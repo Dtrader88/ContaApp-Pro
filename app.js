@@ -891,9 +891,32 @@ verificarYActualizarPlanDeCuentas() {
     // Lógica Contable Principal
             getPlanDeCuentasDefault() {
         return [
-            // ... (todas las cuentas de Activos, Pasivos, Patrimonio sin cambios) ...
             { id: 100, codigo: '100', nombre: 'ACTIVOS', tipo: 'TITULO', parentId: null },
-            // ...
+            { id: 110, codigo: '110', nombre: 'Efectivo y Equivalentes', tipo: 'CONTROL', parentId: 100 },
+            { id: 11001, codigo: '110.1', nombre: 'Caja General', tipo: 'DETALLE', parentId: 110 },
+            { id: 120, codigo: '120', nombre: 'Cuentas por Cobrar', tipo: 'DETALLE', parentId: 100 },
+            // ===== INICIO DE CAMBIOS EN INVENTARIO =====
+            { id: 130, codigo: '130', nombre: 'Inventarios', tipo: 'CONTROL', parentId: 100 },
+            { id: 13001, codigo: '130.1', nombre: 'Inventario de Mercancía para Reventa', tipo: 'DETALLE', parentId: 130 },
+            { id: 13002, codigo: '130.2', nombre: 'Inventario de Materias Primas', tipo: 'DETALLE', parentId: 130 },
+            { id: 13003, codigo: '130.3', nombre: 'Inventario de Productos en Proceso', tipo: 'DETALLE', parentId: 130 },
+            { id: 13004, codigo: '130.4', nombre: 'Inventario de Productos Terminados', tipo: 'DETALLE', parentId: 130 },
+            // ===== FIN DE CAMBIOS EN INVENTARIO =====
+            { id: 140, codigo: '140', nombre: 'IVA Crédito Fiscal', tipo: 'DETALLE', parentId: 100 },
+            { id: 150, codigo: '150', nombre: 'Propiedad, Planta y Equipo', tipo: 'CONTROL', parentId: 100 },
+            { id: 15001, codigo: '150.1', nombre: 'Mobiliario y Equipo de Oficina', tipo: 'DETALLE', parentId: 150 },
+            { id: 159, codigo: '159', nombre: 'Depreciación Acumulada', tipo: 'CONTROL', parentId: 100 },
+            { id: 15901, codigo: '159.1', nombre: 'Dep. Acum. Mobiliario y Equipo', tipo: 'DETALLE', parentId: 159 },
+            { id: 200, codigo: '200', nombre: 'PASIVOS', tipo: 'TITULO', parentId: null },
+            // ... (El resto de las cuentas de Pasivo, Patrimonio, Ingresos y Gastos se mantienen igual) ...
+            { id: 210, codigo: '210', nombre: 'Cuentas por Pagar', tipo: 'DETALLE', parentId: 200 },
+            { id: 220, codigo: '220', nombre: 'Anticipos de Clientes', tipo: 'DETALLE', parentId: 200 },
+            { id: 230, codigo: '230', nombre: 'Tarjetas de Crédito', tipo: 'CONTROL', parentId: 200 },
+            { id: 23001, codigo: '230.1', nombre: 'Tarjeta de Crédito Principal', tipo: 'DETALLE', parentId: 230 },
+            { id: 240, codigo: '240', nombre: 'IVA Débito Fiscal', tipo: 'DETALLE', parentId: 200 },
+            { id: 300, codigo: '300', nombre: 'PATRIMONIO', tipo: 'TITULO', parentId: null },
+            { id: 310, codigo: '310', nombre: 'Capital Social', tipo: 'DETALLE', parentId: 300 },
+            { id: 320, codigo: '320', nombre: 'Resultados Acumulados', tipo: 'DETALLE', parentId: 300 },
             { id: 330, codigo: '330', nombre: 'Utilidades de Apertura', tipo: 'DETALLE', parentId: 300 },
             { id: 400, codigo: '400', nombre: 'INGRESOS', tipo: 'TITULO', parentId: null },
             { id: 401, codigo: '401', nombre: 'Ingresos por Venta de Productos', tipo: 'CONTROL', parentId: 400 },
@@ -901,9 +924,7 @@ verificarYActualizarPlanDeCuentas() {
             { id: 410, codigo: '410', nombre: 'Ingresos por Venta de Servicios', tipo: 'CONTROL', parentId: 400 },
             { id: 41001, codigo: '410.1', nombre: 'Servicios Generales', tipo: 'DETALLE', parentId: 410 },
             { id: 420, codigo: '420', nombre: 'Descuentos y Devoluciones en Venta', tipo: 'DETALLE', parentId: 400 },
-            // ===== NUEVA CUENTA DE INGRESOS NO OPERACIONALES =====
             { id: 430, codigo: '430', nombre: 'Ganancia en Venta de Activos', tipo: 'DETALLE', parentId: 400 },
-            // =======================================================
             { id: 500, codigo: '500', nombre: 'GASTOS', tipo: 'TITULO', parentId: null },
             { id: 501, codigo: '501', nombre: 'Costo de Ventas', tipo: 'DETALLE', parentId: 500 },
             { id: 510, codigo: '510', nombre: 'Gastos Operativos', tipo: 'CONTROL', parentId: 500 },
@@ -911,9 +932,7 @@ verificarYActualizarPlanDeCuentas() {
             { id: 51002, codigo: '510.2', nombre: 'Alquiler', tipo: 'DETALLE', parentId: 510 },
             { id: 51003, codigo: '510.3', nombre: 'Merma de Inventario', tipo: 'DETALLE', parentId: 510 },
             { id: 51004, codigo: '510.4', nombre: 'Gasto por Depreciación', tipo: 'DETALLE', parentId: 510 },
-            // ===== NUEVA CUENTA DE GASTOS NO OPERACIONALES =====
             { id: 520, codigo: '520', nombre: 'Pérdida en Venta/Baja de Activos', tipo: 'DETALLE', parentId: 500 },
-            // ===================================================
         ];
     },
     crearAsiento(fecha, descripcion, movimientos, transaccionId) {
