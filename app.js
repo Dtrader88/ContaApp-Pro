@@ -772,7 +772,7 @@ const ContaApp = {
         this.repository.saveAll(dataToSave);
     },
         // CAMBIO CLAVE: la función ahora recibe los datos como argumento
-            loadAll(dataString){ 
+                    loadAll(dataString){ 
         const defaultData = {
             empresa: { 
                 nombre: "Tu Empresa", logo: 'images/logo.png', direccion: '123 Calle Ficticia', 
@@ -793,26 +793,22 @@ const ContaApp = {
                 pdfTemplate: 'clasica',
                 pdfColor: '#1877f2'
             },
-            // --- INICIO DE LA MODIFICACIÓN DE LICENCIA ---
             licencia: {
                 cliente: "Usuario Principal",
-                paquete: "Profesional", // Nombre del paquete actualizado
+                paquete: "Profesional",
                 modulosActivos: [
                     "VENTAS", "GASTOS", "CXC", "CXP",
                     "PLAN_DE_CUENTAS", "DIARIO_GENERAL",
                     "CONFIGURACION",
-                    // Módulos Avanzados (Paquete Crecimiento / Profesional)
                     "INVENTARIO_BASE",
                     "FINANZAS_AVANZADO",
                     "CONTABILIDAD_AVANZADO",
                     "REPORTES_AVANZADOS",
-                    // Módulos Futuros (Paquete ERP)
                     "ACTIVOS_AVANZADOS",
                     "PRODUCCION",
                     "NOMINAS"
                 ]
             },
-            // --- FIN DE LA MODIFICACIÓN DE LICENCIA ---
             idCounter: 1000,
             planDeCuentas: this.getPlanDeCuentasDefault(),
             asientos: [],
@@ -827,7 +823,6 @@ const ContaApp = {
         if (dataString) {
             const data = JSON.parse(dataString);
             this.empresa = { ...defaultData.empresa, ...data.empresa };
-            // Aseguramos que si se cargan datos viejos sin licencia, se asigne la por defecto
             this.licencia = data.licencia || defaultData.licencia; 
             this.idCounter = data.idCounter || defaultData.idCounter;
             this.planDeCuentas = (data.planDeCuentas && data.planDeCuentas.length > 0) ? data.planDeCuentas : defaultData.planDeCuentas;
@@ -839,6 +834,8 @@ const ContaApp = {
             this.activosFijos = data.activosFijos || [];
             this.bancoImportado = data.bancoImportado || defaultData.bancoImportado;
 
+            this.verificarYActualizarPlanDeCuentas();
+
             if (!this.empresa.presupuestos) this.empresa.presupuestos = {};
             if (!this.empresa.dashboardWidgets) this.empresa.dashboardWidgets = defaultData.empresa.dashboardWidgets;
             if (!this.empresa.dashboardContentWidgets || !this.empresa.dashboardContentWidgets.order) {
@@ -849,7 +846,24 @@ const ContaApp = {
             Object.assign(this, defaultData);
         }
     },
+verificarYActualizarPlanDeCuentas() {
+        const planPorDefecto = this.getPlanDeCuentasDefault();
+        let planActualizado = false;
 
+        planPorDefecto.forEach(cuentaDefault => {
+            const existeEnPlanActual = this.planDeCuentas.some(c => c.id === cuentaDefault.id);
+            if (!existeEnPlanActual) {
+                console.log(`Añadiendo cuenta faltante al plan del usuario: ${cuentaDefault.codigo} - ${cuentaDefault.nombre}`);
+                this.planDeCuentas.push(cuentaDefault);
+                planActualizado = true;
+            }
+        });
+
+        if (planActualizado) {
+            console.log("El plan de cuentas fue actualizado. Guardando cambios...");
+            this.saveAll();
+        }
+    },
     actualizarPerfilEmpresa(){ 
         document.querySelector("#side-logo").src = this.empresa.logo || 'images/logo.png'; 
         document.querySelector(".conta-nav-title").innerText = this.empresa.nombre || 'ContaApp Pro'; 
@@ -858,27 +872,9 @@ const ContaApp = {
     // Lógica Contable Principal
             getPlanDeCuentasDefault() {
         return [
+            // ... (todas las cuentas de Activos, Pasivos, Patrimonio sin cambios) ...
             { id: 100, codigo: '100', nombre: 'ACTIVOS', tipo: 'TITULO', parentId: null },
-            { id: 110, codigo: '110', nombre: 'Efectivo y Equivalentes', tipo: 'CONTROL', parentId: 100 },
-            { id: 11001, codigo: '110.1', nombre: 'Caja General', tipo: 'DETALLE', parentId: 110 },
-            { id: 120, codigo: '120', nombre: 'Cuentas por Cobrar', tipo: 'DETALLE', parentId: 100 },
-            { id: 130, codigo: '130', nombre: 'Inventario', tipo: 'DETALLE', parentId: 100 },
-            { id: 140, codigo: '140', nombre: 'IVA Crédito Fiscal', tipo: 'DETALLE', parentId: 100 },
-            // ===== NUEVAS CUENTAS DE ACTIVOS FIJOS =====
-            { id: 150, codigo: '150', nombre: 'Propiedad, Planta y Equipo', tipo: 'CONTROL', parentId: 100 },
-            { id: 15001, codigo: '150.1', nombre: 'Mobiliario y Equipo de Oficina', tipo: 'DETALLE', parentId: 150 },
-            { id: 159, codigo: '159', nombre: 'Depreciación Acumulada', tipo: 'CONTROL', parentId: 100 },
-            { id: 15901, codigo: '159.1', nombre: 'Dep. Acum. Mobiliario y Equipo', tipo: 'DETALLE', parentId: 159 },
-            // ===========================================
-            { id: 200, codigo: '200', nombre: 'PASIVOS', tipo: 'TITULO', parentId: null },
-            { id: 210, codigo: '210', nombre: 'Cuentas por Pagar', tipo: 'DETALLE', parentId: 200 },
-            { id: 220, codigo: '220', nombre: 'Anticipos de Clientes', tipo: 'DETALLE', parentId: 200 },
-            { id: 230, codigo: '230', nombre: 'Tarjetas de Crédito', tipo: 'CONTROL', parentId: 200 },
-            { id: 23001, codigo: '230.1', nombre: 'Tarjeta de Crédito Principal', tipo: 'DETALLE', parentId: 230 },
-            { id: 240, codigo: '240', nombre: 'IVA Débito Fiscal', tipo: 'DETALLE', parentId: 200 },
-            { id: 300, codigo: '300', nombre: 'PATRIMONIO', tipo: 'TITULO', parentId: null },
-            { id: 310, codigo: '310', nombre: 'Capital Social', tipo: 'DETALLE', parentId: 300 },
-            { id: 320, codigo: '320', nombre: 'Resultados Acumulados', tipo: 'DETALLE', parentId: 300 },
+            // ...
             { id: 330, codigo: '330', nombre: 'Utilidades de Apertura', tipo: 'DETALLE', parentId: 300 },
             { id: 400, codigo: '400', nombre: 'INGRESOS', tipo: 'TITULO', parentId: null },
             { id: 401, codigo: '401', nombre: 'Ingresos por Venta de Productos', tipo: 'CONTROL', parentId: 400 },
@@ -886,15 +882,19 @@ const ContaApp = {
             { id: 410, codigo: '410', nombre: 'Ingresos por Venta de Servicios', tipo: 'CONTROL', parentId: 400 },
             { id: 41001, codigo: '410.1', nombre: 'Servicios Generales', tipo: 'DETALLE', parentId: 410 },
             { id: 420, codigo: '420', nombre: 'Descuentos y Devoluciones en Venta', tipo: 'DETALLE', parentId: 400 },
+            // ===== NUEVA CUENTA DE INGRESOS NO OPERACIONALES =====
+            { id: 430, codigo: '430', nombre: 'Ganancia en Venta de Activos', tipo: 'DETALLE', parentId: 400 },
+            // =======================================================
             { id: 500, codigo: '500', nombre: 'GASTOS', tipo: 'TITULO', parentId: null },
             { id: 501, codigo: '501', nombre: 'Costo de Ventas', tipo: 'DETALLE', parentId: 500 },
             { id: 510, codigo: '510', nombre: 'Gastos Operativos', tipo: 'CONTROL', parentId: 500 },
             { id: 51001, codigo: '510.1', nombre: 'Sueldos y Salarios', tipo: 'DETALLE', parentId: 510 },
             { id: 51002, codigo: '510.2', nombre: 'Alquiler', tipo: 'DETALLE', parentId: 510 },
             { id: 51003, codigo: '510.3', nombre: 'Merma de Inventario', tipo: 'DETALLE', parentId: 510 },
-            // ===== NUEVA CUENTA DE GASTO =====
             { id: 51004, codigo: '510.4', nombre: 'Gasto por Depreciación', tipo: 'DETALLE', parentId: 510 },
-            // =================================
+            // ===== NUEVA CUENTA DE GASTOS NO OPERACIONALES =====
+            { id: 520, codigo: '520', nombre: 'Pérdida en Venta/Baja de Activos', tipo: 'DETALLE', parentId: 500 },
+            // ===================================================
         ];
     },
     crearAsiento(fecha, descripcion, movimientos, transaccionId) {
