@@ -131,10 +131,9 @@ Object.assign(ContaApp, {
 
     guardarOrdenProduccion(e, id = null) {
         e.preventDefault();
-        const isEditing = id !== null; // Lo usaremos en el futuro para editar
+        const isEditing = id !== null;
 
         try {
-            // 1. Recolectar datos del formulario
             const data = {
                 descripcion: document.getElementById('op-descripcion').value,
                 fecha: document.getElementById('op-fecha').value,
@@ -151,7 +150,6 @@ Object.assign(ContaApp, {
                 }
             });
 
-            // 2. Validaciones críticas
             if (!data.productoTerminadoId || componentes.length === 0 || !data.cantidadProducida || data.cantidadProducida <= 0) {
                 throw new Error('Debes completar todos los campos de la orden con valores válidos.');
             }
@@ -165,7 +163,6 @@ Object.assign(ContaApp, {
                 costoTotalProduccion += materiaPrima.costo * comp.cantidad;
             }
 
-            // 3. Ejecutar cambios en el inventario (ahora que sabemos que es posible)
             componentes.forEach(comp => {
                 const materiaPrima = this.findById(this.productos, comp.productoId);
                 materiaPrima.stock -= comp.cantidad;
@@ -180,7 +177,6 @@ Object.assign(ContaApp, {
             productoTerminado.costo = nuevoStockPT > 0 ? (valorStockActualPT + costoTotalProduccion) / nuevoStockPT : costoUnitarioProduccion;
             productoTerminado.stock = nuevoStockPT;
             
-            // 4. Crear el registro de la orden
             const nuevaOrden = {
                 id: this.idCounter++,
                 ...data,
@@ -190,13 +186,12 @@ Object.assign(ContaApp, {
             };
             this.ordenesProduccion.push(nuevaOrden);
 
-            // 5. Crear el asiento contable de producción
-            const cuentaMP = 13002; // Inventario de Materias Primas
-            const cuentaPT = 13004; // Inventario de Productos Terminados
+            const cuentaMP = 13002;
+            const cuentaPT = 13004;
             const asiento = this.crearAsiento(data.fecha, `Orden de Producción #${nuevaOrden.id}: ${data.descripcion}`,
                 [
-                    { cuentaId: cuentaPT, debe: costoTotalProduccion, haber: 0 }, // Entra valor a Productos Terminados
-                    { cuentaId: cuentaMP, debe: 0, haber: costoTotalProduccion }  // Sale valor de Materias Primas
+                    { cuentaId: cuentaPT, debe: costoTotalProduccion, haber: 0 },
+                    { cuentaId: cuentaMP, debe: 0, haber: costoTotalProduccion }
                 ],
                 nuevaOrden.id
             );
