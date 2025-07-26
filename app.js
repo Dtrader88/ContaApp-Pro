@@ -908,7 +908,6 @@ verificarYActualizarPlanDeCuentas() {
             { id: 159, codigo: '159', nombre: 'Depreciación Acumulada', tipo: 'CONTROL', parentId: 100 },
             { id: 15901, codigo: '159.1', nombre: 'Dep. Acum. Mobiliario y Equipo', tipo: 'DETALLE', parentId: 159 },
             { id: 200, codigo: '200', nombre: 'PASIVOS', tipo: 'TITULO', parentId: null },
-            // ... (El resto de las cuentas de Pasivo, Patrimonio, Ingresos y Gastos se mantienen igual) ...
             { id: 210, codigo: '210', nombre: 'Cuentas por Pagar', tipo: 'DETALLE', parentId: 200 },
             { id: 220, codigo: '220', nombre: 'Anticipos de Clientes', tipo: 'DETALLE', parentId: 200 },
             { id: 230, codigo: '230', nombre: 'Tarjetas de Crédito', tipo: 'CONTROL', parentId: 200 },
