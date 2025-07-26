@@ -39,7 +39,7 @@ Object.assign(ContaApp, {
                 <form onsubmit="event.preventDefault(); ContaApp.filtrarInventario();" class="flex items-end gap-3">
                     <div>
                         <label class="text-xs font-semibold">Buscar por Nombre</label>
-                        <input type="search" id="inventario-search" class="conta-input w-full md:w-80" value="${params.search || ''}" placeholder="Escribe para filtrar...">
+                        <input type="search" id="inventario-search" class="conta-input w-full md-w-80" value="${params.search || ''}" placeholder="Escribe para filtrar...">
                     </div>
                     <button type="submit" class="conta-btn">Buscar</button>
                 </form>
@@ -52,26 +52,12 @@ Object.assign(ContaApp, {
                 html += this.generarEstadoVacioHTML('fa-boxes-stacked', 'Tu inventario está vacío', 'Añade tu primer producto o servicio para empezar a gestionar tu stock y ventas.', '+ Crear Producto', "ContaApp.abrirModalProducto()");
             }
         } else {
-            html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
-                <th class="conta-table-th">Nombre</th>
-                <th class="conta-table-th">Tipo</th>
-                <th class="conta-table-th text-right">Stock</th>
-                <th class="conta-table-th">Unidad</th>
-                <th class="conta-table-th text-right">Precio Venta</th>
-                <th class="conta-table-th text-right">Costo</th>
-                <th class="conta-table-th text-center">Acciones</th>
-            </tr></thead><tbody>`;
             let tableRowsHTML = '';
             productosFiltrados.sort((a,b) => a.nombre.localeCompare(b.nombre)).forEach(p => {
                 const isLowStock = p.tipo === 'producto' && p.stockMinimo > 0 && p.stock <= p.stockMinimo;
                 const rowClass = isLowStock ? 'low-stock-row' : '';
                 const stockDisplay = p.tipo === 'producto' ? p.stock : 'N/A';
-                
-                // --- INICIO DE LA CORRECCIÓN ---
-                // Esta es la línea que faltaba
                 const lowStockIcon = isLowStock ? `<i class="fa-solid fa-triangle-exclamation text-[var(--color-danger)] ml-2" title="Stock bajo (Mínimo: ${p.stockMinimo})"></i>` : '';
-                // --- FIN DE LA CORRECCIÓN ---
-
                 const unidad = this.findById(this.unidadesMedida, p.unidadMedidaId);
                 const unidadDisplay = p.tipo === 'producto' ? (unidad ? unidad.nombre : 'N/A') : 'N/A';
 
@@ -89,7 +75,18 @@ Object.assign(ContaApp, {
                         </td>
                     </tr>`;
             });
-            html += tableRowsHTML + `</tbody></table></div>`;
+            
+            // --- INICIO DE LA CORRECCIÓN ---
+            html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
+                <th class="conta-table-th">Nombre</th>
+                <th class="conta-table-th">Tipo</th>
+                <th class="conta-table-th text-right">Stock</th>
+                <th class="conta-table-th">Unidad</th>
+                <th class="conta-table-th text-right">Precio Venta</th>
+                <th class="conta-table-th text-right">Costo</th>
+                <th class="conta-table-th text-center">Acciones</th>
+            </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
+            // --- FIN DE LA CORRECCIÓN ---
         }
         document.getElementById('inventario-contenido').innerHTML = html;
     },
