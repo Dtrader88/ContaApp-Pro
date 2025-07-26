@@ -2,7 +2,28 @@
 
 Object.assign(ContaApp, {
 
-        renderActivosFijos(params = {}) {
+            renderActivosFijos(params = {}) {
+        const submodulo = params.submodulo || 'lista';
+
+        let html = `
+            <div class="flex gap-2 mb-4 border-b border-[var(--color-border-accent)] flex-wrap">
+                <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'lista' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('activos-fijos', {submodulo: 'lista'})">Lista de Activos</button>
+                <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'reporte' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('activos-fijos', {submodulo: 'reporte'})">Reporte de Depreciación</button>
+                <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'kardex' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('activos-fijos', {submodulo: 'kardex'})">Historial por Activo</button>
+            </div>
+            <div id="activos-fijos-contenido"></div>
+        `;
+        document.getElementById('activos-fijos').innerHTML = html;
+
+        if (submodulo === 'lista') {
+            this.renderActivosFijos_TabLista(params);
+        } else if (submodulo === 'reporte') {
+            this.renderActivosFijos_TabReporte(params);
+        } else if (submodulo === 'kardex') {
+            this.renderActivosFijos_TabKardex(params);
+        }
+    },
+        renderActivosFijos_TabLista(params = {}) {
         document.getElementById('page-actions-header').innerHTML = `
             <div class="flex gap-2 flex-wrap">
                 <button class="conta-btn conta-btn-accent" onclick="ContaApp.ejecutarDepreciacionMensual()">
@@ -56,7 +77,7 @@ Object.assign(ContaApp, {
             html += `</tbody></table></div>`;
         }
         
-        document.getElementById('activos-fijos').innerHTML = html;
+        document.getElementById('activos-fijos-contenido').innerHTML = html;
     },
     abrirModalActivoFijo(id = null) {
         const activo = id ? this.findById(this.activosFijos, id) : {};
@@ -257,5 +278,47 @@ Object.assign(ContaApp, {
             this.irModulo('activos-fijos');
             this.showToast('Activo dado de baja con éxito.', 'success');
         }
+    },
+        renderActivosFijos_TabReporte(params = {}) {
+        document.getElementById('page-actions-header').innerHTML = `
+            <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarReporteEstilizadoPDF('Reporte de Activos Fijos', 'reporte-activos-area')">
+                <i class="fa-solid fa-print me-2"></i>Imprimir PDF
+            </button>`;
+
+        const hoy = new Date();
+        const primerDiaAno = new Date(hoy.getFullYear(), 0, 1).toISOString().slice(0, 10);
+
+        // Aquí irá la lógica para generar los datos del reporte. Por ahora, un mensaje temporal.
+        let html = `
+            <div class="conta-card" id="reporte-activos-area">
+                <h3 class="conta-subtitle">Reporte de Movimiento y Depreciación de Activos Fijos</h3>
+                <div class="flex items-end gap-4 mb-6">
+                    <div>
+                        <label class="text-sm font-medium">Desde</label>
+                        <input type="date" id="reporte-activos-inicio" class="w-full conta-input" value="${primerDiaAno}">
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium">Hasta</label>
+                        <input type="date" id="reporte-activos-fin" class="w-full conta-input" value="${this.getTodayDate()}">
+                    </div>
+                    <button class="conta-btn">Generar Reporte</button>
+                </div>
+                <p class="text-center text-[var(--color-text-secondary)] p-8">El contenido del reporte detallado se implementará aquí.</p>
+            </div>
+        `;
+        document.getElementById('activos-fijos-contenido').innerHTML = html;
+    },
+
+    renderActivosFijos_TabKardex(params = {}) {
+        document.getElementById('page-actions-header').innerHTML = '';
+
+        // Aquí irá la lógica para el selector de activo y la tabla de historial. Por ahora, un mensaje temporal.
+        let html = `
+            <div class="conta-card">
+                <h3 class="conta-subtitle">Historial de Movimientos por Activo (Kardex)</h3>
+                <p class="text-center text-[var(--color-text-secondary)] p-8">La funcionalidad de Kardex de Activos Fijos se implementará aquí.</p>
+            </div>
+        `;
+        document.getElementById('activos-fijos-contenido').innerHTML = html;
     },
 });
