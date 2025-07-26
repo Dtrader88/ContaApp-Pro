@@ -115,13 +115,13 @@ Object.assign(ContaApp, {
         const itemHTML = `
             <div class="grid grid-cols-12 gap-2 items-center dynamic-row">
                 <div class="col-span-8">
-                    <select class="w-full conta-input op-componente-id" required>
+                    <select name="op-componente-id" class="w-full conta-input op-componente-id" required>
                         <option value="">-- Selecciona una materia prima --</option>
                         ${materiasPrimasOptions}
                     </select>
                 </div>
                 <div class="col-span-3">
-                     <input type="number" step="any" class="w-full conta-input text-right op-componente-cantidad" placeholder="Cantidad" value="${componente.cantidad || ''}" required>
+                     <input type="number" step="any" name="op-componente-cantidad" class="w-full conta-input text-right op-componente-cantidad" placeholder="Cantidad" value="${componente.cantidad || ''}" required>
                 </div>
                 <button type="button" class="col-span-1 conta-btn-icon delete" onclick="this.closest('.dynamic-row').remove()">🗑️</button>
             </div>
@@ -134,7 +134,6 @@ Object.assign(ContaApp, {
         const isEditing = id !== null;
 
         try {
-            // --- INICIO DE LA LÓGICA DE RECOLECCIÓN DE DATOS MEJORADA ---
             const productoTerminadoNombre = document.getElementById('op-producto-terminado-input').value;
             const productoTerminadoEncontrado = this.productos.find(p => p.nombre.toLowerCase() === productoTerminadoNombre.toLowerCase());
             
@@ -144,7 +143,6 @@ Object.assign(ContaApp, {
                 productoTerminadoId: productoTerminadoEncontrado ? productoTerminadoEncontrado.id : null,
                 cantidadProducida: parseFloat(document.getElementById('op-cantidad-producir').value)
             };
-            // --- FIN DE LA LÓGICA DE RECOLECCIÓN DE DATOS MEJORADA ---
 
             const componentes = [];
             document.querySelectorAll('#op-componentes-container .dynamic-row').forEach(row => {
