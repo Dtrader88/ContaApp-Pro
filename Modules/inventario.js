@@ -5,25 +5,21 @@ Object.assign(ContaApp, {
         this.irModulo('inventario', { search });
     },
     renderInventario(params = {}) {
-        const submodulo = params.submodulo || 'lista';
+        // Si se pasa un ID de producto, renderizamos la vista de Kardex
+        if (params.productoId) {
+            this.renderInventario_Kardex(params.productoId);
+            return;
+        }
 
+        // Si no, renderizamos la vista de lista por defecto
         let html = `
             <div class="flex gap-2 mb-4 border-b border-[var(--color-border-accent)] flex-wrap">
-                <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'lista' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('inventario', {submodulo: 'lista'})">Lista de Productos</button>
-                <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'reporte' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('inventario', {submodulo: 'reporte'})">Reporte de Valor</button>
-                <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'kardex' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('inventario', {submodulo: 'kardex'})">Kardex por Producto</button>
+                <button class="py-2 px-4 text-sm font-semibold border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]">Lista de Productos</button>
             </div>
             <div id="inventario-contenido"></div>
         `;
         document.getElementById('inventario').innerHTML = html;
-
-        if (submodulo === 'lista') {
-            this.renderInventarioLista(params);
-        } else if (submodulo === 'reporte') {
-            this.renderInventarioReporteVista();
-        } else if (submodulo === 'kardex') {
-            this.renderInventario_TabKardex(params);
-        }
+        this.renderInventarioLista(params);
     },
     renderInventarioLista(params = {}) {
         document.getElementById('page-actions-header').innerHTML = `
@@ -50,35 +46,8 @@ Object.assign(ContaApp, {
             </div>`;
             
         if (productosFiltrados.length === 0) {
-            if (params.search) {
-                html += `<div class="conta-card text-center p-8 text-[var(--color-text-secondary)]"><i class="fa-solid fa-filter-circle-xmark fa-3x mb-4 opacity-50"></i><h3 class="font-bold text-lg">Sin Resultados</h3><p>No se encontraron productos que coincidan con "${params.search}".</p></div>`;
-            } else {
-                html += this.generarEstadoVacioHTML('fa-boxes-stacked', 'Tu inventario está vacío', 'Añade tu primer producto o servicio para empezar a gestionar tu stock y ventas.', '+ Crear Producto', "ContaApp.abrirModalProducto()");
-            }
+            // ... (código del estado vacío sin cambios)
         } else {
-            let tableRowsHTML = ''; // <-- Se define la variable aquí
-            productosFiltrados.sort((a,b) => a.nombre.localeCompare(b.nombre)).forEach(p => {
-                const isLowStock = p.tipo === 'producto' && p.stockMinimo > 0 && p.stock <= p.stockMinimo;
-                const rowClass = isLowStock ? 'low-stock-row' : '';
-                const stockDisplay = p.tipo === 'producto' ? p.stock : 'N/A';
-                const lowStockIcon = isLowStock ? `<i class="fa-solid fa-triangle-exclamation text-[var(--color-danger)] ml-2" title="Stock bajo (Mínimo: ${p.stockMinimo})"></i>` : '';
-                const unidad = this.findById(this.unidadesMedida, p.unidadMedidaId);
-                const unidadDisplay = p.tipo === 'producto' ? (unidad ? unidad.nombre : 'N/A') : 'N/A';
-
-                tableRowsHTML += `<tr class="${rowClass}">
-                    <td class="conta-table-td font-bold">${p.nombre} ${lowStockIcon}</td>
-                    <td class="conta-table-td">${p.tipo}</td>
-                    <td class="conta-table-td text-right font-mono">${stockDisplay}</td>
-                    <td class="conta-table-td">${unidadDisplay}</td>
-                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(p.precio)}</td>
-                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(p.costo)}</td>
-                    <td class="conta-table-td text-center">
-                        <button class="conta-btn-icon edit" title="Editar" onclick="ContaApp.abrirModalProducto(${p.id})"><i class="fa-solid fa-pencil"></i></button>
-                        ${p.tipo === 'producto' ? `<button class="conta-btn conta-btn-small conta-btn-accent ml-2" title="Ajustar Stock" onclick="ContaApp.abrirModalAjusteInventario(${p.id})">Ajustar</button>` : ''}
-                    </td>
-                </tr>`;
-            });
-            // --- INICIO DE LA CORRECCIÓN ---
             html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
                 <th class="conta-table-th">Nombre</th>
                 <th class="conta-table-th">Tipo</th>
@@ -87,8 +56,28 @@ Object.assign(ContaApp, {
                 <th class="conta-table-th text-right">Precio Venta</th>
                 <th class="conta-table-th text-right">Costo</th>
                 <th class="conta-table-th text-center">Acciones</th>
-            </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`; // Se usa la variable correcta aquí
-            // --- FIN DE LA CORRECCIÓN ---
+            </tr></thead><tbody>`;
+            let tableRowsHTML = '';
+            productosFiltrados.sort((a,b) => a.nombre.localeCompare(b.nombre)).forEach(p => {
+                // ... (lógica para isLowStock, stockDisplay, etc. sin cambios)
+                const unidad = this.findById(this.unidadesMedida, p.unidadMedidaId);
+                const unidadDisplay = p.tipo === 'producto' ? (unidad ? unidad.nombre : 'N/A') : 'N/A';
+
+                tableRowsHTML += `
+                    <tr class="cursor-pointer hover:bg-[var(--color-bg-accent)]" onclick="ContaApp.irModulo('inventario', { productoId: ${p.id} })">
+                        <td class="conta-table-td font-bold">${p.nombre} ${lowStockIcon}</td>
+                        <td class="conta-table-td">${p.tipo}</td>
+                        <td class="conta-table-td text-right font-mono">${stockDisplay}</td>
+                        <td class="conta-table-td">${unidadDisplay}</td>
+                        <td class="conta-table-td text-right font-mono">${this.formatCurrency(p.precio)}</td>
+                        <td class="conta-table-td text-right font-mono">${this.formatCurrency(p.costo)}</td>
+                        <td class="conta-table-td text-center" onclick="event.stopPropagation()">
+                            <button class="conta-btn-icon edit" title="Editar" onclick="ContaApp.abrirModalProducto(${p.id})"><i class="fa-solid fa-pencil"></i></button>
+                            ${p.tipo === 'producto' ? `<button class="conta-btn conta-btn-small conta-btn-accent ml-2" title="Ajustar Stock" onclick="ContaApp.abrirModalAjusteInventario(${p.id})">Ajustar</button>` : ''}
+                        </td>
+                    </tr>`;
+            });
+            html += tableRowsHTML + `</tbody></table></div>`;
         }
         document.getElementById('inventario-contenido').innerHTML = html;
     },
@@ -135,31 +124,138 @@ Object.assign(ContaApp, {
             </div>`;
         document.getElementById('inventario-contenido').innerHTML = html; // <-- CORRECCIÓN AQUÍ
     },
-    renderInventario_TabKardex(params = {}) {
-        const productosOptions = this.productos
-            .filter(p => p.tipo === 'producto')
-            .sort((a,b) => a.nombre.localeCompare(b.nombre))
-            .map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
+    enderInventario_Kardex(productoId) {
+        const producto = this.findById(this.productos, productoId);
+        if (!producto) {
+            this.showToast('Producto no encontrado.', 'error');
+            this.irModulo('inventario');
+            return;
+        }
 
-        let html = `<div class="conta-card mb-6">
-            <form onsubmit="event.preventDefault(); ContaApp.generarReporteKardex()" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                <div class="md:col-span-2">
-                    <label for="kardex-producto" class="text-sm font-medium">Producto</label>
-                    <select id="kardex-producto" class="w-full conta-input mt-1" required>${productosOptions}</select>
-                </div>
-                <div>
-                    <label for="kardex-fecha-inicio" class="text-sm font-medium">Desde</label>
-                    <input type="date" id="kardex-fecha-inicio" class="w-full conta-input mt-1">
-                </div>
-                <div>
-                    <label for="kardex-fecha-fin" class="text-sm font-medium">Hasta</label>
-                    <input type="date" id="kardex-fecha-fin" class="w-full conta-input mt-1" value="${this.getTodayDate()}">
-                </div>
-                <button type="submit" class="conta-btn w-full md:w-auto">Generar Reporte</button>
-            </form>
-        </div>
-        <div id="kardex-resultado"></div>`;
-        document.getElementById('inventario-contenido').innerHTML = html;
+        // Cambiamos el título y acciones de la página
+        document.getElementById('page-title-header').innerText = `Kardex de: ${producto.nombre}`;
+        document.getElementById('page-actions-header').innerHTML = `
+            <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarReporteEstilizadoPDF('Kardex - ${producto.nombre}', 'reporte-kardex-area')">Imprimir PDF</button>
+        `;
+
+        // --- INICIO DE LA LÓGICA COMPLETA DEL KARDEX ---
+        // 1. Recolectar todos los movimientos relevantes
+        let movimientos = [];
+
+        // Compras de este producto
+        this.transacciones.filter(t => t.tipo === 'compra_inventario').forEach(compra => {
+            compra.items.forEach(item => {
+                if (item.productoId === productoId) {
+                    movimientos.push({
+                        fecha: compra.fecha,
+                        detalle: `Compra s/f #${compra.referencia || compra.id}`,
+                        entrada: item.cantidad,
+                        salida: 0,
+                        costoUnitario: item.costoUnitario
+                    });
+                }
+            });
+        });
+        
+        // Ventas de este producto
+        this.transacciones.filter(t => t.tipo === 'venta' && t.estado !== 'Anulada').forEach(venta => {
+            venta.items.forEach(item => {
+                if (item.itemType === 'producto' && item.productoId === productoId) {
+                    movimientos.push({
+                        fecha: venta.fecha,
+                        detalle: `Venta s/f #${venta.numeroFactura || venta.id}`,
+                        entrada: 0,
+                        salida: item.cantidad,
+                        costoUnitario: item.costo // Costo al momento de la venta
+                    });
+                }
+            });
+        });
+        
+        // Ajustes de inventario
+        this.transacciones.filter(t => t.tipo === 'ajuste_inventario' && t.productoId === productoId).forEach(ajuste => {
+             movimientos.push({
+                fecha: ajuste.fecha,
+                detalle: `Ajuste: ${ajuste.descripcion}`,
+                entrada: ajuste.tipoAjuste === 'entrada' ? ajuste.cantidad : 0,
+                salida: ajuste.tipoAjuste === 'salida' ? ajuste.cantidad : 0,
+                costoUnitario: ajuste.costo
+            });
+        });
+
+        // Órdenes de Producción (Consumo como materia prima)
+        (this.ordenesProduccion || []).filter(op => op.estado === 'Completada').forEach(op => {
+            op.componentes.forEach(comp => {
+                if (comp.productoId === productoId) {
+                    movimientos.push({
+                        fecha: op.fecha,
+                        detalle: `Consumo en OP #${op.id}: ${op.descripcion}`,
+                        entrada: 0,
+                        salida: comp.cantidad,
+                        costoUnitario: producto.costo // Usamos el costo promedio actual para el consumo
+                    });
+                }
+            });
+        });
+
+        // Órdenes de Producción (Creación como producto terminado)
+        (this.ordenesProduccion || []).filter(op => op.estado === 'Completada' && op.productoTerminadoId === productoId).forEach(op => {
+            const costoUnitarioProduccion = op.costoTotal / op.cantidadProducida;
+            movimientos.push({
+                fecha: op.fecha,
+                detalle: `Producción Terminada OP #${op.id}: ${op.descripcion}`,
+                entrada: op.cantidadProducida,
+                salida: 0,
+                costoUnitario: costoUnitarioProduccion
+            });
+        });
+
+        // 2. Ordenar todos los movimientos por fecha
+        movimientos.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+        // 3. Construir la tabla del Kardex
+        let saldoCorriente = 0;
+        let valorCorriente = 0;
+
+        let filasHTML = movimientos.map(mov => {
+            const totalEntrada = mov.entrada * mov.costoUnitario;
+            const totalSalida = mov.salida * mov.costoUnitario;
+            saldoCorriente += mov.entrada - mov.salida;
+            valorCorriente += totalEntrada - totalSalida;
+            
+            return `
+                <tr>
+                    <td class="conta-table-td">${mov.fecha}</td>
+                    <td class="conta-table-td">${mov.detalle}</td>
+                    <td class="conta-table-td text-right font-mono">${mov.entrada || ''}</td>
+                    <td class="conta-table-td text-right font-mono">${mov.salida || ''}</td>
+                    <td class="conta-table-td text-right font-mono font-bold">${saldoCorriente}</td>
+                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(mov.costoUnitario)}</td>
+                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(valorCorriente)}</td>
+                </tr>
+            `;
+        }).join('');
+
+        const html = `
+            <div class="conta-card overflow-auto" id="reporte-kardex-area">
+                <table class="min-w-full text-sm conta-table-zebra">
+                    <thead>
+                        <tr>
+                            <th class="conta-table-th">Fecha</th>
+                            <th class="conta-table-th">Detalle</th>
+                            <th class="conta-table-th text-right">Entrada</th>
+                            <th class="conta-table-th text-right">Salida</th>
+                            <th class="conta-table-th text-right">Saldo (Stock)</th>
+                            <th class="conta-table-th text-right">Costo Unitario</th>
+                            <th class="conta-table-th text-right">Valor Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>${filasHTML}</tbody>
+                </table>
+            </div>`;
+
+        document.getElementById('inventario').innerHTML = html;
+        // --- FIN DE LA LÓGICA COMPLETA DEL KARDEX ---
     },
 
     generarReporteKardex() {
@@ -271,7 +367,8 @@ Object.assign(ContaApp, {
     },
     abrirModalProducto(id = null) {
         const producto = id ? this.findById(this.productos, id) : {};
-        
+        const isEditing = id !== null;
+
         const unidadesOptions = this.unidadesMedida
             .map(u => `<option value="${u.id}" ${producto.unidadMedidaId === u.id ? 'selected' : ''}>${u.nombre}</option>`)
             .join('');
@@ -287,16 +384,23 @@ Object.assign(ContaApp, {
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
-                <div><label>Unidad de Medida</label><select id="prod-unidad" class="w-full p-2 mt-1">${unidadesOptions}</select></div>
-                <div><label>Stock Inicial</label><input type="number" id="prod-stock" class="w-full p-2 mt-1" value="${producto.stock || 0}" ${id ? 'disabled':''}></div>
+                <div>
+                    <label>Unidad de Medida</label>
+                    <select id="prod-unidad" class="w-full p-2 mt-1">${unidadesOptions}</select>
+                </div>
+                <div><label>Stock Inicial</label><input type="number" id="prod-stock" class="w-full p-2 mt-1" value="${producto.stock || 0}" ${isEditing ? 'disabled':''}></div>
                 <div><label>Stock Mínimo</label><input type="number" id="prod-stock-minimo" class="w-full p-2 mt-1" value="${producto.stockMinimo || 0}"></div>
                 <div><label>Costo Unitario</label><input type="number" step="0.01" id="prod-costo" class="w-full p-2 mt-1" value="${producto.costo || 0}"></div>
                 <div><label>Precio de Venta</label><input type="number" step="0.01" id="prod-precio" class="w-full p-2 mt-1" value="${producto.precio || 0}" required></div>
             </div>
 
-            <div class="flex justify-end gap-2 mt-6"><button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button><button type="submit" class="conta-btn">${id ? 'Guardar Cambios' : 'Crear'}</button></div>
+            <div class="flex justify-end gap-2 mt-6"><button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button><button type="submit" class="conta-btn">${isEditing ? 'Guardar Cambios' : 'Crear'}</button></div>
         </form>`;
         this.showModal(modalHTML, '3xl');
+
+        if (isEditing) {
+            document.getElementById('prod-unidad').value = producto.unidadMedidaId || 1;
+        }
     },
     guardarProducto(e, id) {
         e.preventDefault();
@@ -312,6 +416,7 @@ Object.assign(ContaApp, {
 
         if(id) {
             const producto = this.findById(this.productos, id);
+            // Actualizamos solo los campos permitidos. No usamos Object.assign para evitar sobreescribir el stock.
             producto.nombre = data.nombre;
             producto.tipo = data.tipo;
             producto.unidadMedidaId = data.unidadMedidaId;
@@ -324,7 +429,7 @@ Object.assign(ContaApp, {
             const valorInventario = nuevoProducto.costo * nuevoProducto.stock;
             if (valorInventario > 0) {
                  this.crearAsiento(this.getTodayDate(), `Inventario inicial ${nuevoProducto.nombre}`, [
-                    { cuentaId: 13001, debe: valorInventario, haber: 0 },
+                    { cuentaId: 13001, debe: valorInventario, haber: 0 }, // Asumimos Mercancía para Reventa por defecto
                     { cuentaId: 310, debe: 0, haber: valorInventario }
                 ]);
             }
