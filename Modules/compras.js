@@ -5,7 +5,6 @@ Object.assign(ContaApp, {
     renderCompras(params = {}) {
         document.getElementById('page-actions-header').innerHTML = `<button class="conta-btn" onclick="ContaApp.abrirModalNuevaCompra()">+ Nueva Compra</button>`;
 
-        // Obtenemos TODAS las compras, incluidas las anuladas
         const compras = this.transacciones.filter(t => t.tipo === 'compra_inventario');
         
         let html;
@@ -22,6 +21,7 @@ Object.assign(ContaApp, {
                         <th class="conta-table-th">Fecha</th>
                         <th class="conta-table-th">Referencia #</th>
                         <th class="conta-table-th">Proveedor</th>
+                        <th class="conta-table-th">Descripción</th>
                         <th class="conta-table-th text-right">Total</th>
                         <th class="conta-table-th">Estado</th>
                         <th class="conta-table-th text-center">Acciones</th>
@@ -33,7 +33,6 @@ Object.assign(ContaApp, {
                 const proveedor = this.findById(this.contactos, compra.contactoId);
                 const isAnulada = compra.estado === 'Anulada';
                 
-                // --- INICIO DE LA MEJORA VISUAL ---
                 const rowClass = isAnulada ? 'opacity-50' : '';
                 const estadoTag = isAnulada ? `<span class="tag tag-anulada">Anulada</span>` : `<span class="tag tag-success">Completada</span>`;
 
@@ -46,13 +45,13 @@ Object.assign(ContaApp, {
                 if (!isAnulada) {
                     accionesHTML += `<button class="conta-btn-icon delete" title="Anular Compra" onclick="ContaApp.anularCompra(${compra.id})"><i class="fa-solid fa-ban"></i></button>`;
                 }
-                // --- FIN DE LA MEJORA VISUAL ---
 
                 html += `
                     <tr class="${rowClass}">
                         <td class="conta-table-td">${compra.fecha}</td>
                         <td class="conta-table-td font-mono">${compra.referencia || 'N/A'}</td>
                         <td class="conta-table-td font-bold">${proveedor?.nombre || 'N/A'}</td>
+                        <td class="conta-table-td">${compra.descripcion}</td>
                         <td class="conta-table-td text-right font-mono">${this.formatCurrency(compra.total)}</td>
                         <td class="conta-table-td">${estadoTag}</td>
                         <td class="conta-table-td text-center">${accionesHTML}</td>
@@ -103,8 +102,38 @@ Object.assign(ContaApp, {
         this._renderCompraModalContent();
     },
     _renderCompraModalContent() {
-        // ... (código existente de la función sin cambios hasta el final de infoComunHTML) ...
-        const infoComunHTML = `...`;
+        const tipoSeleccionado = document.querySelector('input[name="compra-tipo"]:checked').value;
+        const container = document.getElementById('compra-modal-content');
+        const guardarBtn = document.getElementById('guardar-compra-btn');
+        let html = '';
+
+        const proveedoresDatalist = this.contactos.filter(c => c.tipo === 'proveedor').map(c => `<option value="${c.nombre}" data-id="${c.id}"></option>`).join('');
+        const cuentasPagoOptions = this.planDeCuentas
+            .filter(c => c.parentId === 110 && c.tipo === 'DETALLE')
+            .map(c => `<option value="${c.id}">${c.nombre}</option>`)
+            .join('');
+
+        const infoComunHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div class="md:col-span-1">
+                    <label>Proveedor</label>
+                    <div class="flex items-center gap-2">
+                        <input list="proveedores-datalist-compra" id="compra-proveedor-input" class="w-full conta-input mt-1" placeholder="Buscar proveedor..." required>
+                        <datalist id="proveedores-datalist-compra">${proveedoresDatalist}</datalist>
+                        <input type="hidden" id="compra-proveedor-id">
+                        <button type="button" class="conta-btn conta-btn-small" onclick="ContaApp.abrirSubModalNuevoContacto('proveedor', 'compra-proveedor-input')">+</button>
+                    </div>
+                </div>
+                <div>
+                    <label>Fecha de Compra</label>
+                    <input type="date" id="compra-fecha" value="${this.getTodayDate()}" class="w-full conta-input mt-1" required>
+                </div>
+                <div>
+                    <label>Factura/Referencia del Proveedor</label>
+                    <input type="text" id="compra-referencia" class="w-full conta-input mt-1" placeholder="Ej: F-12345">
+                </div>
+            </div>
+        `;
 
         if (tipoSeleccionado === 'reventa' || tipoSeleccionado === 'materia_prima') {
             const cuentaInventarioId = tipoSeleccionado === 'reventa' ? 13001 : 13002;
@@ -112,6 +141,10 @@ Object.assign(ContaApp, {
             
             html = `
                 ${infoComunHTML}
+                <div class="mb-4">
+                    <label>Descripción de la Compra</label>
+                    <input type="text" id="compra-descripcion" class="w-full conta-input mt-1" placeholder="Ej: Compra semanal de insumos">
+                </div>
                 <input type="hidden" id="compra-cuenta-inventario-id" value="${cuentaInventarioId}">
                 <p class="text-sm text-[var(--color-text-secondary)] mb-4">Registrando compra en la cuenta: <strong>${cuenta.codigo} - ${cuenta.nombre}</strong></p>
                 
@@ -129,12 +162,10 @@ Object.assign(ContaApp, {
                             <optgroup label="De Contado desde:">${cuentasPagoOptions}</optgroup>
                         </select>
                         
-                        <!-- INICIO DE LA MEJORA -->
                         <div class="mt-4">
                             <label>Adjuntar Comprobante (Opcional, máx 1MB)</label>
                             <input type="file" id="compra-comprobante" class="w-full conta-input mt-1" accept="image/*,.pdf">
                         </div>
-                        <!-- FIN DE LA MEJORA -->
                     </div>
                     <div class="space-y-2 text-right">
                         <div class="flex justify-between font-bold text-xl"><span class="text-[var(--color-text-primary)]">Total:</span> <span id="compra-total">${this.formatCurrency(0)}</span></div>
@@ -143,9 +174,22 @@ Object.assign(ContaApp, {
             guardarBtn.textContent = 'Registrar Compra';
             guardarBtn.style.display = '';
         } else if (tipoSeleccionado === 'activo_fijo') {
-            html = `...`; // Sin cambios aquí
+            html = `
+                <div class="text-center p-8 conta-card-accent">
+                    <p class="font-semibold">Serás redirigido al formulario especializado para registrar la compra de un activo fijo.</p>
+                </div>
+            `;
+            guardarBtn.textContent = 'Continuar a Activos Fijos';
+            guardarBtn.style.display = '';
         }
-        // ... (resto de la función sin cambios) ...
+
+        container.innerHTML = html;
+        if (document.getElementById('compra-proveedor-input')) {
+            this.setupDatalistListener('compra-proveedor-input', 'compra-proveedor-id', 'proveedores-datalist-compra');
+        }
+        if (tipoSeleccionado === 'reventa' || tipoSeleccionado === 'materia_prima') {
+            this.agregarItemCompra();
+        }
     },
     agregarItemCompra() {
         const container = document.getElementById('compra-items-container');
@@ -189,6 +233,7 @@ Object.assign(ContaApp, {
                 const proveedorId = parseInt(document.getElementById('compra-proveedor-id').value);
                 const fecha = document.getElementById('compra-fecha').value;
                 const referencia = document.getElementById('compra-referencia').value;
+                const descripcion = document.getElementById('compra-descripcion').value;
                 const cuentaInventarioId = parseInt(document.getElementById('compra-cuenta-inventario-id').value);
                 const cuentaPagoId = parseInt(document.getElementById('compra-pago-id').value);
                 const archivo = document.getElementById('compra-comprobante').files[0];
@@ -232,16 +277,16 @@ Object.assign(ContaApp, {
                     }
                 });
                 
-                const descripcion = `Compra de inventario s/f #${referencia || 'N/A'}`;
+                const descripcionFinal = descripcion || `Compra de inventario s/f #${referencia || 'N/A'}`;
                 
                 const nuevaCompra = {
                     id: this.idCounter++, tipo: 'compra_inventario',
-                    fecha, contactoId: proveedorId, referencia, descripcion,
-                    items, total: totalCompra, comprobanteDataUrl // <-- Propiedad añadida
+                    fecha, contactoId: proveedorId, referencia, descripcion: descripcionFinal,
+                    items, total: totalCompra, comprobanteDataUrl
                 };
                 this.transacciones.push(nuevaCompra);
 
-                const asiento = this.crearAsiento(fecha, descripcion,
+                const asiento = this.crearAsiento(fecha, descripcionFinal,
                     [{ cuentaId: cuentaInventarioId, debe: totalCompra, haber: 0 }, { cuentaId: cuentaPagoId, debe: 0, haber: totalCompra }],
                     nuevaCompra.id
                 );
