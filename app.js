@@ -473,7 +473,8 @@ irAtras() {
             'bancos': 'FINANZAS_AVANZADO',
             'cierre-periodo': 'CONTABILIDAD_AVANZADO',
             'activos-fijos': 'ACTIVOS_AVANZADOS',
-            'produccion': 'PRODUCCION', // <-- LÍNEA AÑADIDA
+            'produccion': 'PRODUCCION',
+            'compras': 'INVENTARIO_BASE', // La compra está ligada al inventario
         };
 
         const licenciaRequerida = mapaLicencias[mod];
@@ -558,8 +559,9 @@ return;
                 const moduleRenderers = {
                     'dashboard': this.renderDashboard,
                     'ventas': this.renderVentas,
-                    'cxc': (p) => p.clienteId ? this.renderCXCDetalleCliente(p.clienteId, p) : this.renderCXC(p),
                     'gastos': this.renderGastos,
+                    'compras': this.renderCompras, // <-- LÍNEA AÑADIDA
+                    'cxc': (p) => p.clienteId ? this.renderCXCDetalleCliente(p.clienteId, p) : this.renderCXC(p),
                     'cxp': (p) => p.proveedorId ? this.renderCXPDetalleProveedor(p.proveedorId, p) : this.renderCXP(p),
                     'inventario': this.renderInventario,
                     'plan-de-cuentas': this.renderPlanDeCuentas,
@@ -568,7 +570,7 @@ return;
                     'bancos': this.renderBancosYTarjetas,
                     'reportes': this.renderReportes,
                     'activos-fijos': this.renderActivosFijos,
-                    'produccion': this.renderProduccion, // <-- LÍNEA AÑADIDA
+                    'produccion': this.renderProduccion,
                     'config': this.renderConfig
                 };
                 
