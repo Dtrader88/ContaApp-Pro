@@ -39,7 +39,7 @@ Object.assign(ContaApp, {
                 <form onsubmit="event.preventDefault(); ContaApp.filtrarInventario();" class="flex items-end gap-3">
                     <div>
                         <label class="text-xs font-semibold">Buscar por Nombre</label>
-                        <input type="search" id="inventario-search" class="conta-input w-full md-w-80" value="${params.search || ''}" placeholder="Escribe para filtrar...">
+                        <input type="search" id="inventario-search" class="conta-input w-full md:w-80" value="${params.search || ''}" placeholder="Escribe para filtrar...">
                     </div>
                     <button type="submit" class="conta-btn">Buscar</button>
                 </form>
@@ -76,7 +76,6 @@ Object.assign(ContaApp, {
                     </tr>`;
             });
             
-            // --- INICIO DE LA CORRECCIÓN ---
             html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
                 <th class="conta-table-th">Nombre</th>
                 <th class="conta-table-th">Tipo</th>
@@ -86,7 +85,6 @@ Object.assign(ContaApp, {
                 <th class="conta-table-th text-right">Costo</th>
                 <th class="conta-table-th text-center">Acciones</th>
             </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
-            // --- FIN DE LA CORRECCIÓN ---
         }
         document.getElementById('inventario-contenido').innerHTML = html;
     },
