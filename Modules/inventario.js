@@ -50,29 +50,26 @@ Object.assign(ContaApp, {
             </div>`;
             
         if (productosFiltrados.length === 0) {
-            // Se comprueba si hay un término de búsqueda para mostrar el mensaje adecuado
             if (params.search) {
-                html += `<div class="conta-card text-center p-8 text-[var(--color-text-secondary)]">
-                            <i class="fa-solid fa-filter-circle-xmark fa-3x mb-4 opacity-50"></i>
-                            <h3 class="font-bold text-lg">Sin Resultados</h3>
-                            <p>No se encontraron productos que coincidan con "${params.search}".</p>
-                         </div>`;
+                html += `<div class="conta-card text-center p-8 text-[var(--color-text-secondary)]"><i class="fa-solid fa-filter-circle-xmark fa-3x mb-4 opacity-50"></i><h3 class="font-bold text-lg">Sin Resultados</h3><p>No se encontraron productos que coincidan con "${params.search}".</p></div>`;
             } else {
-                // Este es el estado vacío original si no hay productos en absoluto
                 html += this.generarEstadoVacioHTML('fa-boxes-stacked', 'Tu inventario está vacío', 'Añade tu primer producto o servicio para empezar a gestionar tu stock y ventas.', '+ Crear Producto', "ContaApp.abrirModalProducto()");
             }
         } else {
-            let tableRowsHTML = '';
+            let tableRowsHTML = ''; // <-- Se define la variable aquí
             productosFiltrados.sort((a,b) => a.nombre.localeCompare(b.nombre)).forEach(p => {
                 const isLowStock = p.tipo === 'producto' && p.stockMinimo > 0 && p.stock <= p.stockMinimo;
                 const rowClass = isLowStock ? 'low-stock-row' : '';
                 const stockDisplay = p.tipo === 'producto' ? p.stock : 'N/A';
                 const lowStockIcon = isLowStock ? `<i class="fa-solid fa-triangle-exclamation text-[var(--color-danger)] ml-2" title="Stock bajo (Mínimo: ${p.stockMinimo})"></i>` : '';
+                const unidad = this.findById(this.unidadesMedida, p.unidadMedidaId);
+                const unidadDisplay = p.tipo === 'producto' ? (unidad ? unidad.nombre : 'N/A') : 'N/A';
 
                 tableRowsHTML += `<tr class="${rowClass}">
                     <td class="conta-table-td font-bold">${p.nombre} ${lowStockIcon}</td>
                     <td class="conta-table-td">${p.tipo}</td>
                     <td class="conta-table-td text-right font-mono">${stockDisplay}</td>
+                    <td class="conta-table-td">${unidadDisplay}</td>
                     <td class="conta-table-td text-right font-mono">${this.formatCurrency(p.precio)}</td>
                     <td class="conta-table-td text-right font-mono">${this.formatCurrency(p.costo)}</td>
                     <td class="conta-table-td text-center">
@@ -81,11 +78,17 @@ Object.assign(ContaApp, {
                     </td>
                 </tr>`;
             });
+            // --- INICIO DE LA CORRECCIÓN ---
             html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
-                <th class="conta-table-th">Nombre</th><th class="conta-table-th">Tipo</th>
-                <th class="conta-table-th text-right">Stock</th><th class="conta-table-th text-right">Precio Venta</th><th class="conta-table-th text-right">Costo</th>
+                <th class="conta-table-th">Nombre</th>
+                <th class="conta-table-th">Tipo</th>
+                <th class="conta-table-th text-right">Stock</th>
+                <th class="conta-table-th">Unidad</th>
+                <th class="conta-table-th text-right">Precio Venta</th>
+                <th class="conta-table-th text-right">Costo</th>
                 <th class="conta-table-th text-center">Acciones</th>
-            </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
+            </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`; // Se usa la variable correcta aquí
+            // --- FIN DE LA CORRECCIÓN ---
         }
         document.getElementById('inventario-contenido').innerHTML = html;
     },
