@@ -791,7 +791,9 @@ irAtras() {
         this.repository.saveAll(dataToSave);
     },
         // CAMBIO CLAVE: la función ahora recibe los datos como argumento
-                    loadAll(dataString){ 
+        loadAll(dataString){ 
+        console.log("--- INICIANDO loadAll ---");
+        
         const defaultData = {
             empresa: { 
                 nombre: "Tu Empresa", logo: 'images/logo.png', direccion: '123 Calle Ficticia', 
@@ -840,11 +842,16 @@ irAtras() {
         };
         
         if (dataString) {
+            console.log("dataString recibido de Firebase:", dataString);
             const data = JSON.parse(dataString);
+            
             this.empresa = { ...defaultData.empresa, ...data.empresa };
             this.licencia = data.licencia || defaultData.licencia; 
             this.idCounter = data.idCounter || defaultData.idCounter;
             this.planDeCuentas = (data.planDeCuentas && data.planDeCuentas.length > 0) ? data.planDeCuentas : defaultData.planDeCuentas;
+            
+            console.log("Plan de Cuentas cargado desde Firebase (antes de verificar):", JSON.parse(JSON.stringify(this.planDeCuentas)));
+
             this.asientos = data.asientos || defaultData.asientos;
             this.transacciones = data.transacciones || defaultData.transacciones;
             this.contactos = data.contactos || defaultData.contactos;
@@ -862,26 +869,34 @@ irAtras() {
             }
             if (!this.empresa.dashboardLayout) this.empresa.dashboardLayout = defaultData.empresa.dashboardLayout;
         } else {
+            console.log("No se recibió dataString. Usando datos por defecto.");
             Object.assign(this, defaultData);
         }
+        console.log("--- FINALIZANDO loadAll ---");
     },
 verificarYActualizarPlanDeCuentas() {
+        console.log("--- INICIANDO verificarYActualizarPlanDeCuentas ---");
         const planPorDefecto = this.getPlanDeCuentasDefault();
         let planActualizado = false;
+
+        console.log(`Comparando ${this.planDeCuentas.length} cuentas del usuario contra ${planPorDefecto.length} cuentas por defecto.`);
 
         planPorDefecto.forEach(cuentaDefault => {
             const existeEnPlanActual = this.planDeCuentas.some(c => c.id === cuentaDefault.id);
             if (!existeEnPlanActual) {
-                console.log(`Añadiendo cuenta faltante al plan del usuario: ${cuentaDefault.codigo} - ${cuentaDefault.nombre}`);
+                console.log(`%c[AÑADIENDO CUENTA] ID: ${cuentaDefault.id}, Nombre: ${cuentaDefault.nombre}`, 'color: #28a745; font-weight: bold;');
                 this.planDeCuentas.push(cuentaDefault);
                 planActualizado = true;
             }
         });
 
         if (planActualizado) {
-            console.log("El plan de cuentas fue actualizado. Guardando cambios...");
+            console.log("%cEl plan de cuentas fue modificado. Disparando guardado...", 'color: #ffc107; font-weight: bold;');
             this.saveAll();
+        } else {
+            console.log("El plan de cuentas del usuario ya estaba actualizado. No se realizaron cambios.");
         }
+        console.log("--- FINALIZANDO verificarYActualizarPlanDeCuentas ---");
     },
     actualizarPerfilEmpresa(){ 
         document.querySelector("#side-logo").src = this.empresa.logo || 'images/logo.png'; 
