@@ -3,7 +3,7 @@ Object.assign(ContaApp, {
 
     renderProduccion(params = {}) {
         document.getElementById('page-actions-header').innerHTML = `
-            <button class.conta-btn" onclick="ContaApp.abrirModalOrdenProduccion()">+ Nueva Orden de Producción</button>
+            <button class="conta-btn" onclick="ContaApp.abrirModalOrdenProduccion()">+ Nueva Orden de Producción</button>
         `;
 
         let html;
@@ -11,23 +11,53 @@ Object.assign(ContaApp, {
 
         if (ordenes.length === 0) {
             html = this.generarEstadoVacioHTML(
-                'fa-cogs',
-                'Aún no tienes Órdenes de Producción',
-                'Crea tu primera orden para registrar la fabricación de un producto terminado a partir de tus materias primas.',
-                '+ Crear Primera Orden',
-                "ContaApp.abrirModalOrdenProduccion()"
+                'fa-cogs', 'Aún no tienes Órdenes de Producción',
+                'Crea tu primera orden para registrar la fabricación de un producto terminado.',
+                '+ Crear Primera Orden', "ContaApp.abrirModalOrdenProduccion()"
             );
         } else {
-            // Futuro: Aquí construiremos la tabla con la lista de órdenes.
-            html = `<div class="conta-card">Tabla de Órdenes de Producción aparecerá aquí.</div>`;
+            html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
+                <thead>
+                    <tr>
+                        <th class="conta-table-th">Fecha</th>
+                        <th class="conta-table-th">Orden #</th>
+                        <th class="conta-table-th">Descripción</th>
+                        <th class="conta-table-th">Producto Final</th>
+                        <th class="conta-table-th text-right">Cantidad</th>
+                        <th class="conta-table-th text-right">Costo Total</th>
+                        <th class="conta-table-th text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            
+            ordenes.sort((a,b) => new Date(b.fecha) - new Date(a.fecha) || b.id - a.id).forEach(orden => {
+                const productoFinal = this.findById(this.productos, orden.productoTerminadoId);
+                html += `
+                    <tr>
+                        <td class="conta-table-td">${orden.fecha}</td>
+                        <td class="conta-table-td font-mono">OP-${orden.id}</td>
+                        <td class="conta-table-td">${orden.descripcion}</td>
+                        <td class="conta-table-td font-bold">${productoFinal?.nombre || 'N/A'}</td>
+                        <td class="conta-table-td text-right font-mono">${orden.cantidadProducida}</td>
+                        <td class="conta-table-td text-right font-mono">${this.formatCurrency(orden.costoTotal)}</td>
+                        <td class="conta-table-td text-center">
+                            <button class="conta-btn-icon" title="Ver Detalle" onclick="ContaApp.abrirModalDetalleOrdenProduccion(${orden.id})"><i class="fa-solid fa-eye"></i></button>
+                            <button class="conta-btn-icon edit" title="Duplicar Orden" onclick="ContaApp.abrirModalOrdenProduccion(null, ${orden.id})"><i class="fa-solid fa-copy"></i></button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `</tbody></table></div>`;
         }
         
         document.getElementById('produccion').innerHTML = html;
     },
 
-    abrirModalOrdenProduccion(id = null) {
-        const orden = id ? this.findById(this.ordenesProduccion, id) : {};
-        const isEditing = id !== null; // En el futuro, lo usaremos para editar y duplicar
+    abrirModalOrdenProduccion(id = null, duplicarId = null) {
+        const ordenOriginal = duplicarId ? this.findById(this.ordenesProduccion, duplicarId) : (id ? this.findById(this.ordenesProduccion, id) : {});
+        const isEditing = id !== null && !duplicarId;
+        const isDuplicating = duplicarId !== null;
 
         const productosTerminadosOptions = this.productos
             .filter(p => p.tipo === 'producto')
@@ -35,20 +65,12 @@ Object.assign(ContaApp, {
             .join('');
 
         const modalHTML = `
-            <h3 class="conta-title mb-4">${isEditing ? 'Editar' : 'Nueva'} Orden de Producción</h3>
+            <h3 class="conta-title mb-4">${isEditing ? 'Editar' : (isDuplicating ? 'Duplicar' : 'Nueva')} Orden de Producción</h3>
             <form onsubmit="ContaApp.guardarOrdenProduccion(event, ${id})" class="space-y-4 modal-form">
-                
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label>Nombre/Descripción de la Orden</label>
-                        <input type="text" id="op-descripcion" class="w-full conta-input mt-1" placeholder="Ej: Señalética de PVC 10x10" value="${orden.descripcion || ''}" required>
-                    </div>
-                    <div>
-                        <label>Fecha de Producción</label>
-                        <input type="date" id="op-fecha" value="${orden.fecha || this.getTodayDate()}" class="w-full conta-input mt-1" required>
-                    </div>
+                    <div><label>Nombre/Descripción de la Orden</label><input type="text" id="op-descripcion" class="w-full conta-input mt-1" placeholder="Ej: Señalética de PVC 10x10" value="${ordenOriginal.descripcion || ''}" required></div>
+                    <div><label>Fecha de Producción</label><input type="date" id="op-fecha" value="${this.getTodayDate()}" class="w-full conta-input mt-1" required></div>
                 </div>
-
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                      <div>
                         <label>Producto Final a Fabricar</label>
@@ -59,18 +81,9 @@ Object.assign(ContaApp, {
                             <button type="button" class="conta-btn conta-btn-small" onclick="ContaApp.abrirSubModalNuevoProducto('produccion')">+</button>
                         </div>
                     </div>
-                    <div>
-                        <label>Cantidad a Producir</label>
-                        <input type="number" id="op-cantidad-producir" class="w-full conta-input mt-1" value="${orden.cantidadProducida || 1}" min="1" required>
-                    </div>
+                    <div><label>Cantidad a Producir</label><input type="number" id="op-cantidad-producir" class="w-full conta-input mt-1" value="${ordenOriginal.cantidadProducida || 1}" min="1" required></div>
                 </div>
-
-                <div class="conta-card p-4">
-                    <h4 class="font-bold mb-2">Materias Primas a Utilizar</h4>
-                    <div id="op-componentes-container" class="space-y-3"></div>
-                    <button type="button" class="conta-btn conta-btn-small conta-btn-accent mt-2" onclick="ContaApp.agregarComponenteOP()">+ Agregar Materia Prima</button>
-                </div>
-                
+                <div class="conta-card p-4"><h4 class="font-bold mb-2">Materias Primas a Utilizar</h4><div id="op-componentes-container" class="space-y-3"></div><button type="button" class="conta-btn conta-btn-small conta-btn-accent mt-2" onclick="ContaApp.agregarComponenteOP()">+ Agregar Materia Prima</button></div>
                 <div class="flex justify-end gap-2 mt-6">
                     <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button>
                     <button type="submit" class="conta-btn">${isEditing ? 'Guardar Cambios' : 'Crear Orden'}</button>
@@ -80,7 +93,14 @@ Object.assign(ContaApp, {
         this.showModal(modalHTML, '4xl');
         this.setupDatalistListener('op-producto-terminado-input', 'op-producto-terminado-id', 'productos-terminados-datalist-op');
         
-        if (!isEditing) {
+        if (isEditing || isDuplicating) {
+            const productoTerminado = this.findById(this.productos, ordenOriginal.productoTerminadoId);
+            if (productoTerminado) {
+                document.getElementById('op-producto-terminado-input').value = productoTerminado.nombre;
+                document.getElementById('op-producto-terminado-id').value = productoTerminado.id;
+            }
+            ordenOriginal.componentes.forEach(comp => this.agregarComponenteOP(comp));
+        } else {
             this.agregarComponenteOP();
         }
     },
@@ -111,9 +131,10 @@ Object.assign(ContaApp, {
 
     guardarOrdenProduccion(e, id = null) {
         e.preventDefault();
-        const isEditing = id !== null;
+        const isEditing = id !== null; // Lo usaremos en el futuro para editar
 
         try {
+            // 1. Recolectar datos del formulario
             const data = {
                 descripcion: document.getElementById('op-descripcion').value,
                 fecha: document.getElementById('op-fecha').value,
@@ -130,8 +151,9 @@ Object.assign(ContaApp, {
                 }
             });
 
-            if (!data.productoTerminadoId || componentes.length === 0 || !data.cantidadProducida) {
-                throw new Error('Debes completar todos los campos de la orden.');
+            // 2. Validaciones críticas
+            if (!data.productoTerminadoId || componentes.length === 0 || !data.cantidadProducida || data.cantidadProducida <= 0) {
+                throw new Error('Debes completar todos los campos de la orden con valores válidos.');
             }
 
             let costoTotalProduccion = 0;
@@ -143,6 +165,7 @@ Object.assign(ContaApp, {
                 costoTotalProduccion += materiaPrima.costo * comp.cantidad;
             }
 
+            // 3. Ejecutar cambios en el inventario (ahora que sabemos que es posible)
             componentes.forEach(comp => {
                 const materiaPrima = this.findById(this.productos, comp.productoId);
                 materiaPrima.stock -= comp.cantidad;
@@ -157,6 +180,7 @@ Object.assign(ContaApp, {
             productoTerminado.costo = nuevoStockPT > 0 ? (valorStockActualPT + costoTotalProduccion) / nuevoStockPT : costoUnitarioProduccion;
             productoTerminado.stock = nuevoStockPT;
             
+            // 4. Crear el registro de la orden
             const nuevaOrden = {
                 id: this.idCounter++,
                 ...data,
@@ -166,12 +190,13 @@ Object.assign(ContaApp, {
             };
             this.ordenesProduccion.push(nuevaOrden);
 
-            const cuentaMP = 13002;
-            const cuentaPT = 13004;
+            // 5. Crear el asiento contable de producción
+            const cuentaMP = 13002; // Inventario de Materias Primas
+            const cuentaPT = 13004; // Inventario de Productos Terminados
             const asiento = this.crearAsiento(data.fecha, `Orden de Producción #${nuevaOrden.id}: ${data.descripcion}`,
                 [
-                    { cuentaId: cuentaPT, debe: costoTotalProduccion, haber: 0 },
-                    { cuentaId: cuentaMP, debe: 0, haber: costoTotalProduccion }
+                    { cuentaId: cuentaPT, debe: costoTotalProduccion, haber: 0 }, // Entra valor a Productos Terminados
+                    { cuentaId: cuentaMP, debe: 0, haber: costoTotalProduccion }  // Sale valor de Materias Primas
                 ],
                 nuevaOrden.id
             );
@@ -187,5 +212,52 @@ Object.assign(ContaApp, {
             console.error("Error al guardar la orden de producción:", error);
         }
     },
+    abrirModalDetalleOrdenProduccion(ordenId) {
+        const orden = this.findById(this.ordenesProduccion, ordenId);
+        if (!orden) return;
+        const productoFinal = this.findById(this.productos, orden.productoTerminadoId);
 
+        let componentesHTML = '';
+        orden.componentes.forEach(comp => {
+            const materiaPrima = this.findById(this.productos, comp.productoId);
+            const costoComponente = materiaPrima.costo * comp.cantidad;
+            componentesHTML += `
+                <tr class="border-t">
+                    <td class="py-2 px-3">${materiaPrima?.nombre || 'N/A'}</td>
+                    <td class="py-2 px-3 text-center">${comp.cantidad}</td>
+                    <td class="py-2 px-3 text-right font-mono">${this.formatCurrency(materiaPrima.costo)}</td>
+                    <td class="py-2 px-3 text-right font-mono font-bold">${this.formatCurrency(costoComponente)}</td>
+                </tr>
+            `;
+        });
+        
+        const modalHTML = `
+            <h3 class="conta-title mb-2">Detalle de Orden de Producción #${orden.id}</h3>
+            <p class="text-[var(--color-text-secondary)] text-sm mb-4">${orden.descripcion}</p>
+            <p><strong>Producto Fabricado:</strong> ${productoFinal?.nombre}</p>
+            <p class="mb-4"><strong>Fecha:</strong> ${orden.fecha}</p>
+            <div class="conta-card !p-0">
+                <table class="w-full text-sm">
+                    <thead><tr>
+                        <th class="conta-table-th">Materia Prima</th>
+                        <th class="conta-table-th text-center">Cantidad Usada</th>
+                        <th class="conta-table-th text-right">Costo Unit.</th>
+                        <th class="conta-table-th text-right">Costo Total</th>
+                    </tr></thead>
+                    <tbody>${componentesHTML}</tbody>
+                    <tfoot class="bg-[var(--color-bg-accent)] font-bold">
+                        <tr>
+                            <td class="conta-table-td text-right" colspan="3">COSTO TOTAL DE PRODUCCIÓN</td>
+                            <td class="conta-table-td text-right font-mono">${this.formatCurrency(orden.costoTotal)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <div class="flex justify-end gap-2 mt-8">
+                <button class="conta-btn" onclick="ContaApp.abrirModalVerAsientos(${orden.id})">Ver Asiento</button>
+                <button class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cerrar</button>
+            </div>
+        `;
+        this.showModal(modalHTML, '3xl');
+    },
 });
