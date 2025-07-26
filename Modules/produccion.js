@@ -25,6 +25,7 @@ Object.assign(ContaApp, {
                         <th class="conta-table-th">Producto Final</th>
                         <th class="conta-table-th text-right">Cantidad</th>
                         <th class="conta-table-th text-right">Costo Total</th>
+                        <th class="conta-table-th">Estado</th>
                         <th class="conta-table-th text-center">Acciones</th>
                     </tr>
                 </thead>
@@ -32,18 +33,33 @@ Object.assign(ContaApp, {
             
             ordenes.sort((a,b) => new Date(b.fecha) - new Date(a.fecha) || b.id - a.id).forEach(orden => {
                 const productoFinal = this.findById(this.productos, orden.productoTerminadoId);
+                let estadoTag;
+                let accionesHTML;
+
+                if (orden.estado === 'Pendiente') {
+                    estadoTag = `<span class="tag tag-warning">Pendiente</span>`;
+                    accionesHTML = `
+                        <button class="conta-btn conta-btn-small conta-btn-success" title="Completar Producción" onclick="ContaApp.completarOrdenProduccion(${orden.id})"><i class="fa-solid fa-play"></i> Completar</button>
+                        <button class="conta-btn-icon edit" title="Duplicar Orden" onclick="ContaApp.abrirModalOrdenProduccion(null, ${orden.id})"><i class="fa-solid fa-copy"></i></button>
+                    `;
+                } else { // Completada
+                    estadoTag = `<span class="tag tag-success">Completada</span>`;
+                    accionesHTML = `
+                        <button class="conta-btn-icon" title="Ver Detalle" onclick="ContaApp.abrirModalDetalleOrdenProduccion(${orden.id})"><i class="fa-solid fa-eye"></i></button>
+                        <button class="conta-btn-icon edit" title="Duplicar Orden" onclick="ContaApp.abrirModalOrdenProduccion(null, ${orden.id})"><i class="fa-solid fa-copy"></i></button>
+                    `;
+                }
+
                 html += `
                     <tr>
                         <td class="conta-table-td">${orden.fecha}</td>
-                        <td class="conta-table-td font-mono">OP-${orden.id}</td>
+                        <td class="conta-table-td font-mono">${orden.numero}</td>
                         <td class="conta-table-td">${orden.descripcion}</td>
                         <td class="conta-table-td font-bold">${productoFinal?.nombre || 'N/A'}</td>
                         <td class="conta-table-td text-right font-mono">${orden.cantidadProducida}</td>
                         <td class="conta-table-td text-right font-mono">${this.formatCurrency(orden.costoTotal)}</td>
-                        <td class="conta-table-td text-center">
-                            <button class="conta-btn-icon" title="Ver Detalle" onclick="ContaApp.abrirModalDetalleOrdenProduccion(${orden.id})"><i class="fa-solid fa-eye"></i></button>
-                            <button class="conta-btn-icon edit" title="Duplicar Orden" onclick="ContaApp.abrirModalOrdenProduccion(null, ${orden.id})"><i class="fa-solid fa-copy"></i></button>
-                        </td>
+                        <td class="conta-table-td">${estadoTag}</td>
+                        <td class="conta-table-td text-center">${accionesHTML}</td>
                     </tr>
                 `;
             });
@@ -160,16 +176,18 @@ Object.assign(ContaApp, {
         }
     },
 
-    guardarOrdenProduccion(e) {
+    guardarOrdenProduccion(e, id = null) {
         e.preventDefault();
+        const isEditing = id !== null;
 
         try {
-            // 1. Recolectar datos del formulario
+            const productoTerminadoNombre = document.getElementById('op-producto-final-nombre').value.trim();
+            const productoTerminadoEncontrado = this.productos.find(p => p.nombre.toLowerCase() === productoTerminadoNombre.toLowerCase());
+            
             const data = {
-                numero: document.getElementById('op-numero').value,
                 descripcion: document.getElementById('op-descripcion').value,
                 fecha: document.getElementById('op-fecha').value,
-                productoFinalNombre: document.getElementById('op-producto-final-nombre').value.trim(),
+                productoTerminadoId: productoTerminadoEncontrado ? productoTerminadoEncontrado.id : null,
                 cantidadProducida: parseFloat(document.getElementById('op-cantidad-producir').value)
             };
 
@@ -182,87 +200,98 @@ Object.assign(ContaApp, {
                 }
             });
 
-            // 2. Validaciones
-            if (!data.productoFinalNombre || componentes.length === 0 || !data.cantidadProducida || data.cantidadProducida <= 0) {
+            if (!data.productoTerminadoId || componentes.length === 0 || !data.cantidadProducida || data.cantidadProducida <= 0) {
                 throw new Error('Debes completar todos los campos de la orden con valores válidos.');
             }
 
-            // 3. Lógica del Producto Final: Buscarlo o Crearlo
-            let productoTerminado = this.productos.find(p => p.nombre.toLowerCase() === data.productoFinalNombre.toLowerCase());
-            
-            if (!productoTerminado) {
-                // Si no existe, lo creamos como un nuevo producto
-                productoTerminado = {
-                    id: this.idCounter++,
-                    nombre: data.productoFinalNombre,
-                    tipo: 'producto',
-                    stock: 0, // Nace con stock 0, la producción lo aumentará
-                    costo: 0, // El costo se definirá por la producción
-                    precio: 0, // El precio de venta se debe definir después
-                    unidadMedidaId: 1 // Asumimos 'Unidad' por defecto
-                };
-                this.productos.push(productoTerminado);
-                this.showToast(`Nuevo producto "${productoTerminado.nombre}" creado en el inventario.`, 'info');
-            }
-
-            // 4. Lógica de Inventario y Contabilidad (la que ya teníamos)
-            let costoTotalProduccion = 0;
+            // Calculamos el costo proyectado en el momento de la creación
+            let costoTotalProyectado = 0;
             for (const comp of componentes) {
                 const materiaPrima = this.findById(this.productos, comp.productoId);
-                if (!materiaPrima || materiaPrima.stock < comp.cantidad) {
-                    throw new Error(`Stock insuficiente para "${materiaPrima.nombre}".`);
-                }
-                costoTotalProduccion += materiaPrima.costo * comp.cantidad;
+                costoTotalProyectado += (materiaPrima.costo || 0) * comp.cantidad;
             }
 
-            componentes.forEach(comp => {
-                const materiaPrima = this.findById(this.productos, comp.productoId);
-                materiaPrima.stock -= comp.cantidad;
-            });
-
-            const costoUnitarioProduccion = costoTotalProduccion / data.cantidadProducida;
-            const valorStockActualPT = (productoTerminado.stock || 0) * (productoTerminado.costo || 0);
-            const nuevoStockPT = (productoTerminado.stock || 0) + data.cantidadProducida;
-            
-            productoTerminado.costo = nuevoStockPT > 0 ? (valorStockActualPT + costoTotalProduccion) / nuevoStockPT : costoUnitarioProduccion;
-            productoTerminado.stock = nuevoStockPT;
-            
-            // 5. Crear el registro de la orden
+            // Crear el registro de la orden en estado "Pendiente"
             const nuevaOrden = {
                 id: this.idCounter++,
-                numero: data.numero,
-                descripcion: data.descripcion,
-                fecha: data.fecha,
-                productoFinalNombre: data.productoFinalNombre, // Guardamos el nombre
-                productoTerminadoId: productoTerminado.id, // Y el ID
-                cantidadProducida: data.cantidadProducida,
+                numero: `OP-${this.idCounter}`,
+                ...data,
                 componentes,
-                costoTotal: costoTotalProduccion,
-                estado: 'Completada'
+                costoTotal: costoTotalProyectado, // Guardamos el costo proyectado
+                estado: 'Pendiente' // <-- CAMBIO CLAVE
             };
             this.ordenesProduccion.push(nuevaOrden);
 
-            // 6. Crear el asiento contable
-            const cuentaMP = 13002;
-            const cuentaPT = 13004;
-            const asiento = this.crearAsiento(data.fecha, `Orden de Producción #${nuevaOrden.numero}: ${data.descripcion}`,
-                [
-                    { cuentaId: cuentaPT, debe: costoTotalProduccion, haber: 0 },
-                    { cuentaId: cuentaMP, debe: 0, haber: costoTotalProduccion }
-                ],
-                nuevaOrden.id
-            );
+            this.saveAll();
+            this.closeModal();
+            this.irModulo('produccion');
+            this.showToast('Orden de Producción planificada con éxito.', 'success');
 
-            if (asiento) {
-                this.saveAll();
-                this.closeModal();
-                this.irModulo('produccion');
-                this.showToast('Orden de Producción registrada con éxito.', 'success');
-            }
         } catch(error) {
             this.showToast(error.message, 'error');
             console.error("Error al guardar la orden de producción:", error);
         }
+    },
+    completarOrdenProduccion(ordenId) {
+        const orden = this.findById(this.ordenesProduccion, ordenId);
+        if (!orden) {
+            this.showToast('Error: Orden de producción no encontrada.', 'error');
+            return;
+        }
+
+        this.showConfirm(
+            `¿Estás seguro de que deseas completar la Orden #${orden.numero}? Se consumirán las materias primas del inventario y se creará el producto final. Esta acción no se puede deshacer.`,
+            () => {
+                try {
+                    // 1. Validar stock y recalcular costo AHORA, con los costos actuales
+                    let costoRealProduccion = 0;
+                    for (const comp of orden.componentes) {
+                        const materiaPrima = this.findById(this.productos, comp.productoId);
+                        if (materiaPrima.stock < comp.cantidad) {
+                            throw new Error(`Stock insuficiente para "${materiaPrima.nombre}". Necesitas ${comp.cantidad}, tienes ${materiaPrima.stock}.`);
+                        }
+                        costoRealProduccion += materiaPrima.costo * comp.cantidad;
+                    }
+
+                    // 2. Ejecutar cambios en el inventario
+                    orden.componentes.forEach(comp => {
+                        const materiaPrima = this.findById(this.productos, comp.productoId);
+                        materiaPrima.stock -= comp.cantidad;
+                    });
+
+                    const productoTerminado = this.findById(this.productos, orden.productoTerminadoId);
+                    const valorStockActualPT = (productoTerminado.stock || 0) * (productoTerminado.costo || 0);
+                    const nuevoStockPT = (productoTerminado.stock || 0) + orden.cantidadProducida;
+                    productoTerminado.costo = nuevoStockPT > 0 ? (valorStockActualPT + costoRealProduccion) / nuevoStockPT : (costoRealProduccion / orden.cantidadProducida);
+                    productoTerminado.stock = nuevoStockPT;
+                    
+                    // 3. Actualizar la orden
+                    orden.costoTotal = costoRealProduccion; // Actualizar con el costo real
+                    orden.estado = 'Completada';
+                    orden.fechaCompletada = this.getTodayDate(); // Opcional: guardar fecha de finalización
+
+                    // 4. Crear el asiento contable
+                    const cuentaMP = 13002;
+                    const cuentaPT = 13004;
+                    const asiento = this.crearAsiento(orden.fechaCompletada, `Completar OP #${orden.numero}: ${orden.descripcion}`,
+                        [
+                            { cuentaId: cuentaPT, debe: costoRealProduccion, haber: 0 },
+                            { cuentaId: cuentaMP, debe: 0, haber: costoRealProduccion }
+                        ],
+                        orden.id
+                    );
+
+                    if (asiento) {
+                        this.saveAll();
+                        this.irModulo('produccion');
+                        this.showToast('Orden de Producción completada con éxito.', 'success');
+                    }
+                } catch(error) {
+                    this.showToast(error.message, 'error');
+                    console.error("Error al completar la orden:", error);
+                }
+            }
+        );
     },
     abrirModalDetalleOrdenProduccion(ordenId) {
         const orden = this.findById(this.ordenesProduccion, ordenId);
