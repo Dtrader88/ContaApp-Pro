@@ -336,7 +336,7 @@ Object.assign(ContaApp, {
         inputsContainer.innerHTML = newInputsHTML;
         this.actualizarTotalesGasto();
     },
-                    agregarItemGasto() {
+    agregarItemGasto() {
         const container = document.getElementById('gasto-items-container');
         
         // 1. Obtenemos la lista de cuentas de gasto/inventario
@@ -349,27 +349,33 @@ Object.assign(ContaApp, {
 
         // 3. Creamos el HTML para el desplegable de cuentas, con la opción por defecto ya seleccionada
         const cuentasGastoOptions = cuentasDisponibles
-            .map(c => `<option value="${c.id}" ${c.id === defaultAccountId ? 'selected' : ''}>${c.codigo} - ${c.nombre}</option>`)
+            .map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`) // No pre-seleccionamos aquí
             .join('');
 
         let initialInputsHTML = '';
 
         // 4. Lógica clave: Construimos el HTML inicial basado en si la cuenta por defecto es Inventario o no
         if (defaultAccountId === 130) {
-            // Si la cuenta por defecto es Inventario, construimos la vista de compra de inventario
+            // Si la primera cuenta disponible es Inventario, construimos la vista de compra de inventario
             const productosOptions = this.productos
                 .filter(p => p.tipo === 'producto')
                 .map(p => `<option value="${p.id}">${p.nombre}</option>`)
                 .join('');
             
             initialInputsHTML = `
-                <select class="col-span-3 p-2 gasto-item-cuenta" onchange="ContaApp.handleGastoItemChange(this)">${cuentasGastoOptions}</select>
-                <select class="col-span-3 p-2 gasto-item-producto-id" required>${productosOptions}</select>
+                <select class="col-span-3 p-2 gasto-item-cuenta" onchange="ContaApp.handleGastoItemChange(this)">
+                    <option value="130" selected>130 - Inventario</option>
+                    ${cuentasDisponibles.filter(c => c.id !== 130).map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`).join('')}
+                </select>
+                <div class="col-span-3 flex items-center gap-2">
+                    <select class="w-full p-2 gasto-item-producto-id" required>${productosOptions}</select>
+                    <button type="button" class="conta-btn conta-btn-small" onclick="ContaApp.abrirSubModalNuevoProducto('gasto')">+</button>
+                </div>
                 <input type="number" min="1" placeholder="Cantidad" class="col-span-2 p-2 text-right gasto-item-cantidad" oninput="ContaApp.actualizarTotalesGasto()" required>
                 <input type="number" step="0.01" min="0" placeholder="Costo Unit." class="col-span-2 p-2 text-right gasto-item-costo-unitario" oninput="ContaApp.actualizarTotalesGasto()" required>
             `;
         } else {
-            // Si es cualquier otra cuenta, construimos la vista de gasto normal
+            // Si es cualquier otra cuenta, construimos la vista de gasto normal por defecto
             initialInputsHTML = `
                 <select class="col-span-7 p-2 gasto-item-cuenta" onchange="ContaApp.handleGastoItemChange(this)">${cuentasGastoOptions}</select>
                 <input type="number" step="0.01" min="0" placeholder="Monto" class="col-span-3 p-2 text-right gasto-item-monto" oninput="ContaApp.actualizarTotalesGasto()">
@@ -386,25 +392,6 @@ Object.assign(ContaApp, {
             </div>
         `;
         container.insertAdjacentHTML('beforeend', itemHTML);
-    },
-        actualizarTotalesGasto() {
-        let total = 0;
-        document.querySelectorAll('.gasto-item-row').forEach(row => {
-            const cuentaSelect = row.querySelector('.gasto-item-cuenta');
-            if (!cuentaSelect) return;
-
-            const cuentaId = parseInt(cuentaSelect.value);
-
-            if (cuentaId === 130) { // Si es una fila de inventario
-                const cantidad = parseFloat(row.querySelector('.gasto-item-cantidad')?.value) || 0;
-                const costoUnitario = parseFloat(row.querySelector('.gasto-item-costo-unitario')?.value) || 0;
-                total += cantidad * costoUnitario;
-            } else { // Si es una fila de gasto normal
-                const monto = parseFloat(row.querySelector('.gasto-item-monto')?.value) || 0;
-                total += monto;
-            }
-        });
-        document.getElementById('gasto-total').textContent = this.formatCurrency(total);
     },
     async guardarGasto(e) {
     e.preventDefault();
