@@ -171,7 +171,6 @@ renderConfig_Licencia() {
                 </div>
             </div>
 
-            <!-- ===== INICIO DE LA NUEVA SECCIÓN ===== -->
             <div class="conta-card mt-6">
                  <h3 class="conta-subtitle">Personalización de Documentos (PDF)</h3>
                  <form onsubmit="event.preventDefault(); ContaApp.guardarConfigPersonalizacion()">
@@ -193,7 +192,6 @@ renderConfig_Licencia() {
                     </div>
                  </form>
             </div>
-            <!-- ===== FIN DE LA NUEVA SECCIÓN ===== -->
 
             <div class="conta-card mt-6">
                 <h3 class="conta-subtitle">Copia de Seguridad (JSON)</h3>
@@ -206,9 +204,19 @@ renderConfig_Licencia() {
             </div>
             <div class="conta-card mt-6">
                  <h3 class="conta-subtitle conta-text-danger">Zona de Peligro</h3>
-                 <div class="flex justify-between items-center mt-4">
-                    <p class="text-[var(--color-text-secondary)]">Borrar todos los datos y empezar de cero. Esta acción es irreversible.</p>
-                    <button class="conta-btn conta-btn-danger" onclick="ContaApp.resetearDatos()">Resetear Aplicación</button>
+                 <!-- INICIO DE LA MEJORA -->
+                 <div class="border-t border-[var(--color-border-accent)] mt-4 pt-4">
+                    <div class="flex justify-between items-center">
+                        <p class="text-[var(--color-text-secondary)] text-sm">Sincroniza tu catálogo de cuentas con la última versión del software. Útil después de una actualización.</p>
+                        <button class="conta-btn conta-btn-accent" onclick="ContaApp.forzarActualizacionPlanDeCuentas()">Forzar Actualización de Cuentas</button>
+                    </div>
+                 </div>
+                 <!-- FIN DE LA MEJORA -->
+                 <div class="border-t border-[var(--color-border-accent)] mt-4 pt-4">
+                    <div class="flex justify-between items-center">
+                        <p class="text-[var(--color-text-secondary)] text-sm">Borrar todos los datos y empezar de cero. Esta acción es irreversible.</p>
+                        <button class="conta-btn conta-btn-danger" onclick="ContaApp.resetearDatos()">Resetear Aplicación</button>
+                    </div>
                  </div>
             </div>
         `;

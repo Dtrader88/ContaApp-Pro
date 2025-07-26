@@ -898,6 +898,28 @@ verificarYActualizarPlanDeCuentas() {
         }
         console.log("--- FINALIZANDO verificarYActualizarPlanDeCuentas ---");
     },
+   forzarActualizacionPlanDeCuentas() {
+        this.showConfirm(
+            'Esto reemplazará las cuentas por defecto con la última versión del código, pero mantendrá las cuentas que hayas creado manualmente. ¿Deseas continuar?',
+            () => {
+                const planPorDefecto = this.getPlanDeCuentasDefault();
+                // Nos quedamos con las cuentas que el usuario creó (ej. bancos, tarjetas, etc.)
+                const cuentasManuales = this.planDeCuentas.filter(c => {
+                    // Una forma simple de identificar cuentas manuales es si su ID no está en el plan por defecto
+                    return !planPorDefecto.some(def => def.id === c.id);
+                });
+                
+                console.log(`Se conservarán ${cuentasManuales.length} cuentas manuales.`);
+                
+                // El nuevo plan de cuentas será el por defecto MÁS las cuentas manuales del usuario
+                this.planDeCuentas = [...planPorDefecto, ...cuentasManuales];
+                
+                this.saveAll();
+                this.showToast('¡Plan de Cuentas forzado a la última versión! Recargando...', 'success');
+                setTimeout(() => window.location.reload(), 1500);
+            }
+        );
+    }, 
     actualizarPerfilEmpresa(){ 
         document.querySelector("#side-logo").src = this.empresa.logo || 'images/logo.png'; 
         document.querySelector(".conta-nav-title").innerText = this.empresa.nombre || 'ContaApp Pro'; 
