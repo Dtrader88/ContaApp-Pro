@@ -447,21 +447,16 @@ const ContaApp = {
     },
 
             irModulo(mod, params = {}) {
-        // --- INICIO DE LA MEJORA DE ROBUSTEZ ---
-        // Si la licencia aún no se ha cargado, no hacer nada para evitar errores.
         if (!this.licencia) {
             console.warn(`Intento de navegar al módulo '${mod}' antes de que la licencia esté cargada. Abortando.`);
             return;
         }
-        // --- FIN DE LA MEJORA DE ROBUSTEZ ---
 
-        // -------------------------------------------------------------------
-        // INICIO DEL BLOQUE DE LICENCIA (AHORA ACTIVADO)
-        // -------------------------------------------------------------------
         const mapaLicencias = {
             'inventario': 'INVENTARIO_BASE',
             'bancos': 'FINANZAS_AVANZADO',
             'cierre-periodo': 'CONTABILIDAD_AVANZADO',
+            'activos-fijos': 'ACTIVOS_AVANZADOS', // <-- LÍNEA AÑADIDA PARA PROTEGER EL MÓDULO
         };
 
         const licenciaRequerida = mapaLicencias[mod];
@@ -489,9 +484,6 @@ const ContaApp = {
                 return;
             }
         }
-        // -----------------------------------------------------------------
-        // FIN DEL BLOQUE DE LICENCIA (AHORA ACTIVADO)
-        // -----------------------------------------------------------------
 
         const hasNewFilterParams = params.hasOwnProperty('search') || params.hasOwnProperty('startDate') || params.hasOwnProperty('endDate') || params.hasOwnProperty('estado');
         if (!hasNewFilterParams && this.moduleFilters[mod]) {
@@ -564,6 +556,7 @@ const ContaApp = {
                     'cierre-periodo': this.renderCierrePeriodo,
                     'bancos': this.renderBancosYTarjetas,
                     'reportes': this.renderReportes,
+                    'activos-fijos': this.renderActivosFijos, // <-- LÍNEA AÑADIDA PARA RENDERIZAR
                     'config': this.renderConfig
                 };
                 
