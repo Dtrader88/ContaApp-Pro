@@ -247,65 +247,147 @@ Object.assign(ContaApp, {
         this.showModal(modalHTML, 'xl');
     },
 
-    guardarBajaActivo(e, id) {
+        guardarBajaActivo(e, id) {
         e.preventDefault();
         const activo = this.findById(this.activosFijos, id);
         const fechaBaja = document.getElementById('baja-fecha').value;
         const valorEnLibros = activo.costo - activo.depreciacionAcumulada;
 
-        // Cuentas involucradas
         const cuentaActivoId = activo.cuentaId;
-        const cuentaDepAcumuladaId = 15901; // Asumimos la de Mobiliario y Equipo
-        const cuentaPerdidaId = 51003; // Gasto por Merma de Inventario es una buena aproximación por ahora
+        const cuentaDepAcumuladaId = 15901;
+        const cuentaPerdidaId = 51003;
 
         const asiento = this.crearAsiento(
             fechaBaja,
             `Baja de activo fijo: ${activo.nombre}`,
             [
-                // 1. DEBITAMOS la depreciación acumulada para saldarla (ponerla en cero)
                 { cuentaId: cuentaDepAcumuladaId, debe: activo.depreciacionAcumulada, haber: 0 },
-                // 2. DEBITAMOS el gasto por la pérdida del valor restante
                 { cuentaId: cuentaPerdidaId, debe: valorEnLibros, haber: 0 },
-                // 3. ACREDITAMOS el activo por su costo original para eliminarlo del balance
                 { cuentaId: cuentaActivoId, debe: 0, haber: activo.costo }
             ]
         );
 
         if (asiento) {
             activo.estado = 'De Baja';
+            activo.fechaBaja = fechaBaja; // <-- LÍNEA AÑADIDA
             this.saveAll();
             this.closeModal();
             this.irModulo('activos-fijos');
             this.showToast('Activo dado de baja con éxito.', 'success');
         }
     },
-        renderActivosFijos_TabReporte(params = {}) {
+        getActivosFijosReportData(fechaInicio, fechaFin) {
+        const reporte = {
+            lineas: [],
+            totales: { saldoInicial: 0, adiciones: 0, depreciacionPeriodo: 0, bajas: 0, saldoFinal: 0 }
+        };
+
+        this.activosFijos.forEach(activo => {
+            const depreciacionMensual = (activo.costo - activo.valorResidual) / activo.vidaUtil;
+            
+            // 1. Calcular Saldo Inicial (Valor en Libros al inicio del período)
+            const mesesHastaInicio = Math.floor((new Date(fechaInicio) - new Date(activo.fechaCompra)) / (1000 * 60 * 60 * 24 * 30.44));
+            const mesesDepreciadosAlInicio = Math.max(0, Math.min(mesesHastaInicio, activo.mesesDepreciados));
+            const depAcumuladaInicial = mesesDepreciadosAlInicio * depreciacionMensual;
+            const saldoInicial = activo.costo - depAcumuladaInicial;
+
+            // 2. Calcular Adiciones (Nuevas compras en el período)
+            const adiciones = (activo.fechaCompra >= fechaInicio && activo.fechaCompra <= fechaFin) ? activo.costo : 0;
+
+            // 3. Calcular Depreciación del Período
+            const mesesDepreciadosAlFin = activo.mesesDepreciados; // El estado actual ya es el final
+            const depreciacionPeriodo = (mesesDepreciadosAlFin - mesesDepreciadosAlInicio) * depreciacionMensual;
+            
+            // 4. Calcular Bajas (Valor en libros de activos dados de baja en el período)
+            const bajas = (activo.estado === 'De Baja' && activo.fechaBaja >= fechaInicio && activo.fechaBaja <= fechaFin) ? saldoInicial : 0;
+            
+            // 5. Calcular Saldo Final
+            const saldoFinal = (activo.estado !== 'De Baja') ? activo.costo - activo.depreciacionAcumulada : 0;
+
+            reporte.lineas.push({
+                nombre: activo.nombre,
+                saldoInicial,
+                adiciones,
+                depreciacionPeriodo,
+                bajas,
+                saldoFinal
+            });
+        });
+
+        // Calcular totales
+        reporte.totales = reporte.lineas.reduce((acc, linea) => {
+            acc.saldoInicial += linea.saldoInicial;
+            acc.adiciones += linea.adiciones;
+            acc.depreciacionPeriodo += linea.depreciacionPeriodo;
+            acc.bajas += linea.bajas;
+            acc.saldoFinal += linea.saldoFinal;
+            return acc;
+        }, { saldoInicial: 0, adiciones: 0, depreciacionPeriodo: 0, bajas: 0, saldoFinal: 0 });
+
+        return reporte;
+    },
+            renderActivosFijos_TabReporte(params = {}) {
         document.getElementById('page-actions-header').innerHTML = `
             <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarReporteEstilizadoPDF('Reporte de Activos Fijos', 'reporte-activos-area')">
                 <i class="fa-solid fa-print me-2"></i>Imprimir PDF
             </button>`;
-
+        
         const hoy = new Date();
         const primerDiaAno = new Date(hoy.getFullYear(), 0, 1).toISOString().slice(0, 10);
+        const fechaInicio = params.fechaInicio || primerDiaAno;
+        const fechaFin = params.fechaFin || this.getTodayDate();
 
-        // Aquí irá la lógica para generar los datos del reporte. Por ahora, un mensaje temporal.
+        const datosReporte = this.getActivosFijosReportData(fechaInicio, fechaFin);
+
+        let filasHTML = '';
+        datosReporte.lineas.forEach(linea => {
+            filasHTML += `
+                <tr>
+                    <td class="conta-table-td">${linea.nombre}</td>
+                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(linea.saldoInicial)}</td>
+                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(linea.adiciones)}</td>
+                    <td class="conta-table-td text-right font-mono">(${this.formatCurrency(linea.depreciacionPeriodo)})</td>
+                    <td class="conta-table-td text-right font-mono">(${this.formatCurrency(linea.bajas)})</td>
+                    <td class="conta-table-td text-right font-mono font-bold">${this.formatCurrency(linea.saldoFinal)}</td>
+                </tr>
+            `;
+        });
+
         let html = `
             <div class="conta-card" id="reporte-activos-area">
                 <h3 class="conta-subtitle">Reporte de Movimiento y Depreciación de Activos Fijos</h3>
-                <div class="flex items-end gap-4 mb-6">
-                    <div>
-                        <label class="text-sm font-medium">Desde</label>
-                        <input type="date" id="reporte-activos-inicio" class="w-full conta-input" value="${primerDiaAno}">
-                    </div>
-                    <div>
-                        <label class="text-sm font-medium">Hasta</label>
-                        <input type="date" id="reporte-activos-fin" class="w-full conta-input" value="${this.getTodayDate()}">
-                    </div>
-                    <button class="conta-btn">Generar Reporte</button>
+                <form onsubmit="event.preventDefault(); ContaApp.filtrarReporteActivos()" class="flex items-end gap-4 mb-6">
+                    <div><label class="text-sm font-medium">Desde</label><input type="date" id="reporte-activos-inicio" class="w-full conta-input" value="${fechaInicio}"></div>
+                    <div><label class="text-sm font-medium">Hasta</label><input type="date" id="reporte-activos-fin" class="w-full conta-input" value="${fechaFin}"></div>
+                    <button type="submit" class="conta-btn">Generar Reporte</button>
+                </form>
+                
+                <div class="overflow-auto">
+                    <table class="min-w-full text-sm conta-table-zebra">
+                        <thead>
+                            <tr>
+                                <th class="conta-table-th">Activo</th>
+                                <th class="conta-table-th text-right">Valor en Libros Inicial</th>
+                                <th class="conta-table-th text-right">Adiciones</th>
+                                <th class="conta-table-th text-right">Depreciación del Período</th>
+                                <th class="conta-table-th text-right">Bajas y Ventas</th>
+                                <th class="conta-table-th text-right">Valor en Libros Final</th>
+                            </tr>
+                        </thead>
+                        <tbody>${filasHTML}</tbody>
+                        <tfoot class="bg-[var(--color-bg-accent)] font-bold">
+                            <tr>
+                                <td class="conta-table-td">TOTALES</td>
+                                <td class="conta-table-td text-right font-mono">${this.formatCurrency(datosReporte.totales.saldoInicial)}</td>
+                                <td class="conta-table-td text-right font-mono">${this.formatCurrency(datosReporte.totales.adiciones)}</td>
+                                <td class="conta-table-td text-right font-mono">(${this.formatCurrency(datosReporte.totales.depreciacionPeriodo)})</td>
+                                <td class="conta-table-td text-right font-mono">(${this.formatCurrency(datosReporte.totales.bajas)})</td>
+                                <td class="conta-table-td text-right font-mono">${this.formatCurrency(datosReporte.totales.saldoFinal)}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
                 </div>
-                <p class="text-center text-[var(--color-text-secondary)] p-8">El contenido del reporte detallado se implementará aquí.</p>
-            </div>
-        `;
+            </div>`;
         document.getElementById('activos-fijos-contenido').innerHTML = html;
     },
 
@@ -320,5 +402,14 @@ Object.assign(ContaApp, {
             </div>
         `;
         document.getElementById('activos-fijos-contenido').innerHTML = html;
+    },
+    filtrarReporteActivos() {
+        const fechaInicio = document.getElementById('reporte-activos-inicio').value;
+        const fechaFin = document.getElementById('reporte-activos-fin').value;
+        this.irModulo('activos-fijos', {
+            submodulo: 'reporte',
+            fechaInicio,
+            fechaFin
+        });
     },
 });
