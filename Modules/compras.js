@@ -220,9 +220,15 @@ Object.assign(ContaApp, {
             </div>
         `;
         container.insertAdjacentHTML('beforeend', itemHTML);
-        if (container.lastChild) {
-            this.actualizarUnidadMedidaCompra(container.lastChild.querySelector('.compra-item-producto-id'));
+        
+        // --- INICIO DE LA CORRECCIÓN ---
+        // Buscamos el último elemento DIV que acabamos de añadir
+        const nuevaFila = container.querySelector('.compra-item-row:last-child');
+        if (nuevaFila) {
+            // Y ahora sí, llamamos a la función con el selector de producto de esa fila
+            this.actualizarUnidadMedidaCompra(nuevaFila.querySelector('.compra-item-producto-id'));
         }
+        // --- FIN DE LA CORRECCIÓN ---
     },
 
     actualizarTotalesCompra() {
