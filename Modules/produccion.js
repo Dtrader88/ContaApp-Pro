@@ -58,7 +58,7 @@ Object.assign(ContaApp, {
         const ordenOriginal = duplicarId ? this.findById(this.ordenesProduccion, duplicarId) : {};
         const isDuplicating = duplicarId !== null;
 
-        const proximoNumeroOP = `OP-${this.ordenesProduccion.length + 1001}`;
+        const proximoNumeroOP = `OP-${(this.ordenesProduccion || []).length + 1001}`;
 
         const modalHTML = `
             <h3 class="conta-title mb-4">${isDuplicating ? 'Duplicar' : 'Nueva'} Orden de Producción</h3>
@@ -74,24 +74,29 @@ Object.assign(ContaApp, {
                         <input type="text" id="op-descripcion" class="w-full conta-input mt-1" placeholder="Ej: Señalética de PVC para Cliente X" value="${ordenOriginal.descripcion || ''}" required>
                     </div>
                 </div>
+                
+                <!-- INICIO DE LA CORRECCIÓN: AÑADIDO CAMPO DE FECHA -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="md:col-span-2">
+                        <label>Producto Final a Crear</label>
+                        <input type="text" id="op-producto-final-nombre" class="w-full conta-input mt-1" placeholder="Ej: Señalética PVC 10x10" value="${ordenOriginal.productoFinalNombre || ''}" required>
+                    </div>
+                    <div>
+                        <label>Fecha de Producción</label>
+                        <input type="date" id="op-fecha" value="${ordenOriginal.fecha || this.getTodayDate()}" class="w-full conta-input mt-1" required>
+                    </div>
+                </div>
+                <!-- FIN DE LA CORRECCIÓN -->
 
                 <div class="conta-card p-4">
-                    <h4 class="font-bold mb-2">Producto Final a Crear</h4>
-                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div class="md:col-span-2">
-                            <label>Nombre del Nuevo Producto</label>
-                            <input type="text" id="op-producto-final-nombre" class="w-full conta-input mt-1" placeholder="Ej: Señalética PVC 10x10" value="${ordenOriginal.productoFinalNombre || ''}" required>
-                        </div>
+                    <h4 class="font-bold mb-2">Producto Final y Materias Primas</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label>Cantidad a Producir</label>
                             <input type="number" id="op-cantidad-producir" class="w-full conta-input mt-1" value="${ordenOriginal.cantidadProducida || 1}" min="1" required>
                         </div>
                     </div>
-                </div>
-
-                <div class="conta-card p-4">
-                    <h4 class="font-bold mb-2">Materias Primas a Utilizar</h4>
-                    <div id="op-componentes-container" class="space-y-3"></div>
+                    <div id="op-componentes-container" class="space-y-3 mt-4"></div>
                     <button type="button" class="conta-btn conta-btn-small conta-btn-accent mt-2" onclick="ContaApp.agregarComponenteOP()">+ Agregar Materia Prima</button>
                 </div>
                 
@@ -103,7 +108,7 @@ Object.assign(ContaApp, {
         `;
         this.showModal(modalHTML, '4xl');
         
-        if (isDuplicating) {
+        if (isDuplicating && ordenOriginal.componentes) {
             ordenOriginal.componentes.forEach(comp => this.agregarComponenteOP(comp));
         } else {
             this.agregarComponenteOP();
@@ -119,19 +124,40 @@ Object.assign(ContaApp, {
 
         const itemHTML = `
             <div class="grid grid-cols-12 gap-2 items-center dynamic-row">
-                <div class="col-span-8">
-                    <select name="op-componente-id" class="w-full conta-input op-componente-id" required>
+                <div class="col-span-6">
+                    <select class="w-full conta-input op-componente-id" onchange="ContaApp.actualizarUnidadMedidaOP(this)" required>
                         <option value="">-- Selecciona una materia prima --</option>
                         ${materiasPrimasOptions}
                     </select>
                 </div>
+                <div class="col-span-2">
+                     <input type="number" step="any" class="w-full conta-input text-right op-componente-cantidad" placeholder="Cantidad" value="${componente.cantidad || ''}" required>
+                </div>
                 <div class="col-span-3">
-                     <input type="number" step="any" name="op-componente-cantidad" class="w-full conta-input text-right op-componente-cantidad" placeholder="Cantidad" value="${componente.cantidad || ''}" required>
+                    <input type="text" class="w-full conta-input bg-gray-100 dark:bg-gray-700 op-componente-unidad-display" readonly>
                 </div>
                 <button type="button" class="col-span-1 conta-btn-icon delete" onclick="this.closest('.dynamic-row').remove()">🗑️</button>
             </div>
         `;
         container.insertAdjacentHTML('beforeend', itemHTML);
+
+        const nuevaFila = container.querySelector('.dynamic-row:last-child');
+        if (nuevaFila) {
+            this.actualizarUnidadMedidaOP(nuevaFila.querySelector('.op-componente-id'));
+        }
+    },
+    actualizarUnidadMedidaOP(selectProducto) {
+        const fila = selectProducto.closest('.dynamic-row');
+        const productoId = parseInt(selectProducto.value);
+        const producto = this.findById(this.productos, productoId);
+        const unidadDisplay = fila.querySelector('.op-componente-unidad-display');
+
+        if (producto) {
+            const unidad = this.findById(this.unidadesMedida, producto.unidadMedidaId);
+            unidadDisplay.value = unidad ? unidad.nombre : 'N/A';
+        } else {
+            unidadDisplay.value = '';
+        }
     },
 
     guardarOrdenProduccion(e) {
