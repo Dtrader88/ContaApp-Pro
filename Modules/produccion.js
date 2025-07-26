@@ -134,12 +134,17 @@ Object.assign(ContaApp, {
         const isEditing = id !== null;
 
         try {
+            // --- INICIO DE LA LÓGICA DE RECOLECCIÓN DE DATOS MEJORADA ---
+            const productoTerminadoNombre = document.getElementById('op-producto-terminado-input').value;
+            const productoTerminadoEncontrado = this.productos.find(p => p.nombre.toLowerCase() === productoTerminadoNombre.toLowerCase());
+            
             const data = {
                 descripcion: document.getElementById('op-descripcion').value,
                 fecha: document.getElementById('op-fecha').value,
-                productoTerminadoId: parseInt(document.getElementById('op-producto-terminado-id').value),
+                productoTerminadoId: productoTerminadoEncontrado ? productoTerminadoEncontrado.id : null,
                 cantidadProducida: parseFloat(document.getElementById('op-cantidad-producir').value)
             };
+            // --- FIN DE LA LÓGICA DE RECOLECCIÓN DE DATOS MEJORADA ---
 
             const componentes = [];
             document.querySelectorAll('#op-componentes-container .dynamic-row').forEach(row => {
