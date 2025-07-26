@@ -310,26 +310,26 @@ Object.assign(ContaApp, {
     abrirModalDarDeBaja(id) {
         const activo = this.findById(this.activosFijos, id);
         if (!activo) return;
-
         const valorEnLibros = activo.costo - activo.depreciacionAcumulada;
 
         const modalHTML = `
             <h3 class="conta-title mb-4">Dar de Baja Activo Fijo</h3>
             <p class="mb-2"><strong>Activo:</strong> ${activo.nombre}</p>
-            <p class="mb-2"><strong>Valor en Libros Actual:</strong> ${this.formatCurrency(valorEnLibros)}</p>
-            <p class="text-[var(--color-text-secondary)] text-sm mb-6">Esta acción registrará una pérdida por el valor en libros restante y cambiará el estado del activo a "De Baja". Esta acción es irreversible.</p>
-
-            <form onsubmit="ContaApp.guardarBajaActivo(event, ${id})" class="modal-form">
+            <p class="mb-2"><strong>Valor en Libros a dar de baja:</strong> ${this.formatCurrency(valorEnLibros)}</p>
+            <form onsubmit="ContaApp.guardarBajaActivo(event, ${id})" class="modal-form space-y-4">
                 <div>
                     <label>Fecha de la Baja</label>
                     <input type="date" id="baja-fecha" value="${this.getTodayDate()}" class="w-full conta-input mt-1" required>
+                </div>
+                <div>
+                    <label>Motivo de la Baja</label>
+                    <input type="text" id="baja-motivo" class="w-full conta-input mt-1" placeholder="Ej: Equipo obsoleto, daño irreparable" required>
                 </div>
                 <div class="flex justify-end gap-2 mt-8">
                     <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button>
                     <button type="submit" class="conta-btn conta-btn-danger">Confirmar Baja</button>
                 </div>
-            </form>
-        `;
+            </form>`;
         this.showModal(modalHTML, 'xl');
     },
 
@@ -337,15 +337,16 @@ Object.assign(ContaApp, {
         e.preventDefault();
         const activo = this.findById(this.activosFijos, id);
         const fechaBaja = document.getElementById('baja-fecha').value;
+        const motivoBaja = document.getElementById('baja-motivo').value;
         const valorEnLibros = activo.costo - activo.depreciacionAcumulada;
 
         const cuentaActivoId = activo.cuentaId;
         const cuentaDepAcumuladaId = 15901;
-        const cuentaPerdidaId = 51003;
+        const cuentaPerdidaId = 520; // CORRECTO: Usar la cuenta de Pérdida en Venta/Baja de Activos
 
         const asiento = this.crearAsiento(
             fechaBaja,
-            `Baja de activo fijo: ${activo.nombre}`,
+            `Baja de activo fijo: ${activo.nombre} (Motivo: ${motivoBaja})`,
             [
                 { cuentaId: cuentaDepAcumuladaId, debe: activo.depreciacionAcumulada, haber: 0 },
                 { cuentaId: cuentaPerdidaId, debe: valorEnLibros, haber: 0 },
@@ -355,10 +356,11 @@ Object.assign(ContaApp, {
 
         if (asiento) {
             activo.estado = 'De Baja';
-            activo.fechaBaja = fechaBaja; // <-- LÍNEA AÑADIDA
+            activo.fechaBaja = fechaBaja;
+            activo.motivoBaja = motivoBaja; // Guardamos el motivo
             this.saveAll();
             this.closeModal();
-            this.irModulo('activos-fijos');
+            this.irModulo('activos-fijos', { activoId: id });
             this.showToast('Activo dado de baja con éxito.', 'success');
         }
     },
@@ -497,47 +499,56 @@ Object.assign(ContaApp, {
         if (!activo) return null;
 
         let movimientos = [];
-        let valorEnLibrosCorriente = activo.costo;
-
-        // 1. Movimiento de Compra
+        
+        // 1. Movimiento de Compra Original
         movimientos.push({
             fecha: activo.fechaCompra,
-            descripcion: 'Compra del Activo',
+            descripcion: 'Compra del Activo (Costo Original)',
             valorCambio: activo.costo,
-            valorEnLibros: valorEnLibrosCorriente
+            esCompra: true
         });
 
-        // 2. Simular los movimientos de depreciación mes a mes
+        // 2. Buscar todas las mejoras para este activo
+        const mejoras = this.transacciones.filter(t => t.tipo === 'mejora_activo' && t.activoId === activoId);
+        mejoras.forEach(mejora => {
+            movimientos.push({
+                fecha: mejora.fecha,
+                descripcion: `Mejora: ${mejora.descripcion}`,
+                valorCambio: mejora.costo,
+                esMejora: true
+            });
+        });
+        
+        // 3. Simular depreciaciones y bajas
         const depreciacionMensual = (activo.costo - activo.valorResidual) / activo.vidaUtil;
         for (let i = 1; i <= activo.mesesDepreciados; i++) {
             const fechaDepreciacion = new Date(activo.fechaCompra);
             fechaDepreciacion.setMonth(fechaDepreciacion.getMonth() + i);
-            
-            valorEnLibrosCorriente -= depreciacionMensual;
-
             movimientos.push({
                 fecha: fechaDepreciacion.toISOString().slice(0, 10),
                 descripcion: `Depreciación Mensual #${i}`,
-                valorCambio: -depreciacionMensual,
-                valorEnLibros: valorEnLibrosCorriente
+                valorCambio: -depreciacionMensual
             });
         }
         
-        // 3. Movimiento de Baja (si existe)
-        if (activo.estado === 'De Baja' && activo.fechaBaja) {
-             valorEnLibrosCorriente = 0; // El valor en libros se vuelve cero
+        if (activo.estado === 'De Baja' || activo.estado === 'Vendido') {
              movimientos.push({
                 fecha: activo.fechaBaja,
-                descripcion: 'Baja del Activo',
-                valorCambio: - (activo.costo - activo.depreciacionAcumulada),
-                valorEnLibros: valorEnLibrosCorriente
+                descripcion: `Disposición del Activo (${activo.estado})`,
+                valorCambio: -(activo.costo - activo.depreciacionAcumulada)
             });
         }
 
-        return {
-            activo: activo,
-            movimientos: movimientos
-        };
+        // 4. Ordenar todos los eventos por fecha y calcular el saldo corriente
+        movimientos.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+        
+        let valorEnLibrosCorriente = 0;
+        movimientos.forEach(mov => {
+            valorEnLibrosCorriente += mov.valorCambio;
+            mov.valorEnLibros = valorEnLibrosCorriente;
+        });
+
+        return { activo, movimientos };
     },
     abrirModalVenderActivo(id) {
         const activo = this.findById(this.activosFijos, id);
@@ -591,26 +602,21 @@ Object.assign(ContaApp, {
 
         // Cuentas involucradas
         const cuentaActivoId = activo.cuentaId;
-        const cuentaDepAcumuladaId = 15901; // Asumimos Mobiliario y Equipo
+        const cuentaDepAcumuladaId = 15901;
         const cuentaGananciaId = 430; // Ganancia en Venta de Activos
         const cuentaPerdidaId = 520;  // Pérdida en Venta/Baja de Activos
 
         const movimientos = [
-            // 1. DEBITAMOS el efectivo recibido en el banco
             { cuentaId: cuentaBancoId, debe: precioVenta, haber: 0 },
-            // 2. DEBITAMOS la depreciación acumulada para saldarla
             { cuentaId: cuentaDepAcumuladaId, debe: activo.depreciacionAcumulada, haber: 0 },
-            // 3. ACREDITAMOS el activo por su costo original para eliminarlo
             { cuentaId: cuentaActivoId, debe: 0, haber: activo.costo }
         ];
 
-        // 4. Registramos la ganancia (crédito) o la pérdida (débito)
         if (gananciaOPerdida > 0) {
             movimientos.push({ cuentaId: cuentaGananciaId, debe: 0, haber: gananciaOPerdida });
         } else if (gananciaOPerdida < 0) {
             movimientos.push({ cuentaId: cuentaPerdidaId, debe: Math.abs(gananciaOPerdida), haber: 0 });
         }
-        // Si es 0, el asiento ya está cuadrado.
 
         const asiento = this.crearAsiento(fechaVenta, `Venta de activo fijo: ${activo.nombre}`, movimientos);
 
@@ -619,7 +625,7 @@ Object.assign(ContaApp, {
             activo.fechaBaja = fechaVenta;
             this.saveAll();
             this.closeModal();
-            this.irModulo('activos-fijos');
+            this.irModulo('activos-fijos', { activoId: id });
             this.showToast('Venta de activo registrada con éxito.', 'success');
         }
     },
@@ -704,26 +710,36 @@ Object.assign(ContaApp, {
             return;
         }
 
-        // 1. Actualizar los valores del activo
-        activo.costo += costoMejora;
+        // 1. Crear una transacción para registrar la mejora (para el Kardex)
+        const transaccionMejora = {
+            id: this.idCounter++,
+            tipo: 'mejora_activo',
+            fecha: fechaMejora,
+            activoId: id,
+            costo: costoMejora,
+            descripcion: descripcion
+        };
+        this.transacciones.push(transaccionMejora);
+
+        // 2. Actualizar los valores del activo
+        activo.costo += costoMejora; // El costo base sí aumenta para el cálculo de depreciación futuro
         activo.vidaUtil += vidaUtilAdicional;
 
-        // 2. Crear el asiento contable para la capitalización
+        // 3. Crear el asiento contable para la capitalización
         const asiento = this.crearAsiento(
             fechaMejora,
             `Mejora en activo ${activo.nombre}: ${descripcion}`,
             [
-                // DEBITAMOS la cuenta del activo para aumentar su valor
                 { cuentaId: activo.cuentaId, debe: costoMejora, haber: 0 },
-                // ACREDITAMOS el banco o las cuentas por pagar
                 { cuentaId: cuentaPagoId, debe: 0, haber: costoMejora }
-            ]
+            ],
+            transaccionMejora.id // Vinculamos el asiento a la transacción
         );
 
         if (asiento) {
             this.saveAll();
             this.closeModal();
-            this.irModulo('activos-fijos', { activoId: id }); // Volver al Kardex del activo
+            this.irModulo('activos-fijos', { activoId: id });
             this.showToast('Mejora capitalizada con éxito.', 'success');
         }
     },
