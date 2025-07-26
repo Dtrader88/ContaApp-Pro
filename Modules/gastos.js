@@ -296,97 +296,26 @@ Object.assign(ContaApp, {
         }
     },
                 handleGastoItemChange(selectElement) {
-        const row = selectElement.closest('.gasto-item-row');
-        const inputsContainer = row.querySelector('.gasto-item-inputs-container');
-        const cuentaId = parseInt(selectElement.value);
-
-        const cuentasGastoOptions = this.planDeCuentas
-            .filter(c => c.tipo === 'DETALLE' && (c.codigo.startsWith('5') || c.id === 130))
-            .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }))
-            .map(c => `<option value="${c.id}" ${c.id === cuentaId ? 'selected' : ''}>${c.codigo} - ${c.nombre}</option>`).join('');
-
-        let newInputsHTML = '';
-
-        if (cuentaId === 130) {
-            const productosOptions = this.productos
-                .filter(p => p.tipo === 'producto')
-                .map(p => `<option value="${p.id}">${p.nombre}</option>`)
-                .join('');
-            
-            newInputsHTML = `
-                <select class="col-span-3 p-2 gasto-item-cuenta" onchange="ContaApp.handleGastoItemChange(this)">${cuentasGastoOptions}</select>
-                
-                <!-- INICIO DE LA MEJORA -->
-                <div class="col-span-3 flex items-center gap-2">
-                    <select class="w-full p-2 gasto-item-producto-id" required>${productosOptions}</select>
-                    <button type="button" class="conta-btn conta-btn-small" onclick="ContaApp.abrirSubModalNuevoProducto('gasto')">+</button>
-                </div>
-                <!-- FIN DE LA MEJORA -->
-
-                <input type="number" min="1" placeholder="Cantidad" class="col-span-2 p-2 text-right gasto-item-cantidad" oninput="ContaApp.actualizarTotalesGasto()" required>
-                <input type="number" step="0.01" min="0" placeholder="Costo Unit." class="col-span-2 p-2 text-right gasto-item-costo-unitario" oninput="ContaApp.actualizarTotalesGasto()" required>
-            `;
-        } else {
-            newInputsHTML = `
-                <select class="col-span-7 p-2 gasto-item-cuenta" onchange="ContaApp.handleGastoItemChange(this)">${cuentasGastoOptions}</select>
-                <input type="number" step="0.01" min="0" placeholder="Monto" class="col-span-3 p-2 text-right gasto-item-monto" oninput="ContaApp.actualizarTotalesGasto()">
-            `;
-        }
-        
-        inputsContainer.innerHTML = newInputsHTML;
+        // Esta función ahora no necesita hacer nada, pero la mantenemos
+        // por si en el futuro queremos añadir lógica aquí.
+        // Lo importante es que ya no intenta cambiar la fila a "modo inventario".
         this.actualizarTotalesGasto();
     },
     agregarItemGasto() {
         const container = document.getElementById('gasto-items-container');
         
-        // 1. Obtenemos la lista de cuentas de gasto/inventario
-        const cuentasDisponibles = this.planDeCuentas
-            .filter(c => c.tipo === 'DETALLE' && (c.codigo.startsWith('5') || c.id === 130))
-            .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }));
-
-        // 2. Determinamos cuál es la cuenta por defecto (la primera de la lista)
-        const defaultAccountId = cuentasDisponibles.length > 0 ? cuentasDisponibles[0].id : null;
-
-        // 3. Creamos el HTML para el desplegable de cuentas, con la opción por defecto ya seleccionada
-        const cuentasGastoOptions = cuentasDisponibles
-            .map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`) // No pre-seleccionamos aquí
+        // Obtenemos SOLO las cuentas de gasto (grupo 500)
+        const cuentasGastoOptions = this.planDeCuentas
+            .filter(c => c.tipo === 'DETALLE' && c.codigo.startsWith('5'))
+            .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }))
+            .map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`)
             .join('');
 
-        let initialInputsHTML = '';
-
-        // 4. Lógica clave: Construimos el HTML inicial basado en si la cuenta por defecto es Inventario o no
-        if (defaultAccountId === 130) {
-            // Si la primera cuenta disponible es Inventario, construimos la vista de compra de inventario
-            const productosOptions = this.productos
-                .filter(p => p.tipo === 'producto')
-                .map(p => `<option value="${p.id}">${p.nombre}</option>`)
-                .join('');
-            
-            initialInputsHTML = `
-                <select class="col-span-3 p-2 gasto-item-cuenta" onchange="ContaApp.handleGastoItemChange(this)">
-                    <option value="130" selected>130 - Inventario</option>
-                    ${cuentasDisponibles.filter(c => c.id !== 130).map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`).join('')}
-                </select>
-                <div class="col-span-3 flex items-center gap-2">
-                    <select class="w-full p-2 gasto-item-producto-id" required>${productosOptions}</select>
-                    <button type="button" class="conta-btn conta-btn-small" onclick="ContaApp.abrirSubModalNuevoProducto('gasto')">+</button>
-                </div>
-                <input type="number" min="1" placeholder="Cantidad" class="col-span-2 p-2 text-right gasto-item-cantidad" oninput="ContaApp.actualizarTotalesGasto()" required>
-                <input type="number" step="0.01" min="0" placeholder="Costo Unit." class="col-span-2 p-2 text-right gasto-item-costo-unitario" oninput="ContaApp.actualizarTotalesGasto()" required>
-            `;
-        } else {
-            // Si es cualquier otra cuenta, construimos la vista de gasto normal por defecto
-            initialInputsHTML = `
-                <select class="col-span-7 p-2 gasto-item-cuenta" onchange="ContaApp.handleGastoItemChange(this)">${cuentasGastoOptions}</select>
-                <input type="number" step="0.01" min="0" placeholder="Monto" class="col-span-3 p-2 text-right gasto-item-monto" oninput="ContaApp.actualizarTotalesGasto()">
-            `;
-        }
-
-        // 5. Ensamblamos la fila completa con el HTML inicial correcto
         const itemHTML = `
             <div class="grid grid-cols-12 gap-2 items-center dynamic-row gasto-item-row">
                 <div class="gasto-item-inputs-container col-span-11 grid grid-cols-10 gap-2 items-center">
-                    ${initialInputsHTML}
+                    <select class="col-span-7 p-2 gasto-item-cuenta" onchange="ContaApp.handleGastoItemChange(this)">${cuentasGastoOptions}</select>
+                    <input type="number" step="0.01" min="0" placeholder="Monto" class="col-span-3 p-2 text-right gasto-item-monto" oninput="ContaApp.actualizarTotalesGasto()">
                 </div>
                 <button type="button" class="col-span-1 conta-btn-icon delete" onclick="this.closest('.gasto-item-row').remove(); ContaApp.actualizarTotalesGasto();">🗑️</button>
             </div>
@@ -394,118 +323,88 @@ Object.assign(ContaApp, {
         container.insertAdjacentHTML('beforeend', itemHTML);
     },
     async guardarGasto(e) {
-    e.preventDefault();
-    const submitButton = e.target.querySelector('button[type="submit"]');
-    this.toggleButtonLoading(submitButton, true);
-    
-    try {
-        const contactoId = parseInt(document.getElementById('gasto-proveedor-id').value);
-        const fecha = document.getElementById('gasto-fecha').value;
-        const descripcion = document.getElementById('gasto-descripcion').value;
-        const pagoTipo = document.getElementById('gasto-pago-tipo').value;
-        const esRecurrente = document.getElementById('gasto-recurrente-check').checked;
-        const archivoInput = document.getElementById('gasto-comprobante');
-        const archivo = archivoInput.files[0];
+        e.preventDefault();
+        const submitButton = e.target.querySelector('button[type="submit"]');
+        this.toggleButtonLoading(submitButton, true);
         
-        let comprobanteDataUrl = null;
-
-        if (archivo) {
-            if (archivo.size > 1024 * 1024) { throw new Error('El archivo es demasiado grande (máx 1MB).'); }
-            comprobanteDataUrl = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = error => reject(error);
-                reader.readAsDataURL(archivo);
-            });
-        }
-        
-        const lineas = [];
-        let total = 0;
-
-        document.querySelectorAll('.gasto-item-row').forEach(row => {
-            const cuentaId = parseInt(row.querySelector('.gasto-item-cuenta').value);
-            let monto = 0;
-            if (!cuentaId) return;
-
-            if (cuentaId === 130) {
-                const productoId = parseInt(row.querySelector('.gasto-item-producto-id').value);
-                const cantidad = parseInt(row.querySelector('.gasto-item-cantidad').value);
-                const costoUnitario = parseFloat(row.querySelector('.gasto-item-costo-unitario').value);
-                const producto = this.findById(this.productos, productoId);
-                if (!producto || !cantidad || cantidad <= 0 || isNaN(costoUnitario)) { throw new Error(`Línea de inventario inválida.`); }
-                monto = cantidad * costoUnitario;
-                const valorStockActual = producto.stock * producto.costo;
-                const valorCompra = monto;
-                const nuevoStock = producto.stock + cantidad;
-                const nuevoCostoPromedio = nuevoStock > 0 ? (valorStockActual + valorCompra) / nuevoStock : 0;
-                producto.stock = nuevoStock;
-                producto.costo = nuevoCostoPromedio;
-            } else {
-                monto = parseFloat(row.querySelector('.gasto-item-monto').value) || 0;
+        try {
+            const contactoId = parseInt(document.getElementById('gasto-proveedor-id').value);
+            const fecha = document.getElementById('gasto-fecha').value;
+            const descripcion = document.getElementById('gasto-descripcion').value;
+            const pagoTipo = document.getElementById('gasto-pago-tipo').value;
+            const esRecurrente = document.getElementById('gasto-recurrente-check').checked;
+            const archivoInput = document.getElementById('gasto-comprobante');
+            const archivo = archivoInput.files[0];
+            
+            let comprobanteDataUrl = null;
+            if (archivo) {
+                if (archivo.size > 1024 * 1024) { throw new Error('El archivo es demasiado grande (máx 1MB).'); }
+                comprobanteDataUrl = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = error => reject(error);
+                    reader.readAsDataURL(archivo);
+                });
             }
-            if (monto > 0) {
+            
+            const lineas = [];
+            let total = 0;
+
+            document.querySelectorAll('.gasto-item-row').forEach(row => {
+                const cuentaId = parseInt(row.querySelector('.gasto-item-cuenta').value);
+                const monto = parseFloat(row.querySelector('.gasto-item-monto').value) || 0;
+                if (!cuentaId || monto <= 0) return;
+
                 lineas.push({ cuentaId, monto });
                 total += monto;
+            });
+
+            if (lineas.length === 0) { throw new Error('Debes agregar al menos una línea de gasto válida.'); }
+            
+            if (esRecurrente) {
+                const nuevaPlantilla = { id: this.idCounter++, tipo: 'gasto', contactoId, descripcion, total, items: lineas, frecuencia: 'mensual', ultimoGenerado: null };
+                this.recurrentes.push(nuevaPlantilla);
             }
-        });
+            
+            const estado = pagoTipo === 'credito' ? 'Pendiente' : 'Pagado';
+            const transaccion = { id: this.idCounter++, tipo: 'gasto', fecha, contactoId, descripcion, total, estado, items: lineas, montoPagado: 0, comprobanteDataUrl };
+            this.transacciones.push(transaccion);
 
-        if (lineas.length === 0) { throw new Error('Debes agregar al menos una línea de gasto.'); }
-        
-        if (esRecurrente) {
-            const nuevaPlantilla = { id: this.idCounter++, tipo: 'gasto', contactoId, descripcion, total, items: lineas, frecuencia: 'mensual', ultimoGenerado: null };
-            this.recurrentes.push(nuevaPlantilla);
-        }
-        
-        const estado = pagoTipo === 'credito' ? 'Pendiente' : 'Pagado';
-        const transaccion = { id: this.idCounter++, tipo: 'gasto', fecha, contactoId, descripcion, total, estado, items: lineas, montoPagado: 0, comprobanteDataUrl };
-        this.transacciones.push(transaccion);
-
-        const cuentaCxpId = 210;
-        const movimientos = [];
-        lineas.forEach(linea => {
-            movimientos.push({ cuentaId: linea.cuentaId, debe: linea.monto, haber: 0 });
-        });
-        
-        if (pagoTipo === 'credito') {
-            movimientos.push({ cuentaId: cuentaCxpId, debe: 0, haber: total });
-        } else {
-            const cuentaBancoId = parseInt(document.getElementById('gasto-pago-cuenta-banco').value);
-            movimientos.push({ cuentaId: cuentaBancoId, debe: 0, haber: total });
-            transaccion.montoPagado = total;
-
-            // --- INICIO DE LA CORRECCIÓN ---
-            // Crear una transacción de pago explícita para el historial
-            const pagoContado = {
-                id: this.idCounter++, tipo: 'pago_proveedor', fecha: fecha, contactoId: contactoId,
-                monto: total, cuentaOrigenId: cuentaBancoId, gastoId: transaccion.id,
-                comentario: 'Pago de contado al crear el gasto'
-            };
-            this.transacciones.push(pagoContado);
-            // --- FIN DE LA CORRECCIÓN ---
-        }
-        
-        const asiento = this.crearAsiento(fecha, descripcion, movimientos, transaccion.id);
-
-        if (asiento) {
-            const ocIdInput = document.getElementById('gasto-oc-origen-id');
-            if (ocIdInput && ocIdInput.value) {
-                const ocId = parseInt(ocIdInput.value);
-                const ocOriginal = this.findById(this.transacciones, ocId);
-                if (ocOriginal) { ocOriginal.estado = 'Recibido Total'; }
+            const cuentaCxpId = 210;
+            const movimientos = [];
+            lineas.forEach(linea => {
+                movimientos.push({ cuentaId: linea.cuentaId, debe: linea.monto, haber: 0 });
+            });
+            
+            if (pagoTipo === 'credito') {
+                movimientos.push({ cuentaId: cuentaCxpId, debe: 0, haber: total });
+            } else {
+                const cuentaBancoId = parseInt(document.getElementById('gasto-pago-cuenta-banco').value);
+                movimientos.push({ cuentaId: cuentaBancoId, debe: 0, haber: total });
+                transaccion.montoPagado = total;
+                const pagoContado = {
+                    id: this.idCounter++, tipo: 'pago_proveedor', fecha: fecha, contactoId: contactoId,
+                    monto: total, cuentaOrigenId: cuentaBancoId, gastoId: transaccion.id,
+                    comentario: 'Pago de contado al crear el gasto'
+                };
+                this.transacciones.push(pagoContado);
             }
+            
+            const asiento = this.crearAsiento(fecha, descripcion, movimientos, transaccion.id);
 
-            this.isFormDirty = false;
-            this.saveAll();
-            this.closeModal();
-            this.irModulo('gastos');
-            this.showToast('Gasto guardado con éxito.', 'success');
+            if (asiento) {
+                this.isFormDirty = false;
+                this.saveAll();
+                this.closeModal();
+                this.irModulo('gastos');
+                this.showToast('Gasto guardado con éxito.', 'success');
+            }
+        } catch (error) {
+            this.showToast(error.message, 'error');
+        } finally {
+            this.toggleButtonLoading(submitButton, false);
         }
-    } catch (error) {
-        this.showToast(error.message, 'error');
-    } finally {
-        this.toggleButtonLoading(submitButton, false);
-    }
-},
+    },
     exportarGastosCSV() {
         const filters = {
             search: document.getElementById('gastos-search')?.value,
