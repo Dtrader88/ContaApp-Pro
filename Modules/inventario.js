@@ -268,6 +268,11 @@ Object.assign(ContaApp, {
     },
     abrirModalProducto(id = null) {
         const producto = id ? this.findById(this.productos, id) : {};
+        
+        const unidadesOptions = this.unidadesMedida
+            .map(u => `<option value="${u.id}" ${producto.unidadMedidaId === u.id ? 'selected' : ''}>${u.nombre}</option>`)
+            .join('');
+
         const modalHTML = `<h3 class="conta-title mb-4">${id ? 'Editar' : 'Nuevo'} Producto/Servicio</h3>
         <form onsubmit="ContaApp.guardarProducto(event, ${id})" class="space-y-4 modal-form">
              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -277,12 +282,15 @@ Object.assign(ContaApp, {
                     <option value="servicio" ${producto.tipo === 'servicio' ? 'selected' : ''}>Servicio</option>
                 </select></div>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div><label>Unidad de Medida</label><select id="prod-unidad" class="w-full p-2 mt-1">${unidadesOptions}</select></div>
                 <div><label>Stock Inicial</label><input type="number" id="prod-stock" class="w-full p-2 mt-1" value="${producto.stock || 0}" ${id ? 'disabled':''}></div>
                 <div><label>Stock Mínimo</label><input type="number" id="prod-stock-minimo" class="w-full p-2 mt-1" value="${producto.stockMinimo || 0}"></div>
                 <div><label>Costo Unitario</label><input type="number" step="0.01" id="prod-costo" class="w-full p-2 mt-1" value="${producto.costo || 0}"></div>
                 <div><label>Precio de Venta</label><input type="number" step="0.01" id="prod-precio" class="w-full p-2 mt-1" value="${producto.precio || 0}" required></div>
             </div>
+
             <div class="flex justify-end gap-2 mt-6"><button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button><button type="submit" class="conta-btn">${id ? 'Guardar Cambios' : 'Crear'}</button></div>
         </form>`;
         this.showModal(modalHTML, '3xl');
@@ -292,6 +300,7 @@ Object.assign(ContaApp, {
         const data = {
             nombre: document.getElementById('prod-nombre').value,
             tipo: document.getElementById('prod-tipo').value,
+            unidadMedidaId: parseInt(document.getElementById('prod-unidad').value) || null,
             stock: parseFloat(document.getElementById('prod-stock').value) || 0,
             stockMinimo: parseFloat(document.getElementById('prod-stock-minimo').value) || 0,
             costo: parseFloat(document.getElementById('prod-costo').value) || 0,
@@ -300,9 +309,9 @@ Object.assign(ContaApp, {
 
         if(id) {
             const producto = this.findById(this.productos, id);
-            // Al editar, no modificamos el stock directamente, solo los otros campos
             producto.nombre = data.nombre;
             producto.tipo = data.tipo;
+            producto.unidadMedidaId = data.unidadMedidaId;
             producto.stockMinimo = data.stockMinimo;
             producto.costo = data.costo;
             producto.precio = data.precio;
@@ -312,7 +321,7 @@ Object.assign(ContaApp, {
             const valorInventario = nuevoProducto.costo * nuevoProducto.stock;
             if (valorInventario > 0) {
                  this.crearAsiento(this.getTodayDate(), `Inventario inicial ${nuevoProducto.nombre}`, [
-                    { cuentaId: 130, debe: valorInventario, haber: 0 },
+                    { cuentaId: 13001, debe: valorInventario, haber: 0 },
                     { cuentaId: 310, debe: 0, haber: valorInventario }
                 ]);
             }

@@ -15,6 +15,7 @@ const ContaApp = {
     activosFijos: [],
     listasMateriales: [],
     ordenesProduccion: [],
+    unidadesMedida: [],
     bancoImportado: {},
     
     // --- LÍNEA AÑADIDA PARA SOLUCIONAR EL ERROR ---
@@ -781,8 +782,9 @@ return;
             productos: this.productos,
             recurrentes: this.recurrentes,
             activosFijos: this.activosFijos,
-            listasMateriales: this.listasMateriales, // <-- LÍNEA AÑADIDA
-            ordenesProduccion: this.ordenesProduccion, // <-- LÍNEA AÑADIDA
+            listasMateriales: this.listasMateriales,
+            ordenesProduccion: this.ordenesProduccion,
+            unidadesMedida: this.unidadesMedida,
             bancoImportado: this.bancoImportado
         };
         this.repository.saveAll(dataToSave);
@@ -828,8 +830,15 @@ return;
             productos: [],
             recurrentes: [],
             activosFijos: [],
-            listasMateriales: [], // <-- LÍNEA AÑADIDA
-            ordenesProduccion: [], // <-- LÍNEA AÑADIDA
+            listasMateriales: [],
+            ordenesProduccion: [],
+            unidadesMedida: [
+                { id: 1, nombre: 'Unidad' },
+                { id: 2, nombre: 'Caja' },
+                { id: 3, nombre: 'Kg' },
+                { id: 4, nombre: 'Litro' },
+                { id: 5, nombre: 'Metro' }
+            ],
             bancoImportado: {}
         };
         
@@ -845,8 +854,9 @@ return;
             this.productos = data.productos || defaultData.productos;
             this.recurrentes = data.recurrentes || defaultData.recurrentes;
             this.activosFijos = data.activosFijos || [];
-            this.listasMateriales = data.listasMateriales || []; // <-- LÍNEA AÑADIDA
-            this.ordenesProduccion = data.ordenesProduccion || []; // <-- LÍNEA AÑADIDA
+            this.listasMateriales = data.listasMateriales || [];
+            this.ordenesProduccion = data.ordenesProduccion || [];
+            this.unidadesMedida = data.unidadesMedida && data.unidadesMedida.length > 0 ? data.unidadesMedida : defaultData.unidadesMedida;
             this.bancoImportado = data.bancoImportado || defaultData.bancoImportado;
 
             this.verificarYActualizarPlanDeCuentas();
