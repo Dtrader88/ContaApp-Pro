@@ -449,40 +449,33 @@ Object.assign(ContaApp, {
                     return;
                 }
 
-                // 1. Revertir el stock y el costo promedio
                 compra.items.forEach(itemCompra => {
                     const producto = this.findById(this.productos, itemCompra.productoId);
                     if (producto) {
-                        // --- INICIO DE LA CORRECCIÓN ---
                         const valorCompraARevertir = itemCompra.cantidad * itemCompra.costoUnitario;
                         const valorTotalStockActual = producto.stock * producto.costo;
                         const nuevoStock = producto.stock - itemCompra.cantidad;
 
                         if (nuevoStock < 0) {
                             console.error(`Error de anulación: el stock de '${producto.nombre}' sería negativo.`);
-                            // En un sistema real, aquí se detendría la anulación y se notificaría al usuario.
-                            // Por ahora, permitimos que quede negativo para no bloquear, pero es una área de mejora.
                         }
                         
-                        // Recalcular el costo promedio al revertir la compra
                         producto.costo = nuevoStock > 0 ? (valorTotalStockActual - valorCompraARevertir) / nuevoStock : 0;
                         producto.stock = nuevoStock;
-                        // --- FIN DE LA CORRECCIÓN ---
                     }
                 });
 
-                // 2. Crear asiento contable de anulación
                 const asientoOriginal = this.asientos.find(a => a.transaccionId === compra.id);
                 if (asientoOriginal) {
                     const movimientosReversos = asientoOriginal.movimientos.map(mov => ({
                         cuentaId: mov.cuentaId,
-                        debe: mov.haber, // Invertir debe y haber
+                        debe: mov.haber,
                         haber: mov.debe
                     }));
                     this.crearAsiento(this.getTodayDate(), `Anulación de Compra s/f #${compra.referencia || compra.id}`, movimientosReversos);
                 }
                 
-                compra.estado = 'Anulada'; // Marcar la transacción original
+                compra.estado = 'Anulada';
                 this.saveAll();
                 this.irModulo('compras');
                 this.showToast('La compra ha sido anulada con éxito.', 'success');
