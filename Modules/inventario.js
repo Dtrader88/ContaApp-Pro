@@ -568,7 +568,6 @@ Object.assign(ContaApp, {
         let selectorQuery;
         let esInput = false;
 
-        // Determinamos qué selector de productos necesitamos actualizar
         if (origen === 'gasto') {
             selectorQuery = '.gasto-item-producto-id';
         } else if (origen === 'venta') {
@@ -576,7 +575,7 @@ Object.assign(ContaApp, {
         } else if (origen === 'compra') {
             selectorQuery = '.compra-item-producto-id';
         } else if (origen === 'produccion') {
-            selectorQuery = '#bom-producto-terminado-input';
+            selectorQuery = '#op-producto-terminado-input';
             esInput = true;
         } else {
             this.showToast('Error: Origen de sub-modal desconocido.', 'error');
