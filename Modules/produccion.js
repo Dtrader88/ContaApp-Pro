@@ -111,7 +111,81 @@ Object.assign(ContaApp, {
 
     guardarOrdenProduccion(e, id = null) {
         e.preventDefault();
-        this.showToast('La lógica para guardar la Orden de Producción aún no está implementada.', 'info');
+        const isEditing = id !== null;
+
+        try {
+            const data = {
+                descripcion: document.getElementById('op-descripcion').value,
+                fecha: document.getElementById('op-fecha').value,
+                productoTerminadoId: parseInt(document.getElementById('op-producto-terminado-id').value),
+                cantidadProducida: parseFloat(document.getElementById('op-cantidad-producir').value)
+            };
+
+            const componentes = [];
+            document.querySelectorAll('#op-componentes-container .dynamic-row').forEach(row => {
+                const productoId = parseInt(row.querySelector('.op-componente-id').value);
+                const cantidad = parseFloat(row.querySelector('.op-componente-cantidad').value);
+                if (productoId && cantidad > 0) {
+                    componentes.push({ productoId, cantidad });
+                }
+            });
+
+            if (!data.productoTerminadoId || componentes.length === 0 || !data.cantidadProducida) {
+                throw new Error('Debes completar todos los campos de la orden.');
+            }
+
+            let costoTotalProduccion = 0;
+            for (const comp of componentes) {
+                const materiaPrima = this.findById(this.productos, comp.productoId);
+                if (!materiaPrima || materiaPrima.stock < comp.cantidad) {
+                    throw new Error(`Stock insuficiente para "${materiaPrima.nombre}". Necesitas ${comp.cantidad}, tienes ${materiaPrima.stock}.`);
+                }
+                costoTotalProduccion += materiaPrima.costo * comp.cantidad;
+            }
+
+            componentes.forEach(comp => {
+                const materiaPrima = this.findById(this.productos, comp.productoId);
+                materiaPrima.stock -= comp.cantidad;
+            });
+
+            const productoTerminado = this.findById(this.productos, data.productoTerminadoId);
+            const costoUnitarioProduccion = costoTotalProduccion / data.cantidadProducida;
+
+            const valorStockActualPT = (productoTerminado.stock || 0) * (productoTerminado.costo || 0);
+            const nuevoStockPT = (productoTerminado.stock || 0) + data.cantidadProducida;
+            
+            productoTerminado.costo = nuevoStockPT > 0 ? (valorStockActualPT + costoTotalProduccion) / nuevoStockPT : costoUnitarioProduccion;
+            productoTerminado.stock = nuevoStockPT;
+            
+            const nuevaOrden = {
+                id: this.idCounter++,
+                ...data,
+                componentes,
+                costoTotal: costoTotalProduccion,
+                estado: 'Completada'
+            };
+            this.ordenesProduccion.push(nuevaOrden);
+
+            const cuentaMP = 13002;
+            const cuentaPT = 13004;
+            const asiento = this.crearAsiento(data.fecha, `Orden de Producción #${nuevaOrden.id}: ${data.descripcion}`,
+                [
+                    { cuentaId: cuentaPT, debe: costoTotalProduccion, haber: 0 },
+                    { cuentaId: cuentaMP, debe: 0, haber: costoTotalProduccion }
+                ],
+                nuevaOrden.id
+            );
+
+            if (asiento) {
+                this.saveAll();
+                this.closeModal();
+                this.irModulo('produccion');
+                this.showToast('Orden de Producción registrada con éxito.', 'success');
+            }
+        } catch(error) {
+            this.showToast(error.message, 'error');
+            console.error("Error al guardar la orden de producción:", error);
+        }
     },
 
 });

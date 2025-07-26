@@ -6,11 +6,11 @@ Object.assign(ContaApp, {
         renderConfig(params = {}) {
         const submodulo = params.submodulo || 'perfil';
 
-        // --- INICIO DE LA MEJORA: AÑADIR PESTAÑA DE LICENCIA ---
         let html = `
             <div class="flex gap-2 mb-6 border-b border-[var(--color-border-accent)] flex-wrap">
                 <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'perfil' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'perfil'})">Perfil de la Compañía</button>
                 <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'contactos' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'contactos'})">Contactos</button>
+                <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'unidades' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'unidades'})">Unidades de Medida</button>
                 <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'licencia' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'licencia'})">Licencia y Activación</button>
                 <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'personalizacion' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'personalizacion'})">Personalización y Datos</button>
             </div>
@@ -23,11 +23,11 @@ Object.assign(ContaApp, {
         switch (submodulo) {
             case 'perfil': this.renderConfig_Perfil(); break;
             case 'contactos': this.renderContactos('config-contenido'); break;
-            case 'licencia': this.renderConfig_Licencia(); break; // <-- NUEVA LÍNEA
+            case 'unidades': this.renderConfig_Unidades(); break;
+            case 'licencia': this.renderConfig_Licencia(); break;
             case 'personalizacion': this.renderConfig_Personalizacion(); break;
             default: this.renderConfig_Perfil();
         }
-        // --- FIN DE LA MEJORA ---
     },
 renderConfig_Licencia() {
         const { cliente, paquete, modulosActivos } = this.licencia || { cliente: 'N/A', paquete: 'N/A', modulosActivos: [] };
@@ -512,5 +512,76 @@ renderConfig_Licencia() {
                 'Telefono': c.telefono || ''
             }));
         this.exportarA_CSV(`contactos_${this.getTodayDate()}.csv`, dataParaExportar);
+    },
+    renderConfig_Unidades() {
+        document.getElementById('page-actions-header').innerHTML = `<button class="conta-btn" onclick="ContaApp.abrirModalUnidad()">+ Nueva Unidad</button>`;
+        
+        let html;
+        if (this.unidadesMedida.length === 0) {
+            html = this.generarEstadoVacioHTML('fa-ruler', 'Sin Unidades de Medida', 'Añade tus propias unidades de medida para gestionar tu inventario.', '+ Crear Primera Unidad', "ContaApp.abrirModalUnidad()");
+        } else {
+            html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
+                <thead><tr>
+                    <th class="conta-table-th">Nombre de la Unidad</th>
+                    <th class="conta-table-th text-center">Acciones</th>
+                </tr></thead>
+                <tbody>`;
+            this.unidadesMedida.sort((a,b) => a.nombre.localeCompare(b.nombre)).forEach(u => {
+                html += `<tr>
+                    <td class="conta-table-td font-bold">${u.nombre}</td>
+                    <td class="conta-table-td text-center">
+                        <button class="conta-btn-icon edit" title="Editar" onclick="ContaApp.abrirModalUnidad(${u.id})"><i class="fa-solid fa-pencil"></i></button>
+                        <button class="conta-btn-icon delete ml-2" title="Eliminar" onclick="ContaApp.eliminarUnidad(${u.id})"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                </tr>`;
+            });
+            html += `</tbody></table></div>`;
+        }
+        document.getElementById('config-contenido').innerHTML = html;
+    },
+
+    abrirModalUnidad(id = null) {
+        const unidad = id ? this.findById(this.unidadesMedida, id) : {};
+        const modalHTML = `<h3 class="conta-title mb-4">${id ? 'Editar' : 'Nueva'} Unidad de Medida</h3>
+        <form onsubmit="ContaApp.guardarUnidad(event, ${id})" class="space-y-4 modal-form">
+            <div>
+                <label>Nombre</label>
+                <input type="text" id="unidad-nombre" class="w-full p-2 mt-1" value="${unidad.nombre || ''}" placeholder="Ej: Paquete, Rollo, m²" required>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+                <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button>
+                <button type="submit" class="conta-btn">${id ? 'Guardar Cambios' : 'Crear Unidad'}</button>
+            </div>
+        </form>`;
+        this.showModal(modalHTML, 'xl');
+    },
+
+    guardarUnidad(e, id = null) {
+        e.preventDefault();
+        const nombre = document.getElementById('unidad-nombre').value;
+        if (id) {
+            const unidad = this.findById(this.unidadesMedida, id);
+            unidad.nombre = nombre;
+        } else {
+            this.unidadesMedida.push({ id: this.idCounter++, nombre });
+        }
+        this.saveAll();
+        this.closeModal();
+        this.irModulo('config', { submodulo: 'unidades' }); 
+        this.showToast(`Unidad ${id ? 'actualizada' : 'creada'} con éxito.`, 'success');
+    },
+
+    eliminarUnidad(id) {
+        const enUso = this.productos.some(p => p.unidadMedidaId === id);
+        if (enUso) {
+            this.showToast('No se puede eliminar. La unidad está siendo usada por uno o más productos.', 'error');
+            return;
+        }
+        this.showConfirm('¿Seguro que deseas eliminar esta unidad de medida?', () => {
+            this.unidadesMedida = this.unidadesMedida.filter(u => u.id !== id);
+            this.saveAll();
+            this.irModulo('config', { submodulo: 'unidades' });
+            this.showToast('Unidad eliminada.', 'success');
+        });
     },
 });
