@@ -503,24 +503,29 @@ Object.assign(ContaApp, {
         if (!activo) return null;
 
         let movimientos = [];
+
+        // 1. Calcular el Costo Original real, sea un activo viejo o nuevo.
+        const totalMejoras = (activo.mejoras || []).reduce((sum, m) => sum + m.costo, 0);
+        const costoOriginalReal = activo.costoOriginal !== undefined ? activo.costoOriginal : (activo.costo - totalMejoras);
         
+        // 2. Añadir el movimiento de Compra con el costo correcto.
         movimientos.push({
             fecha: activo.fechaCompra,
             descripcion: 'Compra del Activo (Costo Original)',
-            valorCambio: activo.costoOriginal || activo.costo,
+            valorCambio: costoOriginalReal,
         });
 
-        if (activo.mejoras && activo.mejoras.length > 0) {
-            activo.mejoras.forEach(mejora => {
-                movimientos.push({
-                    fecha: mejora.fecha,
-                    descripcion: `Mejora: ${mejora.descripcion}`,
-                    valorCambio: mejora.costo,
-                });
+        // 3. Añadir todas las mejoras como eventos separados.
+        (activo.mejoras || []).forEach(mejora => {
+            movimientos.push({
+                fecha: mejora.fecha,
+                descripcion: `Mejora: ${mejora.descripcion}`,
+                valorCambio: mejora.costo,
             });
-        }
+        });
         
-        const depreciacionMensual = (activo.costo - activo.valorResidual) / activo.vidaUtil;
+        // 4. Calcular y añadir las depreciaciones.
+        const depreciacionMensual = (activo.costo - (activo.valorResidual || 0)) / activo.vidaUtil;
         for (let i = 1; i <= activo.mesesDepreciados; i++) {
             const fechaDepreciacion = new Date(activo.fechaCompra);
             fechaDepreciacion.setMonth(fechaDepreciacion.getMonth() + i);
@@ -531,16 +536,21 @@ Object.assign(ContaApp, {
             });
         }
         
+        // 5. Añadir la baja o venta, si existe.
         if (activo.estado === 'De Baja' || activo.estado === 'Vendido') {
+            const costoTotalReal = costoOriginalReal + totalMejoras;
+            const valorEnLibrosEnDisposicion = costoTotalReal - activo.depreciacionAcumulada;
              movimientos.push({
                 fecha: activo.fechaBaja,
                 descripcion: `Disposición del Activo (${activo.estado})`,
-                valorCambio: -(activo.costoOriginal + (activo.mejoras || []).reduce((sum, m) => sum + m.costo, 0) - activo.depreciacionAcumulada)
+                valorCambio: -valorEnLibrosEnDisposicion
             });
         }
 
-        movimientos.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+        // 6. Ordenar todos los eventos por fecha para asegurar la cronología.
+        movimientos.sort((a, b) => new Date(a.fecha) - new Date(b.fecha) || (a.esCompra ? -1 : 1));
         
+        // 7. Calcular el saldo corriente final.
         let valorEnLibrosCorriente = 0;
         movimientos.forEach(mov => {
             valorEnLibrosCorriente += mov.valorCambio;
