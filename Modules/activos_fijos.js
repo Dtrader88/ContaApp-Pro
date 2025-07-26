@@ -391,17 +391,36 @@ Object.assign(ContaApp, {
         document.getElementById('activos-fijos-contenido').innerHTML = html;
     },
 
-    renderActivosFijos_TabKardex(params = {}) {
+        renderActivosFijos_TabKardex(params = {}) {
         document.getElementById('page-actions-header').innerHTML = '';
 
-        // Aquí irá la lógica para el selector de activo y la tabla de historial. Por ahora, un mensaje temporal.
+        const activosOptions = this.activosFijos
+            .sort((a, b) => a.nombre.localeCompare(b.nombre))
+            .map(a => `<option value="${a.id}" ${params.activoId === a.id ? 'selected' : ''}>${a.nombre}</option>`)
+            .join('');
+
         let html = `
-            <div class="conta-card">
-                <h3 class="conta-subtitle">Historial de Movimientos por Activo (Kardex)</h3>
-                <p class="text-center text-[var(--color-text-secondary)] p-8">La funcionalidad de Kardex de Activos Fijos se implementará aquí.</p>
+            <div class="conta-card mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <div class="md:col-span-2">
+                        <label for="kardex-activo-select" class="text-sm font-medium">Selecciona un Activo para ver su Historial</label>
+                        <select id="kardex-activo-select" class="w-full conta-input mt-1">
+                            <option value="">-- Elige un activo --</option>
+                            ${activosOptions}
+                        </select>
+                    </div>
+                    <div>
+                        <button class="conta-btn w-full" onclick="ContaApp.generarReporteKardexActivo()">Ver Historial</button>
+                    </div>
+                </div>
             </div>
-        `;
+            <div id="kardex-activo-resultado"></div>`;
         document.getElementById('activos-fijos-contenido').innerHTML = html;
+
+        // Si se pasó un ID de activo en los parámetros, generamos el reporte automáticamente
+        if (params.activoId) {
+            this.generarReporteKardexActivo();
+        }
     },
     filtrarReporteActivos() {
         const fechaInicio = document.getElementById('reporte-activos-inicio').value;
@@ -411,5 +430,101 @@ Object.assign(ContaApp, {
             fechaInicio,
             fechaFin
         });
+    },
+    getActivoKardexData(activoId) {
+        const activo = this.findById(this.activosFijos, activoId);
+        if (!activo) return null;
+
+        let movimientos = [];
+        let valorEnLibrosCorriente = activo.costo;
+
+        // 1. Movimiento de Compra
+        movimientos.push({
+            fecha: activo.fechaCompra,
+            descripcion: 'Compra del Activo',
+            valorCambio: activo.costo,
+            valorEnLibros: valorEnLibrosCorriente
+        });
+
+        // 2. Simular los movimientos de depreciación mes a mes
+        const depreciacionMensual = (activo.costo - activo.valorResidual) / activo.vidaUtil;
+        for (let i = 1; i <= activo.mesesDepreciados; i++) {
+            const fechaDepreciacion = new Date(activo.fechaCompra);
+            fechaDepreciacion.setMonth(fechaDepreciacion.getMonth() + i);
+            
+            valorEnLibrosCorriente -= depreciacionMensual;
+
+            movimientos.push({
+                fecha: fechaDepreciacion.toISOString().slice(0, 10),
+                descripcion: `Depreciación Mensual #${i}`,
+                valorCambio: -depreciacionMensual,
+                valorEnLibros: valorEnLibrosCorriente
+            });
+        }
+        
+        // 3. Movimiento de Baja (si existe)
+        if (activo.estado === 'De Baja' && activo.fechaBaja) {
+             valorEnLibrosCorriente = 0; // El valor en libros se vuelve cero
+             movimientos.push({
+                fecha: activo.fechaBaja,
+                descripcion: 'Baja del Activo',
+                valorCambio: - (activo.costo - activo.depreciacionAcumulada),
+                valorEnLibros: valorEnLibrosCorriente
+            });
+        }
+
+        return {
+            activo: activo,
+            movimientos: movimientos
+        };
+    },
+    generarReporteKardexActivo() {
+        const activoId = parseInt(document.getElementById('kardex-activo-select').value);
+        const resultadoDiv = document.getElementById('kardex-activo-resultado');
+
+        if (!activoId) {
+            resultadoDiv.innerHTML = '';
+            return;
+        }
+
+        const datosKardex = this.getActivoKardexData(activoId);
+
+        let filasHTML = '';
+        datosKardex.movimientos.forEach(mov => {
+            const cambioClass = mov.valorCambio >= 0 ? 'conta-text-success' : 'conta-text-danger';
+            filasHTML += `
+                <tr>
+                    <td class="conta-table-td">${mov.fecha}</td>
+                    <td class="conta-table-td">${mov.descripcion}</td>
+                    <td class="conta-table-td text-right font-mono ${cambioClass}">${this.formatCurrency(mov.valorCambio)}</td>
+                    <td class="conta-table-td text-right font-mono font-bold">${this.formatCurrency(mov.valorEnLibros)}</td>
+                </tr>
+            `;
+        });
+
+        const htmlReporte = `
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="conta-subtitle !mb-0">Historial de: ${datosKardex.activo.nombre}</h2>
+                <div>
+                    <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarReporteEstilizadoPDF('Kardex - ${datosKardex.activo.nombre}', 'reporte-kardex-activo-area')">
+                        <i class="fa-solid fa-print me-2"></i>Imprimir PDF
+                    </button>
+                </div>
+            </div>
+            <div class="conta-card overflow-auto" id="reporte-kardex-activo-area">
+                <table class="min-w-full text-sm conta-table-zebra">
+                    <thead>
+                        <tr>
+                            <th class="conta-table-th">Fecha</th>
+                            <th class="conta-table-th">Descripción del Evento</th>
+                            <th class="conta-table-th text-right">Cambio en Valor</th>
+                            <th class="conta-table-th text-right">Valor en Libros Resultante</th>
+                        </tr>
+                    </thead>
+                    <tbody>${filasHTML}</tbody>
+                </table>
+            </div>
+        `;
+        resultadoDiv.innerHTML = htmlReporte;
     },
 });
