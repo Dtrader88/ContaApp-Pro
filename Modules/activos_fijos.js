@@ -117,38 +117,85 @@ Object.assign(ContaApp, {
         const activo = id ? this.findById(this.activosFijos, id) : {};
         const isEditing = id !== null;
 
+        // Opciones para las cuentas de Activos Fijos (ej: Mobiliario, Vehículos)
         const cuentasActivoOptions = this.planDeCuentas
             .filter(c => c.parentId === 150 && c.tipo === 'DETALLE')
             .map(c => `<option value="${c.id}" ${activo.cuentaId === c.id ? 'selected' : ''}>${c.codigo} - ${c.nombre}</option>`)
             .join('');
 
+        // Opciones para pagar (Bancos o a Crédito/CxP)
         const cuentasPagoOptions = this.planDeCuentas
-            .filter(c => (c.parentId === 110 || c.id === 210) && c.tipo === 'DETALLE')
+            .filter(c => c.parentId === 110 && c.tipo === 'DETALLE') // Solo cuentas de banco
             .map(c => `<option value="${c.id}" ${activo.cuentaPagoId === c.id ? 'selected' : ''}>${c.nombre}</option>`)
             .join('');
 
         const modalHTML = `
-            <h3 class="conta-title mb-4">${isEditing ? 'Editar' : 'Registrar Nuevo'} Activo Fijo</h3>
+            <h3 class="conta-title mb-4">${isEditing ? 'Editar' : 'Registrar Compra de'} Activo Fijo</h3>
             <form onsubmit="ContaApp.guardarActivoFijo(event, ${id})" class="space-y-4 modal-form">
+                
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div><label>Nombre del Activo</label><input type="text" id="activo-nombre" class="w-full conta-input mt-1" value="${activo.nombre || ''}" required></div>
-                    <div><label>Proveedor (Opcional)</label><input list="proveedores-datalist-activo" id="activo-proveedor-input" class="w-full conta-input mt-1" placeholder="Escribe para buscar..."><input type="hidden" id="activo-proveedor-id"></div>
+                    <div>
+                        <label>Nombre del Activo</label>
+                        <input type="text" id="activo-nombre" class="w-full conta-input mt-1" value="${activo.nombre || ''}" required>
+                    </div>
+                    <div>
+                        <label>Proveedor</label>
+                        <div class="flex items-center gap-2">
+                            <input list="proveedores-datalist-activo" id="activo-proveedor-input" class="w-full conta-input mt-1" placeholder="Buscar proveedor..." required>
+                            <datalist id="proveedores-datalist-activo">${this.contactos.filter(c => c.tipo === 'proveedor').map(c => `<option value="${c.nombre}" data-id="${c.id}"></option>`).join('')}</datalist>
+                            <input type="hidden" id="activo-proveedor-id">
+                            <button type="button" class="conta-btn conta-btn-small" onclick="ContaApp.abrirSubModalNuevoContacto('proveedor', 'activo-proveedor-input')">+</button>
+                        </div>
+                    </div>
                 </div>
-                <div class="conta-card-accent text-sm">
-                    <p class="font-bold">Información Contable (No editable)</p>
-                    <p>Los valores de compra y vida útil no se pueden modificar después del registro para mantener la integridad de la depreciación. Para corregirlos, se debe dar de baja el activo y crearlo de nuevo.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label>Fecha de Compra</label>
+                        <input type="date" id="activo-fecha-compra" class="w-full conta-input mt-1" value="${activo.fechaCompra || this.getTodayDate()}" ${isEditing ? 'disabled' : ''} required>
+                    </div>
+                    <div>
+                        <label>Cuenta Contable del Activo</label>
+                        <select id="activo-cuenta-id" class="w-full conta-input mt-1" ${isEditing ? 'disabled' : ''} required>${cuentasActivoOptions}</select>
+                    </div>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div><label>Fecha de Compra</label><input type="date" id="activo-fecha-compra" class="w-full conta-input mt-1" value="${activo.fechaCompra || this.getTodayDate()}" ${isEditing ? 'disabled' : ''} required></div>
-                    <div><label>Costo de Adquisición</label><input type="number" step="0.01" id="activo-costo" class="w-full conta-input mt-1" value="${activo.costo || ''}" ${isEditing ? 'disabled' : ''} required></div>
-                    <div><label>Vida Útil (en meses)</label><input type="number" id="activo-vida-util" class="w-full conta-input mt-1" value="${activo.vidaUtil || ''}" ${isEditing ? 'disabled' : ''} required></div>
+                
+                <div class="conta-card p-4">
+                    <p class="font-semibold mb-2">Detalles para Depreciación</p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label>Costo de Adquisición</label>
+                            <input type="number" step="0.01" id="activo-costo" class="w-full conta-input mt-1" value="${activo.costo || ''}" ${isEditing ? 'disabled' : ''} required>
+                        </div>
+                        <div>
+                            <label>Vida Útil (en meses)</label>
+                            <input type="number" id="activo-vida-util" class="w-full conta-input mt-1" value="${activo.vidaUtil || ''}" ${isEditing ? 'disabled' : ''} placeholder="Ej: 36" required>
+                        </div>
+                         <div>
+                            <label>Valor Residual</label>
+                            <input type="number" step="0.01" id="activo-valor-residual" class="w-full conta-input mt-1" value="${activo.valorResidual || 0}" ${isEditing ? 'disabled' : ''} required>
+                        </div>
+                    </div>
                 </div>
+
+                <div>
+                    <label>Forma de Pago</label>
+                    <select id="activo-pago-id" class="w-full conta-input mt-1" ${isEditing ? 'disabled' : ''} required>
+                        <option value="210" ${activo.cuentaPagoId === 210 ? 'selected' : ''}>A crédito (Genera Cta. por Pagar)</option>
+                        <optgroup label="De Contado desde:">
+                            ${cuentasPagoOptions}
+                        </optgroup>
+                    </select>
+                </div>
+                
                 <div class="flex justify-end gap-2 mt-6">
                     <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button>
-                    <button type="submit" class="conta-btn">${isEditing ? 'Guardar Cambios' : 'Registrar Activo'}</button>
+                    <button type="submit" class="conta-btn">${isEditing ? 'Guardar Cambios' : 'Registrar Compra'}</button>
                 </div>
-            </form>`;
+            </form>
+        `;
         this.showModal(modalHTML, '4xl');
+        this.setupDatalistListener('activo-proveedor-input', 'activo-proveedor-id', 'proveedores-datalist-activo');
 
         if (isEditing) {
             const proveedor = this.findById(this.contactos, activo.proveedorId);
@@ -163,7 +210,7 @@ Object.assign(ContaApp, {
         const isEditing = id !== null;
 
         if (isEditing) {
-            // Lógica de Edición (solo campos no contables)
+            // Lógica de Edición (solo campos no contables, como el nombre)
             const activo = this.findById(this.activosFijos, id);
             if (activo) {
                 activo.nombre = document.getElementById('activo-nombre').value;
@@ -175,33 +222,41 @@ Object.assign(ContaApp, {
                 this.showToast('Activo fijo actualizado con éxito.', 'success');
             }
         } else {
-            // Lógica de Creación (la que ya teníamos)
+            // Lógica de Creación (Compra)
             const data = {
                 nombre: document.getElementById('activo-nombre').value,
-                cuentaId: 15001, // Asumimos Mobiliario y Equipo por ahora
+                cuentaId: parseInt(document.getElementById('activo-cuenta-id').value),
                 fechaCompra: document.getElementById('activo-fecha-compra').value,
-                proveedorId: parseInt(document.getElementById('activo-proveedor-id').value) || null,
+                proveedorId: parseInt(document.getElementById('activo-proveedor-id').value), // Ahora es requerido
                 costo: parseFloat(document.getElementById('activo-costo').value),
                 vidaUtil: parseInt(document.getElementById('activo-vida-util').value),
-                valorResidual: 0, // Simplificamos, asumimos 0 por ahora
-                cuentaPagoId: 210 // Asumimos Cuentas por Pagar
+                valorResidual: parseFloat(document.getElementById('activo-valor-residual').value),
+                cuentaPagoId: parseInt(document.getElementById('activo-pago-id').value)
             };
 
-            if (isNaN(data.costo) || isNaN(data.vidaUtil)) { this.showToast('Costo y Vida Útil deben ser números.', 'error'); return; }
-            if (data.costo <= 0) { this.showToast('El costo debe ser mayor a cero.', 'error'); return; }
+            // Validaciones
+            if (!data.proveedorId) { this.showToast('Debe seleccionar un proveedor.', 'error'); return; }
+            if (isNaN(data.costo) || isNaN(data.vidaUtil) || isNaN(data.valorResidual)) { this.showToast('Costo, Vida Útil y Valor Residual deben ser números.', 'error'); return; }
+            if (data.costo <= data.valorResidual) { this.showToast('El costo debe ser mayor que el valor residual.', 'error'); return; }
 
             const nuevoActivo = { id: this.idCounter++, ...data, depreciacionAcumulada: 0, mesesDepreciados: 0, estado: 'Activo' };
             this.activosFijos.push(nuevoActivo);
 
-            const asiento = this.crearAsiento(data.fechaCompra, `Compra de activo fijo: ${data.nombre}`,
-                [{ cuentaId: data.cuentaId, debe: data.costo, haber: 0 }, { cuentaId: data.cuentaPagoId, debe: 0, haber: data.costo }]
+            // Crear el asiento contable de la compra
+            const asiento = this.crearAsiento(
+                data.fechaCompra,
+                `Compra de activo fijo: ${data.nombre}`,
+                [
+                    { cuentaId: data.cuentaId, debe: data.costo, haber: 0 }, // DEBE: Aumenta el activo
+                    { cuentaId: data.cuentaPagoId, debe: 0, haber: data.costo } // HABER: Disminuye banco O aumenta Cuentas por Pagar
+                ]
             );
 
             if (asiento) {
                 this.saveAll();
                 this.closeModal();
                 this.irModulo('activos-fijos');
-                this.showToast('Activo fijo registrado con éxito.', 'success');
+                this.showToast('Compra de activo fijo registrada con éxito.', 'success');
             }
         }
     },
