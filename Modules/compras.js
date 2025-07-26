@@ -354,16 +354,18 @@ Object.assign(ContaApp, {
 
                 if (items.length === 0) { throw new Error('Debe añadir al menos un ítem a la compra.'); }
 
+                // --- INICIO DE LA CORRECCIÓN ---
                 items.forEach(item => {
                     const producto = this.findById(this.productos, item.productoId);
                     if (producto) {
-                        const valorStockActual = (producto.stock || 0) * (producto.costo || 0);
+                        const valorTotalStockActual = (producto.stock || 0) * (producto.costo || 0); // Nombre de variable corregido
                         const valorCompra = item.cantidad * item.costoUnitario;
                         const nuevoStock = (producto.stock || 0) + item.cantidad;
-                        producto.costo = nuevoStock > 0 ? (valorStockTotalActual + valorCompra) / nuevoStock : item.costoUnitario;
+                        producto.costo = nuevoStock > 0 ? (valorTotalStockActual + valorCompra) / nuevoStock : item.costoUnitario;
                         producto.stock = nuevoStock;
                     }
                 });
+                // --- FIN DE LA CORRECCIÓN ---
                 
                 const descripcionFinal = descripcion || `Compra de inventario s/f #${referencia || 'N/A'}`;
                 
