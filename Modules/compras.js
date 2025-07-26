@@ -178,7 +178,93 @@ Object.assign(ContaApp, {
 
     guardarCompra(e) {
         e.preventDefault();
-        // Lógica de guardado que implementaremos en el siguiente paso.
-        this.showToast('La lógica para guardar la compra aún no está implementada.', 'info');
+        const tipoSeleccionado = document.querySelector('input[name="compra-tipo"]:checked').value;
+        const submitButton = document.getElementById('guardar-compra-btn');
+        this.toggleButtonLoading(submitButton, true);
+
+        try {
+            if (tipoSeleccionado === 'reventa' || tipoSeleccionado === 'materia_prima') {
+                // Lógica para guardar Compra de Inventario
+                const proveedorId = parseInt(document.getElementById('compra-proveedor-id').value);
+                const fecha = document.getElementById('compra-fecha').value;
+                const cuentaInventarioId = parseInt(document.getElementById('compra-cuenta-inventario-id').value);
+                const cuentaPagoId = parseInt(document.getElementById('compra-pago-id').value);
+
+                if (!proveedorId) {
+                    throw new Error('Debe seleccionar un proveedor válido.');
+                }
+                
+                const items = [];
+                let totalCompra = 0;
+                document.querySelectorAll('.compra-item-row').forEach(row => {
+                    const productoId = parseInt(row.querySelector('.compra-item-producto-id').value);
+                    const cantidad = parseFloat(row.querySelector('.compra-item-cantidad').value);
+                    const costoUnitario = parseFloat(row.querySelector('.compra-item-costo').value);
+
+                    if (productoId && cantidad > 0 && costoUnitario >= 0) {
+                        items.push({ productoId, cantidad, costoUnitario });
+                        totalCompra += cantidad * costoUnitario;
+                    }
+                });
+
+                if (items.length === 0) {
+                    throw new Error('Debe añadir al menos un ítem a la compra.');
+                }
+
+                // Actualizar el stock y el costo promedio de cada producto
+                items.forEach(item => {
+                    const producto = this.findById(this.productos, item.productoId);
+                    if (producto) {
+                        const valorStockActual = (producto.stock || 0) * (producto.costo || 0);
+                        const valorCompra = item.cantidad * item.costoUnitario;
+                        const nuevoStock = (producto.stock || 0) + item.cantidad;
+                        producto.costo = nuevoStock > 0 ? (valorStockActual + valorCompra) / nuevoStock : item.costoUnitario;
+                        producto.stock = nuevoStock;
+                    }
+                });
+                
+                const descripcion = `Compra de inventario #${this.idCounter + 1}`;
+                
+                // Crear la transacción de la compra
+                const nuevaCompra = {
+                    id: this.idCounter++,
+                    tipo: 'compra_inventario',
+                    fecha: fecha,
+                    contactoId: proveedorId,
+                    descripcion: descripcion,
+                    items: items,
+                    total: totalCompra
+                };
+                this.transacciones.push(nuevaCompra);
+
+                // Crear el asiento contable
+                const asiento = this.crearAsiento(
+                    fecha,
+                    descripcion,
+                    [
+                        { cuentaId: cuentaInventarioId, debe: totalCompra, haber: 0 },
+                        { cuentaId: cuentaPagoId, debe: 0, haber: totalCompra }
+                    ],
+                    nuevaCompra.id
+                );
+                
+                if (asiento) {
+                    this.saveAll();
+                    this.closeModal();
+                    this.irModulo('compras');
+                    this.showToast('Compra de inventario registrada con éxito.', 'success');
+                }
+
+            } else if (tipoSeleccionado === 'activo_fijo') {
+                // Lógica para redirigir a Activos Fijos
+                this.closeModal();
+                this.abrirModalActivoFijo();
+            }
+        } catch (error) {
+            this.showToast(error.message, 'error');
+            console.error("Error al guardar la compra:", error);
+        } finally {
+            this.toggleButtonLoading(submitButton, false);
+        }
     },
 });
