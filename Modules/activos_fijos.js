@@ -3,9 +3,11 @@
 Object.assign(ContaApp, {
 
     renderActivosFijos(params = {}) {
-        // Definimos las acciones que aparecerán en la cabecera de la página
         document.getElementById('page-actions-header').innerHTML = `
             <div class="flex gap-2 flex-wrap">
+                <button class="conta-btn conta-btn-accent" onclick="ContaApp.ejecutarDepreciacionMensual()">
+                    <i class="fa-solid fa-calculator me-2"></i>Calcular Depreciación del Mes
+                </button>
                 <button class="conta-btn" onclick="ContaApp.abrirModalActivoFijo()">+ Nuevo Activo Fijo</button>
             </div>`;
 
@@ -19,12 +21,40 @@ Object.assign(ContaApp, {
                 "ContaApp.abrirModalActivoFijo()"
             );
         } else {
-            // Futuro: Aquí construiremos la tabla con la lista de activos.
-            // Por ahora, dejamos un mensaje temporal.
-            html = `<div class="conta-card">Tabla de activos fijos aparecerá aquí.</div>`;
+            // --- INICIO DE LA MODIFICACIÓN: Construir la tabla ---
+            html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
+                <thead>
+                    <tr>
+                        <th class="conta-table-th">Activo</th>
+                        <th class="conta-table-th">Fecha Compra</th>
+                        <th class="conta-table-th text-right">Costo</th>
+                        <th class="conta-table-th text-right">Dep. Acumulada</th>
+                        <th class="conta-table-th text-right">Valor en Libros</th>
+                        <th class="conta-table-th">Estado</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+            this.activosFijos.sort((a,b) => new Date(b.fechaCompra) - new Date(a.fechaCompra)).forEach(activo => {
+                const valorEnLibros = activo.costo - activo.depreciacionAcumulada;
+                html += `
+                    <tr>
+                        <td class="conta-table-td font-bold">${activo.nombre}</td>
+                        <td class="conta-table-td">${activo.fechaCompra}</td>
+                        <td class="conta-table-td text-right font-mono">${this.formatCurrency(activo.costo)}</td>
+                        <td class="conta-table-td text-right font-mono">(${this.formatCurrency(activo.depreciacionAcumulada)})</td>
+                        <td class="conta-table-td text-right font-mono font-bold">${this.formatCurrency(valorEnLibros)}</td>
+                        <td class="conta-table-td">
+                            <span class="tag ${activo.estado === 'Activo' ? 'tag-success' : 'tag-neutral'}">${activo.estado}</span>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `</tbody></table></div>`;
+            // --- FIN DE LA MODIFICACIÓN ---
         }
         
-        // Asignamos el HTML generado al contenedor del módulo
         document.getElementById('activos-fijos').innerHTML = html;
     },
 abrirModalActivoFijo(id = null) {
@@ -159,5 +189,55 @@ abrirModalActivoFijo(id = null) {
             this.irModulo('activos-fijos');
             this.showToast('Activo fijo registrado con éxito.', 'success');
         }
+    },
+    ejecutarDepreciacionMensual() {
+        this.showConfirm(
+            '¿Deseas registrar la depreciación para el mes actual? Se creará un asiento contable para todos los activos elegibles. Esta acción solo debe realizarse una vez por mes.',
+            () => {
+                let totalDepreciacionDelMes = 0;
+                const hoy = new Date();
+                const fechaAsiento = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().slice(0,10); // Último día del mes actual
+
+                const activosADepreciar = this.activosFijos.filter(activo => 
+                    activo.estado === 'Activo' && activo.mesesDepreciados < activo.vidaUtil
+                );
+
+                if (activosADepreciar.length === 0) {
+                    this.showToast('No hay activos elegibles para depreciar este mes.', 'info');
+                    return;
+                }
+
+                activosADepreciar.forEach(activo => {
+                    const montoADepreciar = (activo.costo - activo.valorResidual) / activo.vidaUtil;
+                    
+                    activo.depreciacionAcumulada += montoADepreciar;
+                    activo.mesesDepreciados += 1;
+                    totalDepreciacionDelMes += montoADepreciar;
+
+                    if (activo.mesesDepreciados >= activo.vidaUtil) {
+                        activo.estado = 'Depreciado';
+                    }
+                });
+
+                // Crear un único asiento contable consolidado para la depreciación del mes
+                const cuentaGastoDepreciacionId = 51004; // Gasto por Depreciación
+                const cuentaDepAcumuladaId = 15901; // Dep. Acum. Mobiliario y Equipo
+                
+                const asiento = this.crearAsiento(
+                    fechaAsiento,
+                    `Depreciación del mes ${hoy.toLocaleString('es-ES', { month: 'long', year: 'numeric' })}`,
+                    [
+                        { cuentaId: cuentaGastoDepreciacionId, debe: totalDepreciacionDelMes, haber: 0 },
+                        { cuentaId: cuentaDepAcumuladaId, debe: 0, haber: totalDepreciacionDelMes }
+                    ]
+                );
+
+                if (asiento) {
+                    this.saveAll();
+                    this.irModulo('activos-fijos');
+                    this.showToast('Depreciación mensual registrada con éxito.', 'success');
+                }
+            }
+        );
     },
 });
