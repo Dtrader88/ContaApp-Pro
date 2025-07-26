@@ -300,7 +300,6 @@ Object.assign(ContaApp, {
         const inputsContainer = row.querySelector('.gasto-item-inputs-container');
         const cuentaId = parseInt(selectElement.value);
 
-        // Preparamos la lista de opciones para poder mantener la selección actual al redibujar
         const cuentasGastoOptions = this.planDeCuentas
             .filter(c => c.tipo === 'DETALLE' && (c.codigo.startsWith('5') || c.id === 130))
             .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }))
@@ -308,7 +307,7 @@ Object.assign(ContaApp, {
 
         let newInputsHTML = '';
 
-        if (cuentaId === 130) { // Si el usuario selecciona "Inventario"
+        if (cuentaId === 130) {
             const productosOptions = this.productos
                 .filter(p => p.tipo === 'producto')
                 .map(p => `<option value="${p.id}">${p.nombre}</option>`)
@@ -316,18 +315,24 @@ Object.assign(ContaApp, {
             
             newInputsHTML = `
                 <select class="col-span-3 p-2 gasto-item-cuenta" onchange="ContaApp.handleGastoItemChange(this)">${cuentasGastoOptions}</select>
-                <select class="col-span-3 p-2 gasto-item-producto-id" required>${productosOptions}</select>
+                
+                <!-- INICIO DE LA MEJORA -->
+                <div class="col-span-3 flex items-center gap-2">
+                    <select class="w-full p-2 gasto-item-producto-id" required>${productosOptions}</select>
+                    <button type="button" class="conta-btn conta-btn-small" onclick="ContaApp.abrirSubModalNuevoProducto('gasto')">+</button>
+                </div>
+                <!-- FIN DE LA MEJORA -->
+
                 <input type="number" min="1" placeholder="Cantidad" class="col-span-2 p-2 text-right gasto-item-cantidad" oninput="ContaApp.actualizarTotalesGasto()" required>
                 <input type="number" step="0.01" min="0" placeholder="Costo Unit." class="col-span-2 p-2 text-right gasto-item-costo-unitario" oninput="ContaApp.actualizarTotalesGasto()" required>
             `;
-        } else { // Si el usuario selecciona cualquier otra cuenta de gasto
+        } else {
             newInputsHTML = `
                 <select class="col-span-7 p-2 gasto-item-cuenta" onchange="ContaApp.handleGastoItemChange(this)">${cuentasGastoOptions}</select>
                 <input type="number" step="0.01" min="0" placeholder="Monto" class="col-span-3 p-2 text-right gasto-item-monto" oninput="ContaApp.actualizarTotalesGasto()">
             `;
         }
         
-        // Reemplazamos el contenido de la fila y recalculamos el total general
         inputsContainer.innerHTML = newInputsHTML;
         this.actualizarTotalesGasto();
     },
@@ -844,4 +849,97 @@ anularOrdenDeCompra(ocId) {
         }
     );
 },
+abrirSubModalNuevoProducto(origen) {
+        // Determinamos qué selector de productos necesitamos actualizar después de crear
+        const selectorId = origen === 'gasto' ? '.gasto-item-producto-id' : '.venta-item-id';
+        // Buscamos el último selector en el modal principal, que será el de la fila activa
+        const selectToUpdate = Array.from(document.querySelectorAll(selectorId)).pop();
+        if (!selectToUpdate) {
+            this.showToast('Error: No se encontró el selector de producto a actualizar.', 'error');
+            return;
+        }
+        // Le asignamos un ID único si no lo tiene, para poder referenciarlo
+        if (!selectToUpdate.id) {
+            selectToUpdate.id = `producto-selector-on-the-fly-${Date.now()}`;
+        }
+
+        const subModal = document.createElement('div');
+        subModal.id = 'sub-modal-bg';
+        subModal.onclick = () => document.body.removeChild(subModal); // Permite cerrar haciendo clic fuera
+        
+        const subModalContent = document.createElement('div');
+        subModalContent.className = 'p-6 rounded-lg shadow-xl w-full max-w-md modal-content';
+        subModalContent.onclick = e => e.stopPropagation(); // Evita que el clic dentro cierre el modal
+
+        subModalContent.innerHTML = `
+            <h3 class="conta-title mb-4">Nuevo Producto Rápido</h3>
+            <form onsubmit="event.preventDefault(); ContaApp.guardarNuevoProductoDesdeSubModal(event, '${selectToUpdate.id}')" class="space-y-4 modal-form">
+                <div>
+                    <label>Nombre del Producto</label>
+                    <input type="text" id="sub-prod-nombre" class="w-full p-2 mt-1" required>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label>Precio de Venta</label>
+                        <input type="number" step="0.01" id="sub-prod-precio" class="w-full p-2 mt-1" required>
+                    </div>
+                    <div>
+                        <label>Costo Inicial</label>
+                        <input type="number" step="0.01" id="sub-prod-costo" class="w-full p-2 mt-1" value="0">
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 mt-6">
+                    <button type="button" class="conta-btn conta-btn-accent" onclick="document.body.removeChild(document.getElementById('sub-modal-bg'))">Cancelar</button>
+                    <button type="submit" class="conta-btn">Guardar Producto</button>
+                </div>
+            </form>
+        `;
+        subModal.appendChild(subModalContent);
+        document.body.appendChild(subModal);
+        document.getElementById('sub-prod-nombre').focus();
+    },
+
+    guardarNuevoProductoDesdeSubModal(e, selectIdToUpdate) {
+        const data = {
+            nombre: document.getElementById('sub-prod-nombre').value,
+            precio: parseFloat(document.getElementById('sub-prod-precio').value),
+            costo: parseFloat(document.getElementById('sub-prod-costo').value) || 0,
+        };
+
+        const nuevoProducto = {
+            id: this.idCounter++,
+            nombre: data.nombre,
+            tipo: 'producto',
+            stock: 0, // El stock se añadirá en la propia compra
+            stockMinimo: 0,
+            costo: data.costo,
+            precio: data.precio,
+            cuentaIngresoId: 40101
+        };
+
+        this.productos.push(nuevoProducto);
+        this.saveAll();
+
+        // Actualizar TODOS los selectores de productos en el modal principal para que
+        // el nuevo producto aparezca en todas las filas.
+        const todosLosSelectores = document.querySelectorAll('.gasto-item-producto-id, .venta-item-id');
+        todosLosSelectores.forEach(select => {
+            const option = document.createElement('option');
+            option.value = nuevoProducto.id;
+            option.text = nuevoProducto.nombre;
+            option.dataset.precio = nuevoProducto.precio; // Para el modal de ventas
+            select.add(option);
+        });
+
+        // Seleccionar automáticamente el producto recién creado en la fila activa.
+        const selectActivo = document.getElementById(selectIdToUpdate);
+        if (selectActivo) {
+            selectActivo.value = nuevoProducto.id;
+            // Disparamos un evento 'change' para que cualquier lógica asociada se ejecute (como actualizar precios)
+            selectActivo.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        this.showToast('Producto creado y seleccionado.', 'success');
+        document.body.removeChild(document.getElementById('sub-modal-bg'));
+    },
 });
