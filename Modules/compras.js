@@ -3,26 +3,46 @@
 Object.assign(ContaApp, {
 
     renderCompras(params = {}) {
-        // Acciones de la cabecera
-        document.getElementById('page-actions-header').innerHTML = `
-            <button class="conta-btn" onclick="ContaApp.abrirModalNuevaCompra()">+ Nueva Compra</button>
-        `;
+        document.getElementById('page-actions-header').innerHTML = `<button class="conta-btn" onclick="ContaApp.abrirModalNuevaCompra()">+ Nueva Compra</button>`;
 
-        // Lógica para mostrar la lista de compras (que estará vacía al principio)
         const compras = this.transacciones.filter(t => t.tipo === 'compra_inventario');
         
         let html;
         if (compras.length === 0) {
             html = this.generarEstadoVacioHTML(
-                'fa-shopping-basket',
-                'Aún no tienes compras de inventario',
-                'Usa este módulo para registrar la compra de mercancía para reventa o materias primas para producción.',
-                '+ Registrar Primera Compra',
-                "ContaApp.abrirModalNuevaCompra()"
+                'fa-shopping-basket', 'Aún no tienes compras de inventario',
+                'Usa este módulo para registrar la compra de mercancía para reventa o materias primas.',
+                '+ Registrar Primera Compra', "ContaApp.abrirModalNuevaCompra()"
             );
         } else {
-            // Futuro: Aquí construiremos la tabla con la lista de compras.
-            html = `<div class="conta-card">Tabla de compras aparecerá aquí.</div>`;
+            html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
+                <thead>
+                    <tr>
+                        <th class="conta-table-th">Fecha</th>
+                        <th class="conta-table-th">Referencia #</th>
+                        <th class="conta-table-th">Proveedor</th>
+                        <th class="conta-table-th text-right">Total</th>
+                        <th class="conta-table-th text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            
+            compras.sort((a,b) => new Date(b.fecha) - new Date(a.fecha)).forEach(compra => {
+                const proveedor = this.findById(this.contactos, compra.contactoId);
+                html += `
+                    <tr>
+                        <td class="conta-table-td">${compra.fecha}</td>
+                        <td class="conta-table-td font-mono">${compra.referencia || 'N/A'}</td>
+                        <td class="conta-table-td font-bold">${proveedor?.nombre || 'N/A'}</td>
+                        <td class="conta-table-td text-right font-mono">${this.formatCurrency(compra.total)}</td>
+                        <td class="conta-table-td text-center">
+                            <button class="conta-btn-icon" title="Ver Detalle" onclick="ContaApp.abrirModalDetalleCompra(${compra.id})"><i class="fa-solid fa-eye"></i></button>
+                            <button class="conta-btn-icon delete" title="Anular Compra" onclick="ContaApp.anularCompra(${compra.id})"><i class="fa-solid fa-ban"></i></button>
+                        </td>
+                    </tr>
+                `;
+            });
+            html += `</tbody></table></div>`;
         }
         
         document.getElementById('compras').innerHTML = html;
@@ -77,10 +97,9 @@ Object.assign(ContaApp, {
             .map(c => `<option value="${c.id}">${c.nombre}</option>`)
             .join('');
 
-        // Información común para todas las compras de inventario
         const infoComunHTML = `
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div class="md:col-span-1">
                     <label>Proveedor</label>
                     <div class="flex items-center gap-2">
                         <input list="proveedores-datalist-compra" id="compra-proveedor-input" class="w-full conta-input mt-1" placeholder="Buscar proveedor..." required>
@@ -92,6 +111,10 @@ Object.assign(ContaApp, {
                 <div>
                     <label>Fecha de Compra</label>
                     <input type="date" id="compra-fecha" value="${this.getTodayDate()}" class="w-full conta-input mt-1" required>
+                </div>
+                <div>
+                    <label>Factura/Referencia del Proveedor</label>
+                    <input type="text" id="compra-referencia" class="w-full conta-input mt-1" placeholder="Ej: F-12345">
                 </div>
             </div>
         `;
@@ -136,11 +159,9 @@ Object.assign(ContaApp, {
         }
 
         container.innerHTML = html;
-        // Si estamos en un formulario de compra, configuramos el listener del proveedor
         if (document.getElementById('compra-proveedor-input')) {
             this.setupDatalistListener('compra-proveedor-input', 'compra-proveedor-id', 'proveedores-datalist-compra');
         }
-        // Si es una compra de inventario, añadimos la primera línea de ítems
         if (tipoSeleccionado === 'reventa' || tipoSeleccionado === 'materia_prima') {
             this.agregarItemCompra();
         }
@@ -184,9 +205,9 @@ Object.assign(ContaApp, {
 
         try {
             if (tipoSeleccionado === 'reventa' || tipoSeleccionado === 'materia_prima') {
-                // Lógica para guardar Compra de Inventario
                 const proveedorId = parseInt(document.getElementById('compra-proveedor-id').value);
                 const fecha = document.getElementById('compra-fecha').value;
+                const referencia = document.getElementById('compra-referencia').value;
                 const cuentaInventarioId = parseInt(document.getElementById('compra-cuenta-inventario-id').value);
                 const cuentaPagoId = parseInt(document.getElementById('compra-pago-id').value);
 
@@ -211,7 +232,6 @@ Object.assign(ContaApp, {
                     throw new Error('Debe añadir al menos un ítem a la compra.');
                 }
 
-                // Actualizar el stock y el costo promedio de cada producto
                 items.forEach(item => {
                     const producto = this.findById(this.productos, item.productoId);
                     if (producto) {
@@ -223,21 +243,20 @@ Object.assign(ContaApp, {
                     }
                 });
                 
-                const descripcion = `Compra de inventario #${this.idCounter + 1}`;
+                const descripcion = `Compra de inventario s/f #${referencia || 'N/A'}`;
                 
-                // Crear la transacción de la compra
                 const nuevaCompra = {
                     id: this.idCounter++,
                     tipo: 'compra_inventario',
                     fecha: fecha,
                     contactoId: proveedorId,
+                    referencia: referencia,
                     descripcion: descripcion,
                     items: items,
                     total: totalCompra
                 };
                 this.transacciones.push(nuevaCompra);
 
-                // Crear el asiento contable
                 const asiento = this.crearAsiento(
                     fecha,
                     descripcion,
@@ -256,7 +275,6 @@ Object.assign(ContaApp, {
                 }
 
             } else if (tipoSeleccionado === 'activo_fijo') {
-                // Lógica para redirigir a Activos Fijos
                 this.closeModal();
                 this.abrirModalActivoFijo();
             }
@@ -266,5 +284,96 @@ Object.assign(ContaApp, {
         } finally {
             this.toggleButtonLoading(submitButton, false);
         }
+    },
+    abrirModalDetalleCompra(compraId) {
+        const compra = this.findById(this.transacciones, compraId);
+        if (!compra) return;
+        const proveedor = this.findById(this.contactos, compra.contactoId);
+
+        let itemsHTML = '';
+        compra.items.forEach(item => {
+            const producto = this.findById(this.productos, item.productoId);
+            itemsHTML += `
+                <tr class="border-t">
+                    <td class="py-2 px-3">${producto?.nombre || 'Producto no encontrado'}</td>
+                    <td class="py-2 px-3 text-center">${item.cantidad}</td>
+                    <td class="py-2 px-3 text-right font-mono">${this.formatCurrency(item.costoUnitario)}</td>
+                    <td class="py-2 px-3 text-right font-mono font-bold">${this.formatCurrency(item.cantidad * item.costoUnitario)}</td>
+                </tr>
+            `;
+        });
+        
+        const modalHTML = `
+            <h3 class="conta-title mb-2">Detalle de Compra</h3>
+            <p class="text-[var(--color-text-secondary)] text-sm mb-4">Referencia del Proveedor: ${compra.referencia || 'N/A'}</p>
+            <p><strong>Proveedor:</strong> ${proveedor?.nombre}</p>
+            <p class="mb-4"><strong>Fecha:</strong> ${compra.fecha}</p>
+            <div class="conta-card !p-0">
+                <table class="w-full text-sm">
+                    <thead><tr>
+                        <th class="conta-table-th">Producto</th>
+                        <th class="conta-table-th text-center">Cantidad</th>
+                        <th class="conta-table-th text-right">Costo Unit.</th>
+                        <th class="conta-table-th text-right">Total</th>
+                    </tr></thead>
+                    <tbody>${itemsHTML}</tbody>
+                    <tfoot class="bg-[var(--color-bg-accent)] font-bold">
+                        <tr>
+                            <td class="conta-table-td text-right" colspan="3">TOTAL COMPRA</td>
+                            <td class="conta-table-td text-right font-mono">${this.formatCurrency(compra.total)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <div class="flex justify-end gap-2 mt-8">
+                <button class="conta-btn" onclick="ContaApp.abrirModalVerAsientos(${compra.id})">Ver Asiento</button>
+                <button class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cerrar</button>
+            </div>
+        `;
+        this.showModal(modalHTML, '3xl');
+    },
+
+    anularCompra(compraId) {
+        this.showConfirm(
+            '¿Seguro que deseas anular esta compra? Esta acción revertirá el asiento contable y ajustará el stock del inventario. No se puede deshacer.',
+            () => {
+                const compra = this.findById(this.transacciones, compraId);
+                if (!compra || compra.estado === 'Anulada') {
+                    this.showToast('Esta compra ya ha sido anulada o no se encontró.', 'error');
+                    return;
+                }
+
+                compra.items.forEach(itemCompra => {
+                    const producto = this.findById(this.productos, itemCompra.productoId);
+                    if (producto) {
+                        const valorCompraARevertir = itemCompra.cantidad * itemCompra.costoUnitario;
+                        const valorStockTotalActual = producto.stock * producto.costo;
+                        const nuevoStock = producto.stock - itemCompra.cantidad;
+
+                        if (nuevoStock < 0) {
+                            console.error(`Error de anulación: el stock de '${producto.nombre}' sería negativo.`);
+                        }
+                        
+                        producto.costo = nuevoStock > 0 ? (valorStockTotalActual - valorCompraARevertir) / nuevoStock : 0;
+                        producto.stock = nuevoStock;
+                    }
+                });
+
+                const asientoOriginal = this.asientos.find(a => a.transaccionId === compra.id);
+                if (asientoOriginal) {
+                    const movimientosReversos = asientoOriginal.movimientos.map(mov => ({
+                        cuentaId: mov.cuentaId,
+                        debe: mov.haber,
+                        haber: mov.debe
+                    }));
+                    this.crearAsiento(this.getTodayDate(), `Anulación de Compra s/f #${compra.referencia}`, movimientosReversos);
+                }
+                
+                compra.estado = 'Anulada';
+                this.saveAll();
+                this.irModulo('compras');
+                this.showToast('La compra ha sido anulada con éxito.', 'success');
+            }
+        );
     },
 });
