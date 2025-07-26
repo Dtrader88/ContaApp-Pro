@@ -13,6 +13,8 @@ const ContaApp = {
     productos: [],
     recurrentes: [],
     activosFijos: [],
+    listasMateriales: [],
+    ordenesProduccion: [],
     bancoImportado: {},
     
     // --- LÍNEA AÑADIDA PARA SOLUCIONAR EL ERROR ---
@@ -471,6 +473,7 @@ irAtras() {
             'bancos': 'FINANZAS_AVANZADO',
             'cierre-periodo': 'CONTABILIDAD_AVANZADO',
             'activos-fijos': 'ACTIVOS_AVANZADOS',
+            'produccion': 'PRODUCCION', // <-- LÍNEA AÑADIDA
         };
 
         const licenciaRequerida = mapaLicencias[mod];
@@ -485,11 +488,9 @@ irAtras() {
                 const elToShow = document.getElementById(mod);
                 if (elToShow) {
                     elToShow.innerHTML = this.generarEstadoVacioHTML(
-                        'fa-lock',
-                        'Módulo Bloqueado',
-                        `Esta funcionalidad no está incluida en tu paquete "${this.licencia.paquete}". Contacta a soporte para actualizar tu plan.`,
-                        'Volver al Dashboard',
-                        "ContaApp.irModulo('dashboard')"
+                        'fa-lock', 'Módulo Bloqueado',
+                        `Esta funcionalidad no está incluida en tu paquete "${this.licencia.paquete}".`,
+                        'Volver al Dashboard', "ContaApp.irModulo('dashboard')"
                     );
                     elToShow.style.display = "block";
                 }
@@ -507,30 +508,21 @@ irAtras() {
         }
 
         if (this.isFormDirty) {
-            this.showConfirm(
-                "Tienes cambios sin guardar. ¿Estás seguro de que quieres salir y descartarlos?",
-                () => {
-                    this.isFormDirty = false;
-                    this.irModulo(mod, params);
-                }
+            this.showConfirm( "Tienes cambios sin guardar. ¿Estás seguro de que quieres salir?",
+                () => { this.isFormDirty = false; this.irModulo(mod, params); }
             );
-            return;
+return;
         }
 
-        // --- INICIO DE LA MODIFICACIÓN ---
-        // Solo añadimos al historial si NO es una navegación hacia atrás
         if (!isBackNavigation) {
             const lastState = this.navigationHistory[this.navigationHistory.length - 1];
             if (!lastState || lastState.mod !== mod || JSON.stringify(lastState.params) !== JSON.stringify(params)) {
                 this.navigationHistory.push({ mod, params });
             }
         }
-        // --- FIN DE LA MODIFICACIÓN ---
         
         const backButton = document.getElementById('back-button');
-        if (backButton) {
-            backButton.disabled = this.navigationHistory.length <= 1;
-        }
+        if (backButton) { backButton.disabled = this.navigationHistory.length <= 1; }
 
         const loader = document.getElementById('module-loader');
         const contentArea = document.getElementById('content-area');
@@ -556,7 +548,7 @@ irAtras() {
 
                 const moduleTitle = navLink ? navLink.innerText.trim() : mod.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                 
-                if (!params.clienteId && !params.proveedorId && !params.activoId) { // Añadido !params.activoId
+                if (!params.clienteId && !params.proveedorId && !params.activoId) {
                     document.getElementById('page-title-header').innerText = moduleTitle;
                 }
                 document.title = `${this.empresa.nombre} - ${moduleTitle}`;
@@ -576,6 +568,7 @@ irAtras() {
                     'bancos': this.renderBancosYTarjetas,
                     'reportes': this.renderReportes,
                     'activos-fijos': this.renderActivosFijos,
+                    'produccion': this.renderProduccion, // <-- LÍNEA AÑADIDA
                     'config': this.renderConfig
                 };
                 
@@ -774,7 +767,7 @@ irAtras() {
     },
 
     // Gestión de Datos (LocalStorage)
-                saveAll(){
+        saveAll(){
         const dataToSave = {
             empresa: this.empresa,
             licencia: this.licencia,
@@ -785,15 +778,15 @@ irAtras() {
             contactos: this.contactos,
             productos: this.productos,
             recurrentes: this.recurrentes,
-            activosFijos: this.activosFijos, // <-- LÍNEA AÑADIDA
+            activosFijos: this.activosFijos,
+            listasMateriales: this.listasMateriales, // <-- LÍNEA AÑADIDA
+            ordenesProduccion: this.ordenesProduccion, // <-- LÍNEA AÑADIDA
             bancoImportado: this.bancoImportado
         };
         this.repository.saveAll(dataToSave);
     },
         // CAMBIO CLAVE: la función ahora recibe los datos como argumento
         loadAll(dataString){ 
-        console.log("--- INICIANDO loadAll ---");
-        
         const defaultData = {
             empresa: { 
                 nombre: "Tu Empresa", logo: 'images/logo.png', direccion: '123 Calle Ficticia', 
@@ -820,14 +813,9 @@ irAtras() {
                 modulosActivos: [
                     "VENTAS", "GASTOS", "CXC", "CXP",
                     "PLAN_DE_CUENTAS", "DIARIO_GENERAL",
-                    "CONFIGURACION",
-                    "INVENTARIO_BASE",
-                    "FINANZAS_AVANZADO",
-                    "CONTABILIDAD_AVANZADO",
-                    "REPORTES_AVANZADOS",
-                    "ACTIVOS_AVANZADOS",
-                    "PRODUCCION",
-                    "NOMINAS"
+                    "CONFIGURACION", "INVENTARIO_BASE", "FINANZAS_AVANZADO",
+                    "CONTABILIDAD_AVANZADO", "REPORTES_AVANZADOS", "ACTIVOS_AVANZADOS",
+                    "PRODUCCION", "NOMINAS"
                 ]
             },
             idCounter: 1000,
@@ -838,26 +826,25 @@ irAtras() {
             productos: [],
             recurrentes: [],
             activosFijos: [],
+            listasMateriales: [], // <-- LÍNEA AÑADIDA
+            ordenesProduccion: [], // <-- LÍNEA AÑADIDA
             bancoImportado: {}
         };
         
         if (dataString) {
-            console.log("dataString recibido de Firebase:", dataString);
             const data = JSON.parse(dataString);
-            
             this.empresa = { ...defaultData.empresa, ...data.empresa };
             this.licencia = data.licencia || defaultData.licencia; 
             this.idCounter = data.idCounter || defaultData.idCounter;
             this.planDeCuentas = (data.planDeCuentas && data.planDeCuentas.length > 0) ? data.planDeCuentas : defaultData.planDeCuentas;
-            
-            console.log("Plan de Cuentas cargado desde Firebase (antes de verificar):", JSON.parse(JSON.stringify(this.planDeCuentas)));
-
             this.asientos = data.asientos || defaultData.asientos;
             this.transacciones = data.transacciones || defaultData.transacciones;
             this.contactos = data.contactos || defaultData.contactos;
             this.productos = data.productos || defaultData.productos;
             this.recurrentes = data.recurrentes || defaultData.recurrentes;
             this.activosFijos = data.activosFijos || [];
+            this.listasMateriales = data.listasMateriales || []; // <-- LÍNEA AÑADIDA
+            this.ordenesProduccion = data.ordenesProduccion || []; // <-- LÍNEA AÑADIDA
             this.bancoImportado = data.bancoImportado || defaultData.bancoImportado;
 
             this.verificarYActualizarPlanDeCuentas();
@@ -869,10 +856,8 @@ irAtras() {
             }
             if (!this.empresa.dashboardLayout) this.empresa.dashboardLayout = defaultData.empresa.dashboardLayout;
         } else {
-            console.log("No se recibió dataString. Usando datos por defecto.");
             Object.assign(this, defaultData);
         }
-        console.log("--- FINALIZANDO loadAll ---");
     },
 verificarYActualizarPlanDeCuentas() {
         console.log("--- INICIANDO verificarYActualizarPlanDeCuentas ---");
