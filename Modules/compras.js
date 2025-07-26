@@ -213,8 +213,10 @@ Object.assign(ContaApp, {
             </div>
         `;
         container.insertAdjacentHTML('beforeend', itemHTML);
-        if (container.lastChild) {
-            this.actualizarUnidadMedidaCompra(container.lastChild.querySelector('.compra-item-producto-id'));
+        
+        const nuevaFila = container.querySelector('.compra-item-row:last-child');
+        if (nuevaFila) {
+            this.actualizarUnidadMedidaCompra(nuevaFila.querySelector('.compra-item-producto-id'));
         }
     },
 
