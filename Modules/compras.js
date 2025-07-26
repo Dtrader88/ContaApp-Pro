@@ -197,38 +197,25 @@ Object.assign(ContaApp, {
             .filter(p => p.tipo === 'producto')
             .map(p => `<option value="${p.id}">${p.nombre}</option>`)
             .join('');
-        
-        const unidadesOptions = this.unidadesMedida
-            .map(u => `<option value="${u.id}">${u.nombre}</option>`)
-            .join('');
 
         const itemHTML = `
             <div class="grid grid-cols-12 gap-2 items-center dynamic-row compra-item-row">
-                <div class="col-span-5 flex items-center gap-2">
+                <div class="col-span-6 flex items-center gap-2">
                     <select class="w-full conta-input compra-item-producto-id" onchange="ContaApp.actualizarUnidadMedidaCompra(this)">${productosOptions}</select>
                     <button type="button" class="conta-btn conta-btn-small" onclick="ContaApp.abrirSubModalNuevoProducto('compra')">+</button>
                 </div>
                 <input type="number" min="1" class="col-span-2 conta-input text-right compra-item-cantidad" placeholder="Cant." oninput="ContaApp.actualizarTotalesCompra()">
-                
-                <div class="col-span-2 flex items-center gap-2">
-                    <select class="w-full conta-input compra-item-unidad-id">${unidadesOptions}</select>
-                    <button type="button" class="conta-btn conta-btn-small" onclick="ContaApp.abrirSubModalNuevaUnidad(this)">+</button>
+                <div class="col-span-2">
+                    <input type="text" class="w-full conta-input bg-gray-100 dark:bg-gray-700 compra-item-unidad-display" readonly>
                 </div>
-
-                <input type="number" step="0.01" min="0" class="col-span-2 conta-input text-right compra-item-costo" placeholder="Costo Unit." oninput="ContaApp.actualizarTotalesCompra()">
+                <input type="number" step="0.01" min="0" class="col-span-1 conta-input text-right compra-item-costo" placeholder="Costo" oninput="ContaApp.actualizarTotalesCompra()">
                 <button type="button" class="col-span-1 conta-btn-icon delete" onclick="this.closest('.compra-item-row').remove(); ContaApp.actualizarTotalesCompra();">🗑️</button>
             </div>
         `;
         container.insertAdjacentHTML('beforeend', itemHTML);
-        
-        // --- INICIO DE LA CORRECCIÓN ---
-        // Buscamos el último elemento DIV que acabamos de añadir
-        const nuevaFila = container.querySelector('.compra-item-row:last-child');
-        if (nuevaFila) {
-            // Y ahora sí, llamamos a la función con el selector de producto de esa fila
-            this.actualizarUnidadMedidaCompra(nuevaFila.querySelector('.compra-item-producto-id'));
+        if (container.lastChild) {
+            this.actualizarUnidadMedidaCompra(container.lastChild.querySelector('.compra-item-producto-id'));
         }
-        // --- FIN DE LA CORRECCIÓN ---
     },
 
     actualizarTotalesCompra() {
@@ -344,10 +331,9 @@ Object.assign(ContaApp, {
                     const productoId = parseInt(row.querySelector('.compra-item-producto-id').value);
                     const cantidad = parseFloat(row.querySelector('.compra-item-cantidad').value);
                     const costoUnitario = parseFloat(row.querySelector('.compra-item-costo').value);
-                    const unidadMedidaId = parseInt(row.querySelector('.compra-item-unidad-id').value);
 
                     if (productoId && cantidad > 0 && costoUnitario >= 0) {
-                        items.push({ productoId, cantidad, costoUnitario, unidadMedidaId });
+                        items.push({ productoId, cantidad, costoUnitario });
                         totalCompra += cantidad * costoUnitario;
                     }
                 });
@@ -357,15 +343,11 @@ Object.assign(ContaApp, {
                 items.forEach(item => {
                     const producto = this.findById(this.productos, item.productoId);
                     if (producto) {
-                        const factor = producto.factorConversion || 1;
-                        const cantidadEnUnidadesDeConsumo = item.cantidad * factor;
-                        const costoUnitarioDeConsumo = item.costoUnitario / factor;
-
                         const valorTotalStockActual = (producto.stock || 0) * (producto.costo || 0);
-                        const valorCompraTotal = item.cantidad * item.costoUnitario;
-                        const nuevoStock = (producto.stock || 0) + cantidadEnUnidadesDeConsumo;
+                        const valorCompra = item.cantidad * item.costoUnitario;
+                        const nuevoStock = (producto.stock || 0) + item.cantidad;
 
-                        producto.costo = nuevoStock > 0 ? (valorTotalStockActual + valorCompraTotal) / nuevoStock : costoUnitarioDeConsumo;
+                        producto.costo = nuevoStock > 0 ? (valorTotalStockActual + valorCompra) / nuevoStock : item.costoUnitario;
                         producto.stock = nuevoStock;
                     }
                 });

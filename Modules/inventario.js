@@ -46,7 +46,11 @@ Object.assign(ContaApp, {
             </div>`;
             
         if (productosFiltrados.length === 0) {
-            // ... (código del estado vacío sin cambios)
+            if (params.search) {
+                html += `<div class="conta-card text-center p-8 text-[var(--color-text-secondary)]"><i class="fa-solid fa-filter-circle-xmark fa-3x mb-4 opacity-50"></i><h3 class="font-bold text-lg">Sin Resultados</h3><p>No se encontraron productos que coincidan con "${params.search}".</p></div>`;
+            } else {
+                html += this.generarEstadoVacioHTML('fa-boxes-stacked', 'Tu inventario está vacío', 'Añade tu primer producto o servicio para empezar a gestionar tu stock y ventas.', '+ Crear Producto', "ContaApp.abrirModalProducto()");
+            }
         } else {
             html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
                 <th class="conta-table-th">Nombre</th>
@@ -59,7 +63,15 @@ Object.assign(ContaApp, {
             </tr></thead><tbody>`;
             let tableRowsHTML = '';
             productosFiltrados.sort((a,b) => a.nombre.localeCompare(b.nombre)).forEach(p => {
-                // ... (lógica para isLowStock, stockDisplay, etc. sin cambios)
+                const isLowStock = p.tipo === 'producto' && p.stockMinimo > 0 && p.stock <= p.stockMinimo;
+                const rowClass = isLowStock ? 'low-stock-row' : '';
+                const stockDisplay = p.tipo === 'producto' ? p.stock : 'N/A';
+                
+                // --- INICIO DE LA CORRECCIÓN ---
+                // Esta es la línea que faltaba
+                const lowStockIcon = isLowStock ? `<i class="fa-solid fa-triangle-exclamation text-[var(--color-danger)] ml-2" title="Stock bajo (Mínimo: ${p.stockMinimo})"></i>` : '';
+                // --- FIN DE LA CORRECCIÓN ---
+
                 const unidad = this.findById(this.unidadesMedida, p.unidadMedidaId);
                 const unidadDisplay = p.tipo === 'producto' ? (unidad ? unidad.nombre : 'N/A') : 'N/A';
 
