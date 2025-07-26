@@ -82,16 +82,10 @@ Object.assign(ContaApp, {
         const lista = id ? this.findById(this.listasMateriales, id) : {};
         const isEditing = id !== null;
 
-        // Opciones para el producto que vamos a FABRICAR
+        // Opciones para el datalist de productos a fabricar
         const productosTerminadosOptions = this.productos
-            .filter(p => p.tipo === 'producto') // Asumimos que cualquier producto puede ser terminado
-            .map(p => `<option value="${p.id}" ${lista.productoTerminadoId === p.id ? 'selected' : ''}>${p.nombre}</option>`)
-            .join('');
-            
-        // Opciones para los INGREDIENTES (materias primas)
-        const materiasPrimasOptions = this.productos
-            .filter(p => p.tipo === 'producto') // Asumimos que cualquier producto puede ser materia prima
-            .map(p => `<option value="${p.id}">${p.nombre}</option>`)
+            .filter(p => p.tipo === 'producto')
+            .map(p => `<option value="${p.nombre}" data-id="${p.id}"></option>`)
             .join('');
 
         const modalHTML = `
@@ -99,11 +93,13 @@ Object.assign(ContaApp, {
             <form onsubmit="ContaApp.guardarListaMateriales(event, ${id})" class="space-y-4 modal-form">
                 
                 <div>
-                    <label>Producto a Fabricar</label>
-                    <select id="bom-producto-terminado" class="w-full conta-input mt-1" required>
-                        <option value="">-- Selecciona un producto --</option>
-                        ${productosTerminadosOptions}
-                    </select>
+                    <label>Producto a Fabricar (Producto Final)</label>
+                    <div class="flex items-center gap-2 mt-1">
+                        <input list="productos-terminados-datalist" id="bom-producto-terminado-input" class="w-full conta-input" placeholder="Selecciona o escribe para crear un nuevo producto..." required>
+                        <datalist id="productos-terminados-datalist">${productosTerminadosOptions}</datalist>
+                        <input type="hidden" id="bom-producto-terminado-id">
+                        <button type="button" class="conta-btn conta-btn-small" onclick="ContaApp.abrirSubModalNuevoProducto('produccion')">+</button>
+                    </div>
                 </div>
 
                 <div class="conta-card p-4">
@@ -119,12 +115,17 @@ Object.assign(ContaApp, {
             </form>
         `;
         this.showModal(modalHTML, '3xl');
-
-        // Si estamos editando, poblamos los componentes existentes
+        this.setupDatalistListener('bom-producto-terminado-input', 'bom-producto-terminado-id', 'productos-terminados-datalist');
+        
         if (isEditing) {
+            const productoTerminado = this.findById(this.productos, lista.productoTerminadoId);
+            if (productoTerminado) {
+                document.getElementById('bom-producto-terminado-input').value = productoTerminado.nombre;
+                document.getElementById('bom-producto-terminado-id').value = productoTerminado.id;
+            }
             lista.componentes.forEach(comp => this.agregarComponenteBOM(comp));
         } else {
-            this.agregarComponenteBOM(); // Añadir una primera línea vacía
+            this.agregarComponenteBOM();
         }
     },
 
