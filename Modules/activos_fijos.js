@@ -202,12 +202,11 @@ Object.assign(ContaApp, {
             }
         }
     },
-        guardarActivoFijo(e, id = null) {
+            guardarActivoFijo(e, id = null) {
         e.preventDefault();
         const isEditing = id !== null;
 
         if (isEditing) {
-            // Lógica de Edición (solo campos no contables, como el nombre)
             const activo = this.findById(this.activosFijos, id);
             if (activo) {
                 activo.nombre = document.getElementById('activo-nombre').value;
@@ -219,33 +218,38 @@ Object.assign(ContaApp, {
                 this.showToast('Activo fijo actualizado con éxito.', 'success');
             }
         } else {
-            // Lógica de Creación (Compra)
             const data = {
                 nombre: document.getElementById('activo-nombre').value,
                 cuentaId: parseInt(document.getElementById('activo-cuenta-id').value),
                 fechaCompra: document.getElementById('activo-fecha-compra').value,
-                proveedorId: parseInt(document.getElementById('activo-proveedor-id').value), // Ahora es requerido
+                proveedorId: parseInt(document.getElementById('activo-proveedor-id').value),
                 costo: parseFloat(document.getElementById('activo-costo').value),
                 vidaUtil: parseInt(document.getElementById('activo-vida-util').value),
                 valorResidual: parseFloat(document.getElementById('activo-valor-residual').value),
                 cuentaPagoId: parseInt(document.getElementById('activo-pago-id').value)
             };
 
-            // Validaciones
             if (!data.proveedorId) { this.showToast('Debe seleccionar un proveedor.', 'error'); return; }
             if (isNaN(data.costo) || isNaN(data.vidaUtil) || isNaN(data.valorResidual)) { this.showToast('Costo, Vida Útil y Valor Residual deben ser números.', 'error'); return; }
             if (data.costo <= data.valorResidual) { this.showToast('El costo debe ser mayor que el valor residual.', 'error'); return; }
 
-            const nuevoActivo = { id: this.idCounter++, ...data, depreciacionAcumulada: 0, mesesDepreciados: 0, estado: 'Activo' };
+            const nuevoActivo = { 
+                id: this.idCounter++, 
+                ...data,
+                costoOriginal: data.costo,
+                mejoras: [],
+                depreciacionAcumulada: 0, 
+                mesesDepreciados: 0, 
+                estado: 'Activo' 
+            };
             this.activosFijos.push(nuevoActivo);
 
-            // Crear el asiento contable de la compra
             const asiento = this.crearAsiento(
                 data.fechaCompra,
                 `Compra de activo fijo: ${data.nombre}`,
                 [
-                    { cuentaId: data.cuentaId, debe: data.costo, haber: 0 }, // DEBE: Aumenta el activo
-                    { cuentaId: data.cuentaPagoId, debe: 0, haber: data.costo } // HABER: Disminuye banco O aumenta Cuentas por Pagar
+                    { cuentaId: data.cuentaId, debe: data.costo, haber: 0 },
+                    { cuentaId: data.cuentaPagoId, debe: 0, haber: data.costo }
                 ]
             );
 
@@ -494,32 +498,28 @@ Object.assign(ContaApp, {
 
         this.showModal(reporteHTML, '6xl');
     },
-    getActivoKardexData(activoId) {
+        getActivoKardexData(activoId) {
         const activo = this.findById(this.activosFijos, activoId);
         if (!activo) return null;
 
         let movimientos = [];
         
-        // 1. Movimiento de Compra Original
         movimientos.push({
             fecha: activo.fechaCompra,
             descripcion: 'Compra del Activo (Costo Original)',
-            valorCambio: activo.costo,
-            esCompra: true
+            valorCambio: activo.costoOriginal || activo.costo,
         });
 
-        // 2. Buscar todas las mejoras para este activo
-        const mejoras = this.transacciones.filter(t => t.tipo === 'mejora_activo' && t.activoId === activoId);
-        mejoras.forEach(mejora => {
-            movimientos.push({
-                fecha: mejora.fecha,
-                descripcion: `Mejora: ${mejora.descripcion}`,
-                valorCambio: mejora.costo,
-                esMejora: true
+        if (activo.mejoras && activo.mejoras.length > 0) {
+            activo.mejoras.forEach(mejora => {
+                movimientos.push({
+                    fecha: mejora.fecha,
+                    descripcion: `Mejora: ${mejora.descripcion}`,
+                    valorCambio: mejora.costo,
+                });
             });
-        });
+        }
         
-        // 3. Simular depreciaciones y bajas
         const depreciacionMensual = (activo.costo - activo.valorResidual) / activo.vidaUtil;
         for (let i = 1; i <= activo.mesesDepreciados; i++) {
             const fechaDepreciacion = new Date(activo.fechaCompra);
@@ -535,11 +535,10 @@ Object.assign(ContaApp, {
              movimientos.push({
                 fecha: activo.fechaBaja,
                 descripcion: `Disposición del Activo (${activo.estado})`,
-                valorCambio: -(activo.costo - activo.depreciacionAcumulada)
+                valorCambio: -(activo.costoOriginal + (activo.mejoras || []).reduce((sum, m) => sum + m.costo, 0) - activo.depreciacionAcumulada)
             });
         }
 
-        // 4. Ordenar todos los eventos por fecha y calcular el saldo corriente
         movimientos.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
         
         let valorEnLibrosCorriente = 0;
@@ -696,7 +695,7 @@ Object.assign(ContaApp, {
         this.showModal(modalHTML, '2xl');
     },
 
-    guardarMejoraActivo(e, id) {
+        guardarMejoraActivo(e, id) {
         e.preventDefault();
         const activo = this.findById(this.activosFijos, id);
         const costoMejora = parseFloat(document.getElementById('mejora-costo').value);
@@ -710,30 +709,23 @@ Object.assign(ContaApp, {
             return;
         }
 
-        // 1. Crear una transacción para registrar la mejora (para el Kardex)
-        const transaccionMejora = {
-            id: this.idCounter++,
-            tipo: 'mejora_activo',
+        if (!activo.mejoras) activo.mejoras = [];
+        activo.mejoras.push({
             fecha: fechaMejora,
-            activoId: id,
-            costo: costoMejora,
-            descripcion: descripcion
-        };
-        this.transacciones.push(transaccionMejora);
+            descripcion: descripcion,
+            costo: costoMejora
+        });
 
-        // 2. Actualizar los valores del activo
-        activo.costo += costoMejora; // El costo base sí aumenta para el cálculo de depreciación futuro
+        activo.costo += costoMejora;
         activo.vidaUtil += vidaUtilAdicional;
 
-        // 3. Crear el asiento contable para la capitalización
         const asiento = this.crearAsiento(
             fechaMejora,
             `Mejora en activo ${activo.nombre}: ${descripcion}`,
             [
                 { cuentaId: activo.cuentaId, debe: costoMejora, haber: 0 },
                 { cuentaId: cuentaPagoId, debe: 0, haber: costoMejora }
-            ],
-            transaccionMejora.id // Vinculamos el asiento a la transacción
+            ]
         );
 
         if (asiento) {
