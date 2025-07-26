@@ -445,8 +445,22 @@ const ContaApp = {
             this.showToast(`Error de configuración: ${error.message}`, 'error');
         }
     },
+irAtras() {
+        // No hacer nada si no hay a dónde ir
+        if (this.navigationHistory.length <= 1) {
+            return;
+        }
 
-            irModulo(mod, params = {}) {
+        // 1. Eliminar la página actual del historial
+        this.navigationHistory.pop();
+
+        // 2. Obtener el estado de la página a la que queremos volver
+        const previousState = this.navigationHistory[this.navigationHistory.length - 1];
+
+        // 3. Navegar a ese estado anterior, indicando que es una navegación "hacia atrás"
+        this.irModulo(previousState.mod, previousState.params, true);
+    },
+            irModulo(mod, params = {}, isBackNavigation = false) {
         if (!this.licencia) {
             console.warn(`Intento de navegar al módulo '${mod}' antes de que la licencia esté cargada. Abortando.`);
             return;
@@ -456,7 +470,7 @@ const ContaApp = {
             'inventario': 'INVENTARIO_BASE',
             'bancos': 'FINANZAS_AVANZADO',
             'cierre-periodo': 'CONTABILIDAD_AVANZADO',
-            'activos-fijos': 'ACTIVOS_AVANZADOS', // <-- LÍNEA AÑADIDA PARA PROTEGER EL MÓDULO
+            'activos-fijos': 'ACTIVOS_AVANZADOS',
         };
 
         const licenciaRequerida = mapaLicencias[mod];
@@ -503,10 +517,15 @@ const ContaApp = {
             return;
         }
 
-        const lastState = this.navigationHistory[this.navigationHistory.length - 1];
-        if (!lastState || lastState.mod !== mod || JSON.stringify(lastState.params) !== JSON.stringify(params)) {
-            this.navigationHistory.push({ mod, params });
+        // --- INICIO DE LA MODIFICACIÓN ---
+        // Solo añadimos al historial si NO es una navegación hacia atrás
+        if (!isBackNavigation) {
+            const lastState = this.navigationHistory[this.navigationHistory.length - 1];
+            if (!lastState || lastState.mod !== mod || JSON.stringify(lastState.params) !== JSON.stringify(params)) {
+                this.navigationHistory.push({ mod, params });
+            }
         }
+        // --- FIN DE LA MODIFICACIÓN ---
         
         const backButton = document.getElementById('back-button');
         if (backButton) {
@@ -537,7 +556,7 @@ const ContaApp = {
 
                 const moduleTitle = navLink ? navLink.innerText.trim() : mod.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                 
-                if (!params.clienteId && !params.proveedorId) {
+                if (!params.clienteId && !params.proveedorId && !params.activoId) { // Añadido !params.activoId
                     document.getElementById('page-title-header').innerText = moduleTitle;
                 }
                 document.title = `${this.empresa.nombre} - ${moduleTitle}`;
@@ -556,7 +575,7 @@ const ContaApp = {
                     'cierre-periodo': this.renderCierrePeriodo,
                     'bancos': this.renderBancosYTarjetas,
                     'reportes': this.renderReportes,
-                    'activos-fijos': this.renderActivosFijos, // <-- LÍNEA AÑADIDA PARA RENDERIZAR
+                    'activos-fijos': this.renderActivosFijos,
                     'config': this.renderConfig
                 };
                 
