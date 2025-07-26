@@ -197,19 +197,32 @@ Object.assign(ContaApp, {
             .filter(p => p.tipo === 'producto')
             .map(p => `<option value="${p.id}">${p.nombre}</option>`)
             .join('');
+        
+        const unidadesOptions = this.unidadesMedida
+            .map(u => `<option value="${u.id}">${u.nombre}</option>`)
+            .join('');
 
         const itemHTML = `
             <div class="grid grid-cols-12 gap-2 items-center dynamic-row compra-item-row">
-                <div class="col-span-6 flex items-center gap-2">
-                    <select class="w-full conta-input compra-item-producto-id">${productosOptions}</select>
+                <div class="col-span-5 flex items-center gap-2">
+                    <select class="w-full conta-input compra-item-producto-id" onchange="ContaApp.actualizarUnidadMedidaCompra(this)">${productosOptions}</select>
                     <button type="button" class="conta-btn conta-btn-small" onclick="ContaApp.abrirSubModalNuevoProducto('compra')">+</button>
                 </div>
                 <input type="number" min="1" class="col-span-2 conta-input text-right compra-item-cantidad" placeholder="Cant." oninput="ContaApp.actualizarTotalesCompra()">
-                <input type="number" step="0.01" min="0" class="col-span-3 conta-input text-right compra-item-costo" placeholder="Costo Unit." oninput="ContaApp.actualizarTotalesCompra()">
+                
+                <div class="col-span-2 flex items-center gap-2">
+                    <select class="w-full conta-input compra-item-unidad-id">${unidadesOptions}</select>
+                    <button type="button" class="conta-btn conta-btn-small" onclick="ContaApp.abrirSubModalNuevaUnidad(this)">+</button>
+                </div>
+
+                <input type="number" step="0.01" min="0" class="col-span-2 conta-input text-right compra-item-costo" placeholder="Costo Unit." oninput="ContaApp.actualizarTotalesCompra()">
                 <button type="button" class="col-span-1 conta-btn-icon delete" onclick="this.closest('.compra-item-row').remove(); ContaApp.actualizarTotalesCompra();">🗑️</button>
             </div>
         `;
         container.insertAdjacentHTML('beforeend', itemHTML);
+        if (container.lastChild) {
+            this.actualizarUnidadMedidaCompra(container.lastChild.querySelector('.compra-item-producto-id'));
+        }
     },
 
     actualizarTotalesCompra() {
@@ -221,7 +234,75 @@ Object.assign(ContaApp, {
         });
         document.getElementById('compra-total').textContent = this.formatCurrency(total);
     },
+    actualizarUnidadMedidaCompra(selectProducto) {
+        const fila = selectProducto.closest('.compra-item-row');
+        const productoId = parseInt(selectProducto.value);
+        const producto = this.findById(this.productos, productoId);
+        const selectUnidad = fila.querySelector('.compra-item-unidad-id');
+        if (producto && selectUnidad) {
+            selectUnidad.value = producto.unidadMedidaId || 1;
+        }
+    },
 
+    abrirSubModalNuevaUnidad(button) {
+        const selectToUpdate = button.previousElementSibling;
+        if (!selectToUpdate.id) {
+            selectToUpdate.id = `unidad-selector-on-the-fly-${Date.now()}`;
+        }
+
+        const subModal = document.createElement('div');
+        subModal.id = 'sub-modal-bg';
+        subModal.onclick = () => document.body.removeChild(subModal);
+        
+        const subModalContent = document.createElement('div');
+        subModalContent.className = 'p-6 rounded-lg shadow-xl w-full max-w-sm modal-content';
+        subModalContent.onclick = e => e.stopPropagation();
+
+        subModalContent.innerHTML = `
+            <h3 class="conta-title mb-4">Nueva Unidad de Medida</h3>
+            <form onsubmit="event.preventDefault(); ContaApp.guardarNuevaUnidadDesdeSubModal(event, '${selectToUpdate.id}')" class="space-y-4 modal-form">
+                <div>
+                    <label>Nombre de la Unidad</label>
+                    <input type="text" id="sub-unidad-nombre" class="w-full p-2 mt-1" placeholder="Ej: Paquete, Rollo, m²" required>
+                </div>
+                <div class="flex justify-end gap-2 mt-6">
+                    <button type="button" class="conta-btn conta-btn-accent" onclick="document.body.removeChild(document.getElementById('sub-modal-bg'))">Cancelar</button>
+                    <button type="submit" class="conta-btn">Guardar</button>
+                </div>
+            </form>
+        `;
+        subModal.appendChild(subModalContent);
+        document.body.appendChild(subModal);
+        document.getElementById('sub-unidad-nombre').focus();
+    },
+
+    guardarNuevaUnidadDesdeSubModal(e, selectIdToUpdate) {
+        const nombre = document.getElementById('sub-unidad-nombre').value;
+        if (!nombre) return;
+
+        const nuevaUnidad = {
+            id: this.idCounter++,
+            nombre: nombre
+        };
+        this.unidadesMedida.push(nuevaUnidad);
+        this.saveAll();
+
+        const todosLosSelectores = document.querySelectorAll('.compra-item-unidad-id');
+        todosLosSelectores.forEach(select => {
+            const option = document.createElement('option');
+            option.value = nuevaUnidad.id;
+            option.text = nuevaUnidad.nombre;
+            select.add(option);
+        });
+
+        const selectActivo = document.getElementById(selectIdToUpdate);
+        if (selectActivo) {
+            selectActivo.value = nuevaUnidad.id;
+        }
+
+        this.showToast('Unidad de medida creada y seleccionada.', 'success');
+        document.body.removeChild(document.getElementById('sub-modal-bg'));
+    },
     async guardarCompra(e) {
         e.preventDefault();
         const tipoSeleccionado = document.querySelector('input[name="compra-tipo"]:checked').value;
@@ -257,9 +338,10 @@ Object.assign(ContaApp, {
                     const productoId = parseInt(row.querySelector('.compra-item-producto-id').value);
                     const cantidad = parseFloat(row.querySelector('.compra-item-cantidad').value);
                     const costoUnitario = parseFloat(row.querySelector('.compra-item-costo').value);
+                    const unidadMedidaId = parseInt(row.querySelector('.compra-item-unidad-id').value);
 
                     if (productoId && cantidad > 0 && costoUnitario >= 0) {
-                        items.push({ productoId, cantidad, costoUnitario });
+                        items.push({ productoId, cantidad, costoUnitario, unidadMedidaId });
                         totalCompra += cantidad * costoUnitario;
                     }
                 });
@@ -272,7 +354,7 @@ Object.assign(ContaApp, {
                         const valorStockActual = (producto.stock || 0) * (producto.costo || 0);
                         const valorCompra = item.cantidad * item.costoUnitario;
                         const nuevoStock = (producto.stock || 0) + item.cantidad;
-                        producto.costo = nuevoStock > 0 ? (valorStockActual + valorCompra) / nuevoStock : item.costoUnitario;
+                        producto.costo = nuevoStock > 0 ? (valorStockTotalActual + valorCompra) / nuevoStock : item.costoUnitario;
                         producto.stock = nuevoStock;
                     }
                 });
