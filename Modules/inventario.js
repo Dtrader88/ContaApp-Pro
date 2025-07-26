@@ -435,4 +435,121 @@ Object.assign(ContaApp, {
         }));
         this.exportarA_CSV(`inventario_${this.getTodayDate()}.csv`, dataParaExportar);
     },
+    abrirSubModalNuevoProducto(origen) {
+        let selectorQuery;
+        let esInput = false;
+
+        // Determinamos qué selector de productos necesitamos actualizar
+        if (origen === 'gasto') {
+            selectorQuery = '.gasto-item-producto-id';
+        } else if (origen === 'venta') {
+            selectorQuery = '.venta-item-id';
+        } else if (origen === 'compra') {
+            selectorQuery = '.compra-item-producto-id';
+        } else if (origen === 'produccion') {
+            selectorQuery = '#bom-producto-terminado-input';
+            esInput = true;
+        } else {
+            this.showToast('Error: Origen de sub-modal desconocido.', 'error');
+            return;
+        }
+
+        let elementToUpdate;
+        if (esInput) {
+            elementToUpdate = document.querySelector(selectorQuery);
+        } else {
+            elementToUpdate = Array.from(document.querySelectorAll(selectorQuery)).pop();
+        }
+        
+        if (!elementToUpdate) {
+            this.showToast('Error: No se encontró el elemento a actualizar.', 'error');
+            return;
+        }
+
+        if (!elementToUpdate.id) {
+            elementToUpdate.id = `element-on-the-fly-${Date.now()}`;
+        }
+
+        const subModal = document.createElement('div');
+        subModal.id = 'sub-modal-bg';
+        subModal.onclick = () => document.body.removeChild(subModal);
+        
+        const subModalContent = document.createElement('div');
+        subModalContent.className = 'p-6 rounded-lg shadow-xl w-full max-w-md modal-content';
+        subModalContent.onclick = e => e.stopPropagation();
+
+        subModalContent.innerHTML = `
+            <h3 class="conta-title mb-4">Nuevo Producto Rápido</h3>
+            <form onsubmit="event.preventDefault(); ContaApp.guardarNuevoProductoDesdeSubModal(event, '${elementToUpdate.id}')" class="space-y-4 modal-form">
+                <div>
+                    <label>Nombre del Producto</label>
+                    <input type="text" id="sub-prod-nombre" class="w-full p-2 mt-1" required>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label>Precio de Venta</label>
+                        <input type="number" step="0.01" id="sub-prod-precio" class="w-full p-2 mt-1" required>
+                    </div>
+                    <div>
+                        <label>Costo Inicial</label>
+                        <input type="number" step="0.01" id="sub-prod-costo" class="w-full p-2 mt-1" value="0">
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 mt-6">
+                    <button type="button" class="conta-btn conta-btn-accent" onclick="document.body.removeChild(document.getElementById('sub-modal-bg'))">Cancelar</button>
+                    <button type="submit" class="conta-btn">Guardar Producto</button>
+                </div>
+            </form>
+        `;
+        subModal.appendChild(subModalContent);
+        document.body.appendChild(subModal);
+        document.getElementById('sub-prod-nombre').focus();
+    },
+
+    guardarNuevoProductoDesdeSubModal(e, elementIdToUpdate) {
+        const data = {
+            nombre: document.getElementById('sub-prod-nombre').value,
+            precio: parseFloat(document.getElementById('sub-prod-precio').value),
+            costo: parseFloat(document.getElementById('sub-prod-costo').value) || 0,
+        };
+
+        const nuevoProducto = {
+            id: this.idCounter++, nombre: data.nombre, tipo: 'producto',
+            stock: 0, stockMinimo: 0, costo: data.costo, precio: data.precio,
+            cuentaIngresoId: 40101
+        };
+        this.productos.push(nuevoProducto);
+        this.saveAll();
+
+        const todosLosSelectores = document.querySelectorAll('.gasto-item-producto-id, .venta-item-id, .compra-item-producto-id, #productos-terminados-datalist');
+        
+        todosLosSelectores.forEach(el => {
+            const option = document.createElement('option');
+            if (el.tagName === 'DATALIST') {
+                option.value = nuevoProducto.nombre;
+                option.dataset.id = nuevoProducto.id;
+            } else {
+                option.value = nuevoProducto.id;
+                option.text = nuevoProducto.nombre;
+                option.dataset.precio = nuevoProducto.precio;
+            }
+            el.appendChild(option);
+        });
+
+        const elementActivo = document.getElementById(elementIdToUpdate);
+        if (elementActivo) {
+            if (elementActivo.tagName === 'INPUT') {
+                elementActivo.value = nuevoProducto.nombre;
+                const hiddenInputId = elementActivo.id.replace('-input', '-id');
+                const hiddenInput = document.getElementById(hiddenInputId);
+                if(hiddenInput) hiddenInput.value = nuevoProducto.id;
+            } else {
+                elementActivo.value = nuevoProducto.id;
+            }
+            elementActivo.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        this.showToast('Producto creado y seleccionado.', 'success');
+        document.body.removeChild(document.getElementById('sub-modal-bg'));
+    },
 });
