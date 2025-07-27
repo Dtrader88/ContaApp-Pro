@@ -242,10 +242,35 @@ renderConfig_Licencia() {
         this.showToast("Configuración guardada con éxito.", 'success');
     },
     resetearDatos() {
-        this.showConfirm("¿ESTÁS SEGURO? Esta acción borrará TODOS los datos de la aplicación y no se puede deshacer.", () => {
-            localStorage.removeItem("conta_app_data");
-            window.location.reload();
-        });
+        this.showConfirm(
+            "¿ESTÁS SEGURO? Esta acción borrará TODOS tus datos de la nube (transacciones, clientes, etc.) y no se puede deshacer. Serás redirigido a la pantalla de configuración inicial.",
+            async () => {
+                try {
+                    // Verificamos que tenemos un usuario y un workspace ID
+                    if (!this.repository || !this.repository.workspaceId) {
+                        throw new Error("No se pudo identificar el workspace a borrar.");
+                    }
+
+                    console.log(`Borrando documento del workspace: ${this.repository.workspaceId}`);
+                    
+                    // Creamos una referencia al documento del workspace en Firestore
+                    const workspaceRef = firebase.firestore().collection("workspaces").doc(this.repository.workspaceId);
+                    
+                    // Eliminamos el documento
+                    await workspaceRef.delete();
+                    
+                    this.showToast('Todos los datos han sido eliminados. Recargando...', 'success');
+                    
+                    // Forzamos un cierre de sesión para limpiar el estado local y recargamos
+                    await firebase.auth().signOut();
+                    window.location.reload();
+
+                } catch (error) {
+                    console.error("Error al resetear los datos:", error);
+                    this.showToast('Ocurrió un error al intentar borrar los datos de la nube.', 'error');
+                }
+            }
+        );
     },
     exportarDatos() {
         const data = localStorage.getItem("conta_app_data");
