@@ -29,11 +29,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const handleRegister = () => {
         const email = emailInput.value;
         const password = passwordInput.value;
-        errorMessageDiv.textContent = ''; // Limpiar errores
+        errorMessageDiv.textContent = '';
+
+        const db = firebase.firestore();
 
         auth.createUserWithEmailAndPassword(email, password)
             .then((userCredential) => {
-                // Registro exitoso, redirigir a la app principal
+                const user = userCredential.user;
+                console.log("Usuario creado en Authentication con UID:", user.uid);
+
+                // Paso 2: Crear el documento del workspace
+                const workspaceRef = db.collection("workspaces").doc(user.uid);
+                
+                // Paso 3: Crear el documento del perfil del usuario
+                const userProfileRef = db.collection("usuarios").doc(user.uid);
+
+                // Usamos un batch para asegurar que ambas operaciones se completen
+                const batch = db.batch();
+                
+                // En el workspace no guardamos nada, se llenará con saveAll la primera vez.
+                batch.set(workspaceRef, {}); 
+                
+                // En el perfil del usuario, guardamos su rol y el ID de su nuevo workspace.
+                batch.set(userProfileRef, {
+                    email: user.email,
+                    rol: "administrador", // El primer usuario siempre es administrador
+                    workspaceId: user.uid
+                });
+
+                // Ejecutamos el batch
+                return batch.commit();
+            })
+            .then(() => {
+                console.log("Workspace y perfil creados en Firestore. Redirigiendo...");
                 window.location.href = 'index.html';
             })
             .catch((error) => {

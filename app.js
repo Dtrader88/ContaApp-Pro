@@ -42,15 +42,15 @@ const ContaApp = {
 
             // Inicialización de la aplicación
     // Inicialización de la aplicación
-        async init(repository) { 
+        async init(repository, userProfile) { 
         this.repository = repository;
+        this.currentUser = userProfile; // <-- CAMBIO CLAVE: Guardamos el perfil del usuario inmediatamente
 
         // 1. Inicializar componentes de UI que SIEMPRE deben funcionar.
         this.initTheme();
         this.initGlobalSearch();
 
         // 2. Obtener los datos UNA SOLA VEZ al inicio, usando el repositorio.
-        //    CAMBIO CLAVE: Esperamos a que la promesa de loadAll() se resuelva.
         const dataString = await this.repository.loadAll();
 
         // 3. Cargar los datos. La función loadAll ahora solo procesa, no lee.
@@ -62,7 +62,6 @@ const ContaApp = {
             this.abrirAsistenteApertura();
         } else {
             // -- RUTA PARA USO NORMAL --
-            // Ahora esto se ejecuta DESPUÉS de que los datos han llegado.
             this.actualizarSaldosGlobales();
             this.actualizarPerfilEmpresa();
             this.irModulo('dashboard');
