@@ -350,7 +350,6 @@ ordenarVentasPor(columna) {
              infoHeaderHTML = `<div class="bg-accent-100 border-l-4 border-accent-500 text-accent-700 p-3 rounded mb-4" role="alert"><p class="font-bold">Creando Venta desde Cotización #${transaccionOriginal.numeroCotizacion || transaccionOriginal.id}</p></div>`;
         }
 
-        // --- CAMBIO CLAVE: Se añade oninput al <form> y se resetea el estado al abrir ---
         this.isFormDirty = false;
         const modalHTML = `
             <h3 class="conta-title mb-4">${transaccionOriginal ? (cotizacionIdDuplicar ? 'Nueva Venta desde Cotización' : 'Duplicar Venta') : 'Nueva Venta'}</h3>
@@ -415,7 +414,22 @@ ordenarVentasPor(columna) {
         this.showModal(modalHTML, '5xl');
         this.setupDatalistListener('venta-cliente-input', 'venta-cliente-id', 'clientes-datalist');
         
-        if (transaccionOriginal) {
+        const itemsContainer = document.getElementById('venta-items-container');
+        itemsContainer.innerHTML = '';
+
+        if (ContaApp.tempItemsParaVenta && ContaApp.tempItemsParaVenta.length > 0) {
+            ContaApp.tempItemsParaVenta.forEach(item => {
+                this.agregarItemVenta();
+                const nuevaFila = itemsContainer.lastChild;
+                nuevaFila.querySelector('.venta-item-type').value = 'producto';
+                this.cambiarTipoItemVenta(nuevaFila.querySelector('.venta-item-type'));
+                
+                nuevaFila.querySelector('.venta-item-id').value = item.productoId;
+                nuevaFila.querySelector('.venta-item-cantidad').value = item.cantidad;
+                nuevaFila.querySelector('.venta-item-precio').value = (item.precio || 0).toFixed(2);
+            });
+            ContaApp.tempItemsParaVenta = [];
+        } else if (transaccionOriginal) {
             const cliente = this.findById(this.contactos, transaccionOriginal.contactoId);
             if (cliente) {
                 document.getElementById('venta-cliente-input').value = cliente.nombre;
@@ -428,8 +442,6 @@ ordenarVentasPor(columna) {
                 document.getElementById('venta-terminos-pago').value = transaccionOriginal.terminosPago;
             }
 
-            const itemsContainer = document.getElementById('venta-items-container');
-            itemsContainer.innerHTML = '';
             transaccionOriginal.items.forEach(item => {
                 this.agregarItemVenta();
                 const nuevaFila = itemsContainer.lastChild;
@@ -439,16 +451,17 @@ ordenarVentasPor(columna) {
                 
                 nuevaFila.querySelector('.venta-item-id').value = item.itemType === 'producto' ? item.productoId : item.cuentaId;
                 nuevaFila.querySelector('.venta-item-cantidad').value = item.cantidad;
-                nuevaFila.querySelector('.venta-item-precio').value = item.precio.toFixed(2);
+                nuevaFila.querySelector('.venta-item-precio').value = (item.precio || 0).toFixed(2);
                 if (item.itemType === 'servicio') {
                     const descripcionInput = nuevaFila.querySelector('.venta-item-descripcion');
                     if(descripcionInput) descripcionInput.value = item.descripcion || '';
                 }
             });
-            this.actualizarTotalesVenta();
         } else {
              this.agregarItemVenta();
         }
+
+        this.actualizarTotalesVenta();
     },
         convertirCotizacionAVenta(cotizacionId) {
         const cotizacion = this.findById(this.transacciones, cotizacionId);
