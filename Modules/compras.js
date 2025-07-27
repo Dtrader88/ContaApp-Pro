@@ -307,6 +307,13 @@ Object.assign(ContaApp, {
         try {
             if (tipoSeleccionado === 'reventa' || tipoSeleccionado === 'materia_prima') {
                 const proveedorId = parseInt(document.getElementById('compra-proveedor-id').value);
+
+                // --- INICIO DE LA VALIDACIÓN MEJORADA ---
+                if (!proveedorId || isNaN(proveedorId)) {
+                    throw new Error('Debe seleccionar un proveedor válido de la lista.');
+                }
+                // --- FIN DE LA VALIDACIÓN MEJORADA ---
+
                 const fecha = document.getElementById('compra-fecha').value;
                 const referencia = document.getElementById('compra-referencia').value;
                 const descripcion = document.getElementById('compra-descripcion').value;
@@ -324,8 +331,6 @@ Object.assign(ContaApp, {
                         reader.readAsDataURL(archivo);
                     });
                 }
-
-                if (!proveedorId) { throw new Error('Debe seleccionar un proveedor válido.'); }
                 
                 const items = [];
                 let totalCompra = 0;
