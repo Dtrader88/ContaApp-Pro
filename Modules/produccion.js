@@ -71,61 +71,56 @@ Object.assign(ContaApp, {
         document.getElementById('produccion').innerHTML = html;
     },
 
-    abrirModalOrdenProduccion(duplicarId = null) {
-        const ordenOriginal = duplicarId ? this.findById(this.ordenesProduccion, duplicarId) : {};
+    abrirModalOrdenProduccion(id = null, duplicarId = null) {
+        const ordenOriginal = duplicarId ? this.findById(this.ordenesProduccion, duplicarId) : (id ? this.findById(this.ordenesProduccion, id) : {});
+        const isEditing = id !== null && !duplicarId;
         const isDuplicating = duplicarId !== null;
 
-        const proximoNumeroOP = `OP-${(this.ordenesProduccion || []).length + 1001}`;
+        const productosTerminadosOptions = this.productos
+            .filter(p => p.tipo === 'producto')
+            .map(p => `<option value="${p.nombre}" data-id="${p.id}"></option>`)
+            .join('');
+
+        // --- INICIO DE LA CORRECCIÓN CLAVE ---
+        // Al editar, pasamos el 'id'. Al duplicar o crear, pasamos 'null'.
+        const formSubmitAction = `ContaApp.guardarOrdenProduccion(event, ${isDuplicating ? null : id})`;
+        // --- FIN DE LA CORRECCIÓN CLAVE ---
 
         const modalHTML = `
-            <h3 class="conta-title mb-4">${isDuplicating ? 'Duplicar' : 'Nueva'} Orden de Producción</h3>
-            <form onsubmit="ContaApp.guardarOrdenProduccion(event)" class="space-y-4 modal-form">
-                
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <label>Número de Orden</label>
-                        <input type="text" id="op-numero" class="w-full conta-input mt-1 bg-gray-100 dark:bg-gray-700" value="${proximoNumeroOP}" readonly>
-                    </div>
-                    <div class="md:col-span-2">
-                        <label>Detalle de la Orden</label>
-                        <input type="text" id="op-descripcion" class="w-full conta-input mt-1" placeholder="Ej: Señalética de PVC para Cliente X" value="${ordenOriginal.descripcion || ''}" required>
-                    </div>
+            <h3 class="conta-title mb-4">${isEditing ? 'Editar' : (isDuplicating ? 'Duplicar' : 'Nueva')} Orden de Producción</h3>
+            <form onsubmit="${formSubmitAction}" class="space-y-4 modal-form">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label>Nombre/Descripción de la Orden</label><input type="text" id="op-descripcion" class="w-full conta-input mt-1" placeholder="Ej: Señalética de PVC 10x10" value="${ordenOriginal.descripcion || ''}" required></div>
+                    <div><label>Fecha de Producción</label><input type="date" id="op-fecha" value="${isDuplicating ? this.getTodayDate() : (ordenOriginal.fecha || this.getTodayDate())}" class="w-full conta-input mt-1" required></div>
                 </div>
-                
-                <!-- INICIO DE LA CORRECCIÓN: AÑADIDO CAMPO DE FECHA -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div class="md:col-span-2">
-                        <label>Producto Final a Crear</label>
-                        <input type="text" id="op-producto-final-nombre" class="w-full conta-input mt-1" placeholder="Ej: Señalética PVC 10x10" value="${ordenOriginal.productoFinalNombre || ''}" required>
-                    </div>
-                    <div>
-                        <label>Fecha de Producción</label>
-                        <input type="date" id="op-fecha" value="${ordenOriginal.fecha || this.getTodayDate()}" class="w-full conta-input mt-1" required>
-                    </div>
-                </div>
-                <!-- FIN DE LA CORRECCIÓN -->
-
-                <div class="conta-card p-4">
-                    <h4 class="font-bold mb-2">Producto Final y Materias Primas</h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label>Cantidad a Producir</label>
-                            <input type="number" id="op-cantidad-producir" class="w-full conta-input mt-1" value="${ordenOriginal.cantidadProducida || 1}" min="1" required>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <div>
+                        <label>Producto Final a Fabricar</label>
+                        <div class="flex items-center gap-2 mt-1">
+                            <input list="productos-terminados-datalist-op" id="op-producto-terminado-input" class="w-full conta-input" placeholder="Selecciona o crea un producto..." required>
+                            <datalist id="productos-terminados-datalist-op">${productosTerminadosOptions}</datalist>
+                            <input type="hidden" id="op-producto-terminado-id">
+                            <button type="button" class="conta-btn conta-btn-small" onclick="ContaApp.abrirSubModalNuevoProducto('produccion')">+</button>
                         </div>
                     </div>
-                    <div id="op-componentes-container" class="space-y-3 mt-4"></div>
-                    <button type="button" class="conta-btn conta-btn-small conta-btn-accent mt-2" onclick="ContaApp.agregarComponenteOP()">+ Agregar Materia Prima</button>
+                    <div><label>Cantidad a Producir</label><input type="number" id="op-cantidad-producir" class="w-full conta-input mt-1" value="${ordenOriginal.cantidadProducida || 1}" min="1" required></div>
                 </div>
-                
+                <div class="conta-card p-4"><h4 class="font-bold mb-2">Materias Primas a Utilizar</h4><div id="op-componentes-container" class="space-y-3"></div><button type="button" class="conta-btn conta-btn-small conta-btn-accent mt-2" onclick="ContaApp.agregarComponenteOP()">+ Agregar Materia Prima</button></div>
                 <div class="flex justify-end gap-2 mt-6">
                     <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button>
-                    <button type="submit" class="conta-btn">Crear Orden</button>
+                    <button type="submit" class="conta-btn">${isEditing ? 'Guardar Cambios' : 'Crear Orden'}</button>
                 </div>
             </form>
         `;
         this.showModal(modalHTML, '4xl');
+        this.setupDatalistListener('op-producto-terminado-input', 'op-producto-terminado-id', 'productos-terminados-datalist-op');
         
-        if (isDuplicating && ordenOriginal.componentes) {
+        if (isEditing || isDuplicating) {
+            const productoTerminado = this.findById(this.productos, ordenOriginal.productoTerminadoId);
+            if (productoTerminado) {
+                document.getElementById('op-producto-terminado-input').value = productoTerminado.nombre;
+                document.getElementById('op-producto-terminado-id').value = productoTerminado.id;
+            }
             ordenOriginal.componentes.forEach(comp => this.agregarComponenteOP(comp));
         } else {
             this.agregarComponenteOP();
@@ -182,15 +177,12 @@ Object.assign(ContaApp, {
         const isEditing = id !== null;
 
         try {
-            // 1. Recolectar datos del formulario
-            const productoTerminadoNombre = document.getElementById('op-producto-final-nombre').value.trim();
-            const productoTerminadoEncontrado = this.productos.find(p => p.nombre.toLowerCase() === productoTerminadoNombre.toLowerCase());
-            
             const data = {
                 descripcion: document.getElementById('op-descripcion').value,
                 fecha: document.getElementById('op-fecha').value,
-                productoTerminadoId: productoTerminadoEncontrado ? productoTerminadoEncontrado.id : null,
-                cantidadProducida: parseFloat(document.getElementById('op-cantidad-producir').value)
+                productoTerminadoId: parseInt(document.getElementById('op-producto-terminado-id').value),
+                cantidadProducida: parseFloat(document.getElementById('op-cantidad-producir').value),
+                productoFinalNombre: document.getElementById('op-producto-terminado-input').value.trim()
             };
 
             const componentes = [];
@@ -202,44 +194,32 @@ Object.assign(ContaApp, {
                 }
             });
 
-            // 2. Validaciones
             if (!data.productoTerminadoId || componentes.length === 0 || !data.cantidadProducida || data.cantidadProducida <= 0) {
                 throw new Error('Debes completar todos los campos de la orden con valores válidos.');
             }
+            
+            let costoTotalProyectado = 0;
+            for (const comp of componentes) {
+                const materiaPrima = this.findById(this.productos, comp.productoId);
+                costoTotalProyectado += (materiaPrima.costo || 0) * comp.cantidad;
+            }
 
-            // 3. Guardar o Actualizar
             if (isEditing) {
-                // Lógica de Actualización para una orden PENDIENTE
                 const ordenExistente = this.findById(this.ordenesProduccion, id);
                 if (ordenExistente) {
                     ordenExistente.descripcion = data.descripcion;
                     ordenExistente.fecha = data.fecha;
                     ordenExistente.productoTerminadoId = data.productoTerminadoId;
-                    ordenExistente.productoFinalNombre = productoTerminadoNombre;
+                    ordenExistente.productoFinalNombre = data.productoFinalNombre;
                     ordenExistente.cantidadProducida = data.cantidadProducida;
                     ordenExistente.componentes = componentes;
-
-                    // Recalculamos el costo proyectado
-                    let costoTotalProyectado = 0;
-                    for (const comp of componentes) {
-                        const materiaPrima = this.findById(this.productos, comp.productoId);
-                        costoTotalProyectado += (materiaPrima.costo || 0) * comp.cantidad;
-                    }
                     ordenExistente.costoTotal = costoTotalProyectado;
                 }
             } else {
-                // Lógica de Creación (la que ya teníamos, pero con el estado correcto)
-                let costoTotalProyectado = 0;
-                for (const comp of componentes) {
-                    const materiaPrima = this.findById(this.productos, comp.productoId);
-                    costoTotalProyectado += (materiaPrima.costo || 0) * comp.cantidad;
-                }
-
                 const nuevaOrden = {
                     id: this.idCounter++,
                     numero: `OP-${this.idCounter}`,
                     ...data,
-                    productoFinalNombre: productoTerminadoNombre,
                     componentes,
                     costoTotal: costoTotalProyectado,
                     estado: 'Pendiente'
