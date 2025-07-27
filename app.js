@@ -476,7 +476,6 @@ irAtras() {
             'cierre-periodo': 'CONTABILIDAD_AVANZADO',
             'activos-fijos': 'ACTIVOS_AVANZADOS',
             'produccion': 'PRODUCCION',
-            'compras': 'INVENTARIO_BASE', // La compra está ligada al inventario
         };
 
         const licenciaRequerida = mapaLicencias[mod];
@@ -514,7 +513,7 @@ irAtras() {
             this.showConfirm( "Tienes cambios sin guardar. ¿Estás seguro de que quieres salir?",
                 () => { this.isFormDirty = false; this.irModulo(mod, params); }
             );
-return;
+            return;
         }
 
         if (!isBackNavigation) {
@@ -562,7 +561,7 @@ return;
                     'dashboard': this.renderDashboard,
                     'ventas': this.renderVentas,
                     'gastos': this.renderGastos,
-                    'compras': this.renderCompras, // <-- LÍNEA AÑADIDA
+                    'compras': this.renderCompras,
                     'cxc': (p) => p.clienteId ? this.renderCXCDetalleCliente(p.clienteId, p) : this.renderCXC(p),
                     'cxp': (p) => p.proveedorId ? this.renderCXPDetalleProveedor(p.proveedorId, p) : this.renderCXP(p),
                     'inventario': this.renderInventario,
@@ -572,7 +571,7 @@ return;
                     'bancos': this.renderBancosYTarjetas,
                     'reportes': this.renderReportes,
                     'activos-fijos': this.renderActivosFijos,
-                    'produccion': this.renderProduccion,
+                    'produccion': this.renderProduccion, // <-- ESTA ES LA LÍNEA QUE FALTABA
                     'config': this.renderConfig
                 };
                 
