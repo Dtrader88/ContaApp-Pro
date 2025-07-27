@@ -1,13 +1,31 @@
 
 Object.assign(ContaApp, {
 
+    renderProduccion(params = {}) {
+        const submodulo = params.submodulo || 'ordenes-produccion';
+
+        let html = `
+            <div class="flex gap-2 mb-4 border-b border-[var(--color-border-accent)] flex-wrap">
+                <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'ordenes-produccion' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('produccion', {submodulo: 'ordenes-produccion'})">Órdenes de Producción</button>
+                <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'produccion-terminada' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('produccion', {submodulo: 'produccion-terminada'})">Producción Terminada para Venta</button>
+            </div>
+            <div id="produccion-contenido"></div>
+        `;
+        document.getElementById('produccion').innerHTML = html;
+
+        if (submodulo === 'ordenes-produccion') {
+            this.renderProduccion_TabOrdenes(params);
+        } else if (submodulo === 'produccion-terminada') {
+            this.renderProduccion_TabTerminada(params);
+        }
+    },
     renderProduccion_TabOrdenes(params = {}) {
         document.getElementById('page-actions-header').innerHTML = `
             <button class="conta-btn" onclick="ContaApp.abrirModalOrdenProduccion()">+ Nueva Orden de Producción</button>
         `;
 
+        let html;
         const ordenes = this.ordenesProduccion || [];
-        let html; // Declaramos la variable que contendrá todo el HTML
 
         if (ordenes.length === 0) {
             html = this.generarEstadoVacioHTML(
@@ -16,8 +34,6 @@ Object.assign(ContaApp, {
                 '+ Crear Primera Orden', "ContaApp.abrirModalOrdenProduccion()"
             );
         } else {
-            // --- INICIO DE LA CORRECCIÓN DEFINITIVA ---
-            // Construimos el HTML de la tabla directamente en la variable 'html'
             html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
                 <thead>
                     <tr>
@@ -33,7 +49,6 @@ Object.assign(ContaApp, {
                 </thead>
                 <tbody>`;
             
-            // Creamos las filas y las añadimos directamente a la variable 'html'
             ordenes.sort((a,b) => new Date(b.fecha) - new Date(a.fecha) || b.id - a.id).forEach(orden => {
                 const productoFinal = this.findById(this.productos, orden.productoTerminadoId);
                 let estadoTag;
@@ -68,13 +83,11 @@ Object.assign(ContaApp, {
                 `;
             });
 
-            html += `</tbody></table></div>`; // Cerramos la tabla y el div
-            // --- FIN DE LA CORRECCIÓN DEFINITIVA ---
+            html += `</tbody></table></div>`;
         }
         
         document.getElementById('produccion-contenido').innerHTML = html;
     },
-
     abrirModalOrdenProduccion(id = null, duplicarId = null) {
         const ordenOriginal = duplicarId ? this.findById(this.ordenesProduccion, duplicarId) : (id ? this.findById(this.ordenesProduccion, id) : {});
         const isEditing = id !== null && !duplicarId;
