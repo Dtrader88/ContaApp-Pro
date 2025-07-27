@@ -6,8 +6,8 @@ Object.assign(ContaApp, {
             <button class="conta-btn" onclick="ContaApp.abrirModalOrdenProduccion()">+ Nueva Orden de Producción</button>
         `;
 
-        let html;
         const ordenes = this.ordenesProduccion || [];
+        let html; // Declaramos la variable que contendrá todo el HTML
 
         if (ordenes.length === 0) {
             html = this.generarEstadoVacioHTML(
@@ -16,8 +16,8 @@ Object.assign(ContaApp, {
                 '+ Crear Primera Orden', "ContaApp.abrirModalOrdenProduccion()"
             );
         } else {
-            // --- INICIO DE LA CORRECCIÓN ---
-            let tableRowsHTML = ''; // Se usará esta variable para las filas
+            // --- INICIO DE LA CORRECCIÓN DEFINITIVA ---
+            // Construimos el HTML de la tabla directamente en la variable 'html'
             html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
                 <thead>
                     <tr>
@@ -33,6 +33,7 @@ Object.assign(ContaApp, {
                 </thead>
                 <tbody>`;
             
+            // Creamos las filas y las añadimos directamente a la variable 'html'
             ordenes.sort((a,b) => new Date(b.fecha) - new Date(a.fecha) || b.id - a.id).forEach(orden => {
                 const productoFinal = this.findById(this.productos, orden.productoTerminadoId);
                 let estadoTag;
@@ -53,7 +54,7 @@ Object.assign(ContaApp, {
                     `;
                 }
 
-                tableRowsHTML += `
+                html += `
                     <tr>
                         <td class="conta-table-td">${orden.fecha}</td>
                         <td class="conta-table-td font-mono">${orden.numero}</td>
@@ -67,8 +68,8 @@ Object.assign(ContaApp, {
                 `;
             });
 
-            html += tableRowsHTML + `</tbody></table></div>`; // Se añade correctamente aquí
-            // --- FIN DE LA CORRECCIÓN ---
+            html += `</tbody></table></div>`; // Cerramos la tabla y el div
+            // --- FIN DE LA CORRECCIÓN DEFINITIVA ---
         }
         
         document.getElementById('produccion-contenido').innerHTML = html;
