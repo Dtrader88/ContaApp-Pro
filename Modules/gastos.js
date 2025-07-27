@@ -329,6 +329,13 @@ Object.assign(ContaApp, {
         
         try {
             const contactoId = parseInt(document.getElementById('gasto-proveedor-id').value);
+            
+            // --- INICIO DE LA VALIDACIÓN MEJORADA ---
+            if (!contactoId || isNaN(contactoId)) {
+                throw new Error('Debe seleccionar un proveedor válido de la lista.');
+            }
+            // --- FIN DE LA VALIDACIÓN MEJORADA ---
+
             const fecha = document.getElementById('gasto-fecha').value;
             const descripcion = document.getElementById('gasto-descripcion').value;
             const pagoTipo = document.getElementById('gasto-pago-tipo').value;
@@ -403,6 +410,68 @@ Object.assign(ContaApp, {
             this.showToast(error.message, 'error');
         } finally {
             this.toggleButtonLoading(submitButton, false);
+        }
+    },
+    anularGasto(gastoId) {
+        const gasto = this.findById(this.transacciones, gastoId);
+        if (!gasto) {
+            this.showToast('Error: Gasto no encontrado.', 'error');
+            return;
+        }
+        if (gasto.montoPagado > 0) {
+            this.showToast('No se puede anular un gasto que ya tiene pagos registrados.', 'error');
+            return;
+        }
+
+        this.showConfirm(
+            `¿Seguro que deseas anular el gasto "${gasto.descripcion}"? Esta acción creará un asiento contable reverso y es irreversible.`,
+            () => {
+                // 1. Encontrar el asiento original
+                const asientoOriginal = this.asientos.find(a => a.transaccionId === gasto.id);
+                if (!asientoOriginal) {
+                    this.showToast('Error: No se encontró el asiento contable original para anular.', 'error');
+                    return;
+                }
+
+                // 2. Crear los movimientos reversos
+                const movimientosReversos = asientoOriginal.movimientos.map(mov => ({
+                    cuentaId: mov.cuentaId,
+                    debe: mov.haber, // Se invierten debe y haber
+                    haber: mov.debe
+                }));
+
+                // 3. Crear el asiento de anulación
+                const asientoReverso = this.crearAsiento(
+                    this.getTodayDate(),
+                    `Anulación de Gasto: ${gasto.descripcion}`,
+                    movimientosReversos
+                );
+
+                if (asientoReverso) {
+                    // 4. Actualizar el estado del gasto
+                    gasto.estado = 'Anulado';
+                    this.saveAll();
+                    this.irModulo('cxp');
+                    this.showToast('Gasto anulado correctamente.', 'success');
+                }
+            }
+        );
+    },
+    anularTransaccionPorId(transaccionId) {
+        const transaccion = this.findById(this.transacciones, transaccionId);
+        if (!transaccion) {
+            this.showToast('Error: Transacción no encontrada.', 'error');
+            return;
+        }
+
+        const tipo = transaccion.tipo;
+        
+        if (tipo === 'gasto') {
+            this.anularGasto(transaccionId);
+        } else if (tipo === 'compra_inventario') {
+            this.anularCompra(transaccionId);
+        } else {
+            this.showToast(`La anulación para el tipo '${tipo}' no está implementada.`, 'error');
         }
     },
     exportarGastosCSV() {
