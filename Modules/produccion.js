@@ -24,7 +24,7 @@ Object.assign(ContaApp, {
                         <th class="conta-table-th">Descripción</th>
                         <th class="conta-table-th">Producto Final</th>
                         <th class="conta-table-th text-right">Cantidad</th>
-                        <th class="conta-table-th text-right">Costo Total</th>
+                        <th class="conta-table-th text-right">Costo Proyectado</th>
                         <th class="conta-table-th">Estado</th>
                         <th class="conta-table-th text-center">Acciones</th>
                     </tr>
@@ -40,7 +40,8 @@ Object.assign(ContaApp, {
                     estadoTag = `<span class="tag tag-warning">Pendiente</span>`;
                     accionesHTML = `
                         <button class="conta-btn conta-btn-small conta-btn-success" title="Completar Producción" onclick="ContaApp.completarOrdenProduccion(${orden.id})"><i class="fa-solid fa-play"></i> Completar</button>
-                        <button class="conta-btn-icon edit" title="Duplicar Orden" onclick="ContaApp.abrirModalOrdenProduccion(null, ${orden.id})"><i class="fa-solid fa-copy"></i></button>
+                        <button class="conta-btn-icon edit" title="Editar Orden" onclick="ContaApp.abrirModalOrdenProduccion(${orden.id})"><i class="fa-solid fa-pencil"></i></button>
+                        <button class="conta-btn-icon delete" title="Cancelar Orden" onclick="ContaApp.cancelarOrdenProduccion(${orden.id})"><i class="fa-solid fa-ban"></i></button>
                     `;
                 } else { // Completada
                     estadoTag = `<span class="tag tag-success">Completada</span>`;
@@ -181,6 +182,7 @@ Object.assign(ContaApp, {
         const isEditing = id !== null;
 
         try {
+            // 1. Recolectar datos del formulario
             const productoTerminadoNombre = document.getElementById('op-producto-final-nombre').value.trim();
             const productoTerminadoEncontrado = this.productos.find(p => p.nombre.toLowerCase() === productoTerminadoNombre.toLowerCase());
             
@@ -200,37 +202,77 @@ Object.assign(ContaApp, {
                 }
             });
 
+            // 2. Validaciones
             if (!data.productoTerminadoId || componentes.length === 0 || !data.cantidadProducida || data.cantidadProducida <= 0) {
                 throw new Error('Debes completar todos los campos de la orden con valores válidos.');
             }
 
-            // Calculamos el costo proyectado en el momento de la creación
-            let costoTotalProyectado = 0;
-            for (const comp of componentes) {
-                const materiaPrima = this.findById(this.productos, comp.productoId);
-                costoTotalProyectado += (materiaPrima.costo || 0) * comp.cantidad;
-            }
+            // 3. Guardar o Actualizar
+            if (isEditing) {
+                // Lógica de Actualización para una orden PENDIENTE
+                const ordenExistente = this.findById(this.ordenesProduccion, id);
+                if (ordenExistente) {
+                    ordenExistente.descripcion = data.descripcion;
+                    ordenExistente.fecha = data.fecha;
+                    ordenExistente.productoTerminadoId = data.productoTerminadoId;
+                    ordenExistente.productoFinalNombre = productoTerminadoNombre;
+                    ordenExistente.cantidadProducida = data.cantidadProducida;
+                    ordenExistente.componentes = componentes;
 
-            // Crear el registro de la orden en estado "Pendiente"
-            const nuevaOrden = {
-                id: this.idCounter++,
-                numero: `OP-${this.idCounter}`,
-                ...data,
-                componentes,
-                costoTotal: costoTotalProyectado, // Guardamos el costo proyectado
-                estado: 'Pendiente' // <-- CAMBIO CLAVE
-            };
-            this.ordenesProduccion.push(nuevaOrden);
+                    // Recalculamos el costo proyectado
+                    let costoTotalProyectado = 0;
+                    for (const comp of componentes) {
+                        const materiaPrima = this.findById(this.productos, comp.productoId);
+                        costoTotalProyectado += (materiaPrima.costo || 0) * comp.cantidad;
+                    }
+                    ordenExistente.costoTotal = costoTotalProyectado;
+                }
+            } else {
+                // Lógica de Creación (la que ya teníamos, pero con el estado correcto)
+                let costoTotalProyectado = 0;
+                for (const comp of componentes) {
+                    const materiaPrima = this.findById(this.productos, comp.productoId);
+                    costoTotalProyectado += (materiaPrima.costo || 0) * comp.cantidad;
+                }
+
+                const nuevaOrden = {
+                    id: this.idCounter++,
+                    numero: `OP-${this.idCounter}`,
+                    ...data,
+                    productoFinalNombre: productoTerminadoNombre,
+                    componentes,
+                    costoTotal: costoTotalProyectado,
+                    estado: 'Pendiente'
+                };
+                this.ordenesProduccion.push(nuevaOrden);
+            }
 
             this.saveAll();
             this.closeModal();
             this.irModulo('produccion');
-            this.showToast('Orden de Producción planificada con éxito.', 'success');
+            this.showToast(`Orden de Producción ${isEditing ? 'actualizada' : 'planificada'} con éxito.`, 'success');
 
         } catch(error) {
             this.showToast(error.message, 'error');
             console.error("Error al guardar la orden de producción:", error);
         }
+    },
+    cancelarOrdenProduccion(ordenId) {
+        const orden = this.findById(this.ordenesProduccion, ordenId);
+        if (!orden || orden.estado !== 'Pendiente') {
+            this.showToast('Solo se pueden cancelar órdenes pendientes.', 'error');
+            return;
+        }
+
+        this.showConfirm(
+            `¿Seguro que deseas cancelar la Orden de Producción #${orden.numero}? Esta acción es irreversible.`,
+            () => {
+                this.ordenesProduccion = this.ordenesProduccion.filter(op => op.id !== ordenId);
+                this.saveAll();
+                this.irModulo('produccion');
+                this.showToast('Orden de Producción cancelada.', 'success');
+            }
+        );
     },
     completarOrdenProduccion(ordenId) {
         const orden = this.findById(this.ordenesProduccion, ordenId);
