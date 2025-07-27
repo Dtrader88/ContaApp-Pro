@@ -1124,6 +1124,7 @@ renderAnticipos(containerId) {
                             <option value="Pendiente">Pendiente</option>
                             <option value="Parcial">Pago Parcial</option>
                             <option value="Pagado">Pagado</option>
+                            <option value="Anulado">Anulado</option>
                          </select>
                     </div>
                     <button type="submit" class="conta-btn">Filtrar</button>
@@ -1140,20 +1141,27 @@ renderAnticipos(containerId) {
                 const saldo = g.total - (g.montoPagado || 0);
                 const estado = g.estado || 'Pendiente';
                 let estadoClass = estado === 'Pagado' ? 'tag-success' : (estado === 'Parcial' ? 'tag-accent' : 'tag-warning');
+                if (g.estado === 'Anulado') estadoClass = 'tag-anulada';
                 const isPayable = estado === 'Pendiente' || estado === 'Parcial';
                 
-                tableRowsHTML += `<tr>
-                    <td class="conta-table-td text-center">${isPayable ? `<input type="checkbox" class="cxp-gasto-check" data-factura-id="${g.id}" data-contacto-id="${g.contactoId}">` : ''}</td>
-                    <td class="conta-table-td">${g.fecha}</td>
-                    <td class="conta-table-td font-bold cursor-pointer hover:text-[var(--color-primary)]" onclick="ContaApp.irModulo('cxp', { proveedorId: ${g.contactoId} })">${proveedor?.nombre || 'N/A'}</td>
-                    <td class="conta-table-td">${g.descripcion} ${g.comprobanteDataUrl ? '<i class="fa-solid fa-paperclip text-[var(--color-text-secondary)] ml-1"></i>' : ''}</td>
-                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(g.total)}</td>
-                    <td class="conta-table-td text-right font-mono font-bold">${this.formatCurrency(saldo)}</td>
-                    <td class="conta-table-td"><span class="tag ${estadoClass}">${estado}</span></td>
-                    <td class="conta-table-td">
-                         <button class="conta-btn conta-btn-small" title="Ver Historial de Pagos" onclick="ContaApp.abrirModalHistorialGasto(${g.id})"><i class="fa-solid fa-history"></i> Ver</button>
-                    </td>
-                </tr>`;
+                let accionesHTML = `
+                    <button class="conta-btn-icon" title="Ver Historial de Pagos" onclick="ContaApp.abrirModalHistorialGasto(${g.id})"><i class="fa-solid fa-history"></i></button>
+                `;
+                if (g.estado !== 'Anulado' && g.montoPagado === 0) {
+                    accionesHTML += `<button class="conta-btn-icon delete ml-2" title="Anular Gasto" onclick="ContaApp.anularGasto(${g.id})"><i class="fa-solid fa-ban"></i></button>`;
+                }
+
+                tableRowsHTML += `
+                    <tr class="${g.estado === 'Anulado' ? 'opacity-50' : ''}">
+                        <td class="conta-table-td text-center">${isPayable ? `<input type="checkbox" class="cxp-gasto-check" data-factura-id="${g.id}" data-contacto-id="${g.contactoId}">` : ''}</td>
+                        <td class="conta-table-td">${g.fecha}</td>
+                        <td class="conta-table-td font-bold cursor-pointer hover:text-[var(--color-primary)]" onclick="ContaApp.irModulo('cxp', { proveedorId: ${g.contactoId} })">${proveedor?.nombre || 'N/A'}</td>
+                        <td class="conta-table-td">${g.descripcion} ${g.comprobanteDataUrl ? '<i class="fa-solid fa-paperclip text-[var(--color-text-secondary)] ml-1"></i>' : ''}</td>
+                        <td class="conta-table-td text-right font-mono">${this.formatCurrency(g.total)}</td>
+                        <td class="conta-table-td text-right font-mono font-bold">${this.formatCurrency(saldo)}</td>
+                        <td class="conta-table-td"><span class="tag ${estadoClass}">${estado}</span></td>
+                        <td class="conta-table-td">${accionesHTML}</td>
+                    </tr>`;
             });
             html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
                 <thead><tr>
