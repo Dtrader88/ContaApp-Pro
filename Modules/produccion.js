@@ -16,6 +16,8 @@ Object.assign(ContaApp, {
                 '+ Crear Primera Orden', "ContaApp.abrirModalOrdenProduccion()"
             );
         } else {
+            // --- INICIO DE LA CORRECCIÓN ---
+            let tableRowsHTML = ''; // Se usará esta variable para las filas
             html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
                 <thead>
                     <tr>
@@ -24,7 +26,7 @@ Object.assign(ContaApp, {
                         <th class="conta-table-th">Descripción</th>
                         <th class="conta-table-th">Producto Final</th>
                         <th class="conta-table-th text-right">Cantidad</th>
-                        <th class="conta-table-th text-right">Costo Total</th>
+                        <th class="conta-table-th text-right">Costo Proyectado</th>
                         <th class="conta-table-th">Estado</th>
                         <th class="conta-table-th text-center">Acciones</th>
                     </tr>
@@ -51,7 +53,7 @@ Object.assign(ContaApp, {
                     `;
                 }
 
-                html += `
+                tableRowsHTML += `
                     <tr>
                         <td class="conta-table-td">${orden.fecha}</td>
                         <td class="conta-table-td font-mono">${orden.numero}</td>
@@ -65,7 +67,8 @@ Object.assign(ContaApp, {
                 `;
             });
 
-            html += `</tbody></table></div>`;
+            html += tableRowsHTML + `</tbody></table></div>`; // Se añade correctamente aquí
+            // --- FIN DE LA CORRECCIÓN ---
         }
         
         document.getElementById('produccion-contenido').innerHTML = html;
