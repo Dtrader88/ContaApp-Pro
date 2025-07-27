@@ -33,7 +33,6 @@
             <div class="overflow-y-auto">
                 <a id="nav-dashboard" class="conta-nav-link" onclick="ContaApp.irModulo('dashboard')"><i class="fa-solid fa-chart-pie fa-fw me-2"></i> Dashboard</a>
                 
-                <!-- --- INICIO DE LA REESTRUCTURACIÓN DEL MENÚ --- -->
                 <div class="px-4 pt-4 pb-2 text-xs font-bold uppercase text-[var(--color-text-secondary)]">Finanzas</div>
                 <a id="nav-ventas" class="conta-nav-link" onclick="ContaApp.irModulo('ventas')"><i class="fa-solid fa-shopping-cart fa-fw me-2"></i> Ventas</a>
                 <a id="nav-cxc" class="conta-nav-link" onclick="ContaApp.irModulo('cxc')"><i class="fa-solid fa-file-invoice-dollar fa-fw me-2"></i> Cuentas por Cobrar</a>
@@ -44,21 +43,23 @@
 
                 <div class="px-4 pt-4 pb-2 text-xs font-bold uppercase text-[var(--color-text-secondary)]">Inventario</div>
                 <a id="nav-inventario" class="conta-nav-link" onclick="ContaApp.irModulo('inventario')"><i class="fa-solid fa-boxes-stacked fa-fw me-2"></i> Gestión de Productos</a>
+                
                 <div class="px-4 pt-4 pb-2 text-xs font-bold uppercase text-[var(--color-text-secondary)]">Producción</div>
                 <a id="nav-produccion" class="conta-nav-link" onclick="ContaApp.irModulo('produccion')"><i class="fa-solid fa-cogs fa-fw me-2"></i> Gestión de Producción</a>
+
                 <div class="px-4 pt-4 pb-2 text-xs font-bold uppercase text-[var(--color-text-secondary)]">Contabilidad</div>
                 <a id="nav-plan-de-cuentas" class="conta-nav-link" onclick="ContaApp.irModulo('plan-de-cuentas')"><i class="fa-solid fa-book fa-fw me-2"></i> Plan de Cuentas</a>
                 <a id="nav-diario-general" class="conta-nav-link" onclick="ContaApp.irModulo('diario-general')"><i class="fa-solid fa-book-journal-whills fa-fw me-2"></i> Diario General</a>
                 <a id="nav-cierre-periodo" class="conta-nav-link" onclick="ContaApp.irModulo('cierre-periodo')"><i class="fa-solid fa-scale-balanced fa-fw me-2"></i> Cierre del Período</a>
+                
                 <div class="px-4 pt-4 pb-2 text-xs font-bold uppercase text-[var(--color-text-secondary)]">Activos</div>
                 <a id="nav-activos-fijos" class="conta-nav-link" onclick="ContaApp.irModulo('activos-fijos')"><i class="fa-solid fa-building-columns fa-fw me-2"></i> Activos Fijos</a>
-                
+
                 <div class="px-4 pt-4 pb-2 text-xs font-bold uppercase text-[var(--color-text-secondary)]">Análisis</div>
                 <a id="nav-reportes" class="conta-nav-link" onclick="ContaApp.irModulo('reportes')"><i class="fa-solid fa-chart-simple fa-fw me-2"></i> Reportes Financieros</a>
                 
                 <div class="px-4 pt-4 pb-2 text-xs font-bold uppercase text-[var(--color-text-secondary)]">Sistema</div>
                 <a id="nav-config" class="conta-nav-link" onclick="ContaApp.irModulo('config')"><i class="fa-solid fa-cog fa-fw me-2"></i> Ajustes</a>
-                <!-- --- FIN DE LA REESTRUCTURACIÓN DEL MENÚ --- -->
             </div>
         </nav>
         <main class="flex-1 flex flex-col relative">
@@ -90,13 +91,13 @@
                 <div id="compras" style="display:none;"></div>
                 <div id="cxp" style="display:none;"></div>
                 <div id="inventario" style="display:none;"></div>
+                <div id="produccion" style="display:none;"></div>
                 <div id="plan-de-cuentas" style="display:none;"></div>
                 <div id="diario-general" style="display:none;"></div>
                 <div id="cierre-periodo" style="display:none;"></div>
+                <div id="activos-fijos" style="display:none;"></div>
                 <div id="bancos" style="display:none;"></div>
                 <div id="reportes" style="display:none;"></div>
-                <div id="activos-fijos" style="display:none;"></div>
-                <div id="produccion" style="display:none;"></div>
                 <div id="config" style="display:none;"></div>
             </div>
         </main>
@@ -105,33 +106,27 @@
         <div id="modal-content" class="p-6 rounded-lg shadow-xl w-full max-w-4xl modal-content" onclick="event.stopPropagation()"></div>
     </div>
 
-            <!-- ===== ORDEN DE CARGA DE SCRIPTS ===== -->
-
-    <!-- ===== INICIO DE CÓDIGO AÑADIDO PARA FIREBASE ===== -->
-    <!-- The core Firebase JS SDK is always required and must be listed first -->
+    <!-- Scripts de Firebase -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <!-- TODO: Add SDKs for Firebase products that you want to use
-         https://firebase.google.com/docs/web/setup#available-libraries -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     
     <script>
-      // Your web app's Firebase configuration
+      // Tu configuración personal de Firebase
       const firebaseConfig = {
-  apiKey: "AIzaSyAmbRyLI3Z05KQCR5rnVYl1hneo6FgAl5s",
-  authDomain: "contaapp-pro.firebaseapp.com",
-  projectId: "contaapp-pro",
-  storageBucket: "contaapp-pro.firebasestorage.app",
-  messagingSenderId: "275496192649",
-  appId: "1:275496192649:web:1d6563eedf21849e049458"
-};
-
+        apiKey: "AIzaSyAmbRyLI3Z05KQCR5rnVYl1hneo6FgA15s",
+        authDomain: "contaapp-pro.firebaseapp.com",
+        projectId: "contaapp-pro",
+        storageBucket: "contaapp-pro.firebasestorage.app",
+        messagingSenderId: "275496192649",
+        appId: "1:275496192649:web:1d6563eedf21849e049458"
+      };
     
-      // Initialize Firebase
+      // Inicializar Firebase
       firebase.initializeApp(firebaseConfig);
     </script>
-    <!-- ===== FIN DE CÓDIGO AÑADIDO PARA FIREBASE ===== -->
 
+    <!-- ===== ORDEN DE CARGA DE SCRIPTS ===== -->
     <script src="repository.js"></script>
     <script src="app.js"></script>
     <script src="modules/dashboard.js"></script>
@@ -140,10 +135,10 @@
     <script src="modules/compras.js"></script>
     <script src="modules/cuentas_corrientes.js"></script>
     <script src="modules/inventario.js"></script>
+    <script src="modules/produccion.js"></script>
     <script src="modules/bancos.js"></script>
     <script src="modules/reportes.js"></script>
-     <script src="modules/activos_fijos.js"></script>
-     <script src="modules/produccion.js"></script>
+    <script src="modules/activos_fijos.js"></script>
     <script src="modules/contabilidad.js"></script>
     <script src="modules/config.js"></script>
     
