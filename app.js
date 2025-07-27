@@ -16,6 +16,7 @@ const ContaApp = {
     listasMateriales: [],
     ordenesProduccion: [],
     unidadesMedida: [],
+    tempItemsParaVenta: [],
     bancoImportado: {},
     
     // --- LÍNEA AÑADIDA PARA SOLUCIONAR EL ERROR ---

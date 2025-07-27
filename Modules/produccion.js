@@ -1,7 +1,7 @@
 
 Object.assign(ContaApp, {
 
-    renderProduccion(params = {}) {
+    renderProduccion_TabOrdenes(params = {}) {
         document.getElementById('page-actions-header').innerHTML = `
             <button class="conta-btn" onclick="ContaApp.abrirModalOrdenProduccion()">+ Nueva Orden de Producción</button>
         `;
@@ -24,7 +24,7 @@ Object.assign(ContaApp, {
                         <th class="conta-table-th">Descripción</th>
                         <th class="conta-table-th">Producto Final</th>
                         <th class="conta-table-th text-right">Cantidad</th>
-                        <th class="conta-table-th text-right">Costo Proyectado</th>
+                        <th class="conta-table-th text-right">Costo Total</th>
                         <th class="conta-table-th">Estado</th>
                         <th class="conta-table-th text-center">Acciones</th>
                     </tr>
@@ -68,7 +68,7 @@ Object.assign(ContaApp, {
             html += `</tbody></table></div>`;
         }
         
-        document.getElementById('produccion').innerHTML = html;
+        document.getElementById('produccion-contenido').innerHTML = html;
     },
 
     abrirModalOrdenProduccion(id = null, duplicarId = null) {
@@ -314,6 +314,119 @@ Object.assign(ContaApp, {
                 }
             }
         );
+    },
+    renderProduccion_TabTerminada(params = {}) {
+        document.getElementById('page-actions-header').innerHTML = `
+            <button class="conta-btn conta-btn-success" onclick="ContaApp.facturarProduccionSeleccionada()">
+                <i class="fa-solid fa-file-invoice-dollar me-2"></i>Facturar Selección
+            </button>
+        `;
+
+        const productosTerminados = (this.ordenesProduccion || [])
+            .filter(op => op.estado === 'Completada')
+            .reduce((acc, op) => {
+                const producto = this.findById(this.productos, op.productoTerminadoId);
+                if (producto) {
+                    if (!acc[producto.id]) {
+                        acc[producto.id] = {
+                            producto: producto,
+                            cantidadTotal: 0
+                        };
+                    }
+                    acc[producto.id].cantidadTotal += op.cantidadProducida;
+                }
+                return acc;
+            }, {});
+
+        const productosArray = Object.values(productosTerminados);
+
+        let html;
+        if (productosArray.length === 0) {
+            html = this.generarEstadoVacioHTML(
+                'fa-box-check',
+                'No hay producción terminada',
+                'Completa una Orden de Producción para que los productos fabricados aparezcan aquí, listos para la venta.',
+                'Ir a Órdenes de Producción',
+                "ContaApp.irModulo('produccion', {submodulo: 'ordenes-produccion'})"
+            );
+        } else {
+            html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
+                <thead>
+                    <tr>
+                        <th class="conta-table-th w-10"><input type="checkbox" onchange="ContaApp.toggleAllCheckboxes(this, 'prod-terminada-check')"></th>
+                        <th class="conta-table-th">Producto Fabricado</th>
+                        <th class="conta-table-th text-right">Stock Actual</th>
+                        <th class="conta-table-th" style="width: 150px;">Precio de Venta</th>
+                        <th class="conta-table-th" style="width: 120px;">Cantidad a Vender</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            
+            productosArray.forEach(({ producto }) => {
+                html += `
+                    <tr>
+                        <td class="conta-table-td text-center"><input type="checkbox" class="prod-terminada-check" data-producto-id="${producto.id}"></td>
+                        <td class="conta-table-td font-bold">${producto.nombre}</td>
+                        <td class="conta-table-td text-right font-mono">${producto.stock}</td>
+                        <td class="conta-table-td">
+                            <input type="number" step="0.01" class="w-full conta-input text-right precio-venta-input" data-producto-id="${producto.id}" value="${(producto.precio || 0).toFixed(2)}" onchange="ContaApp.actualizarPrecioProducto(${producto.id}, this.value)">
+                        </td>
+                        <td class="conta-table-td">
+                            <input type="number" class="w-full conta-input text-right cantidad-a-vender-input" data-producto-id="${producto.id}" min="0" max="${producto.stock}" placeholder="0">
+                        </td>
+                    </tr>
+                `;
+            });
+            html += `</tbody></table></div>`;
+        }
+        
+        document.getElementById('produccion-contenido').innerHTML = html;
+    },
+
+    actualizarPrecioProducto(productoId, nuevoPrecio) {
+        const producto = this.findById(this.productos, productoId);
+        if (producto) {
+            producto.precio = parseFloat(nuevoPrecio) || 0;
+            this.saveAll();
+            this.showToast(`Precio de "${producto.nombre}" actualizado.`, 'info');
+        }
+    },
+
+    facturarProduccionSeleccionada() {
+        const itemsParaFacturar = [];
+        let error = null;
+        document.querySelectorAll('.prod-terminada-check:checked').forEach(checkbox => {
+            const productoId = parseInt(checkbox.dataset.productoId);
+            const producto = this.findById(this.productos, productoId);
+            const cantidadInput = document.querySelector(`.cantidad-a-vender-input[data-producto-id="${productoId}"]`);
+            const cantidad = parseFloat(cantidadInput.value);
+
+            if (producto && cantidad > 0) {
+                if (cantidad > producto.stock) {
+                    error = `Cantidad a vender de "${producto.nombre}" excede el stock.`;
+                }
+                itemsParaFacturar.push({
+                    itemType: 'producto',
+                    productoId: producto.id,
+                    cantidad: cantidad,
+                    precio: producto.precio,
+                    costo: producto.costo
+                });
+            }
+        });
+        
+        if (error) {
+            this.showToast(error, 'error');
+            return;
+        }
+
+        if (itemsParaFacturar.length === 0) {
+            this.showToast('Debes seleccionar al menos un producto y especificar una cantidad a vender.', 'error');
+            return;
+        }
+
+        ContaApp.tempItemsParaVenta = itemsParaFacturar;
+        this.abrirModalVenta();
     },
     abrirModalDetalleOrdenProduccion(ordenId) {
         const orden = this.findById(this.ordenesProduccion, ordenId);
