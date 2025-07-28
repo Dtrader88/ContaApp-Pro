@@ -160,7 +160,6 @@ renderConfig_Licencia() {
         document.getElementById('config-contenido').innerHTML = configHTML;
     },
         renderConfig_Personalizacion() {
-    // --- MEJORA VISUAL: Se rediseña la página con un layout de 2 columnas ---
     const personalizacionHTML = `
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
@@ -178,21 +177,21 @@ renderConfig_Licencia() {
                 <div class="conta-card">
                      <h3 class="conta-subtitle">Personalización de Documentos (PDF)</h3>
                      <form onsubmit="event.preventDefault(); ContaApp.guardarConfigPersonalizacion()">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                            <div>
+                        <div class="flex flex-wrap items-end gap-4">
+                            <div class="flex-grow" style="min-width: 200px;">
                                 <label for="pdf-template" class="text-sm font-medium">Plantilla de Factura</label>
-                                <select id="pdf-template" class="w-full conta-input mt-1">
+                                <select id="pdf-template" class="conta-input mt-1">
                                     <option value="clasica" ${this.empresa.pdfTemplate === 'clasica' ? 'selected' : ''}>Clásica</option>
                                     <option value="moderna" ${this.empresa.pdfTemplate === 'moderna' ? 'selected' : ''}>Moderna</option>
                                 </select>
                             </div>
                             <div>
                                 <label for="pdf-color" class="text-sm font-medium">Color de Acento</label>
-                                <input type="color" id="pdf-color" class="w-full h-10 conta-input mt-1" value="${this.empresa.pdfColor || '#1877f2'}">
+                                <input type="color" id="pdf-color" class="h-10 conta-input mt-1" value="${this.empresa.pdfColor || '#1877f2'}">
                             </div>
-                        </div>
-                         <div class="text-right mt-6">
-                            <button type="submit" class="conta-btn w-fit">Guardar Personalización</button>
+                            <div class="flex-grow text-right">
+                                <button type="submit" class="conta-btn w-fit">Guardar Personalización</button>
+                            </div>
                         </div>
                      </form>
                 </div>
@@ -201,8 +200,8 @@ renderConfig_Licencia() {
                     <h3 class="conta-subtitle">Copia de Seguridad (JSON)</h3>
                     <p class="text-[var(--color-text-secondary)] text-sm mb-4">Usa esto para guardar una copia exacta de los datos de la app, o para restaurarla en este u otro navegador.</p>
                     <div class="flex flex-col md:flex-row gap-3">
-                       <button class="conta-btn conta-btn-accent flex-1" onclick="ContaApp.exportarDatos()">Exportar Datos (.json)</button>
-                       <button class="conta-btn flex-1" onclick="document.getElementById('import-file-input').click()">Importar Datos (.json)</button>
+                       <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarDatos()">Exportar Datos (.json)</button>
+                       <button class="conta-btn" onclick="document.getElementById('import-file-input').click()">Importar Datos (.json)</button>
                        <input type="file" id="import-file-input" class="hidden" accept=".json" onchange="ContaApp.importarDatos(event)">
                     </div>
                 </div>

@@ -51,115 +51,114 @@ Object.assign(ContaApp, {
         // ===== FIN DE LA MEJORA =====
     },
         renderEstadoResultados(params = {}) {
-        const isComparative = !!params.comparative;
+    const isComparative = !!params.comparative;
 
-        // 1. DEFINIR RANGOS DE FECHAS
-        const hoy = new Date();
-        const primerDiaMesActual = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-        const fechaInicioA = params.fechaInicioA || primerDiaMesActual.toISOString().slice(0, 10);
-        const fechaFinA = params.fechaFinA || hoy.toISOString().slice(0, 10);
-        
-        let fechaInicioB = '', fechaFinB = '';
+    const hoy = new Date();
+    const primerDiaMesActual = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const fechaInicioA = params.fechaInicioA || primerDiaMesActual.toISOString().slice(0, 10);
+    const fechaFinA = params.fechaFinA || hoy.toISOString().slice(0, 10);
+    
+    let fechaInicioB = '', fechaFinB = '';
+    if (isComparative) {
+        const ultimoDiaMesAnterior = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+        const primerDiaMesAnterior = new Date(ultimoDiaMesAnterior.getFullYear(), ultimoDiaMesAnterior.getMonth(), 1);
+        fechaInicioB = params.fechaInicioB || primerDiaMesAnterior.toISOString().slice(0, 10);
+        fechaFinB = params.fechaFinB || ultimoDiaMesAnterior.toISOString().slice(0, 10);
+    }
+
+    const planSaldosA = this.getSaldosPorPeriodo(fechaFinA, fechaInicioA);
+    const planSaldosB = isComparative ? this.getSaldosPorPeriodo(fechaFinB, fechaInicioB) : null;
+
+    const planCombinado = JSON.parse(JSON.stringify(this.planDeCuentas.map(({saldo, ...rest}) => rest)));
+    planCombinado.forEach(c => {
+        c.saldoA = planSaldosA.find(s => s.id === c.id)?.saldo || 0;
         if (isComparative) {
-            const ultimoDiaMesAnterior = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
-            const primerDiaMesAnterior = new Date(ultimoDiaMesAnterior.getFullYear(), ultimoDiaMesAnterior.getMonth(), 1);
-            fechaInicioB = params.fechaInicioB || primerDiaMesAnterior.toISOString().slice(0, 10);
-            fechaFinB = params.fechaFinB || ultimoDiaMesAnterior.toISOString().slice(0, 10);
+            c.saldoB = planSaldosB.find(s => s.id === c.id)?.saldo || 0;
         }
+    });
 
-        // 2. OBTENER DATOS
-        const planSaldosA = this.getSaldosPorPeriodo(fechaFinA, fechaInicioA);
-        const planSaldosB = isComparative ? this.getSaldosPorPeriodo(fechaFinB, fechaInicioB) : null;
+    const ingresos = planCombinado.find(c => c.codigo === '400');
+    const gastos = planCombinado.find(c => c.codigo === '500');
 
-        const planCombinado = JSON.parse(JSON.stringify(this.planDeCuentas.map(({saldo, ...rest}) => rest)));
-        planCombinado.forEach(c => {
-            c.saldoA = planSaldosA.find(s => s.id === c.id)?.saldo || 0;
-            if (isComparative) {
-                c.saldoB = planSaldosB.find(s => s.id === c.id)?.saldo || 0;
-            }
-        });
+    if (!ingresos || !gastos) {
+        document.getElementById('reporte-contenido').innerHTML = `<div class="conta-card text-center conta-text-danger"><p>Error: Cuentas principales de Ingresos (400) y/o Gastos (500) no encontradas.</p></div>`;
+        return;
+    }
+    
+    const resultadoA = ingresos.saldoA - gastos.saldoA;
 
-        const ingresos = planCombinado.find(c => c.codigo === '400');
-        const gastos = planCombinado.find(c => c.codigo === '500');
-
-        if (!ingresos || !gastos) {
-            document.getElementById('reporte-contenido').innerHTML = `<div class="conta-card text-center conta-text-danger"><p>Error: Cuentas principales de Ingresos (400) y/o Gastos (500) no encontradas.</p></div>`;
-            return;
-        }
-        
-        const resultadoA = ingresos.saldoA - gastos.saldoA;
-
-        // 3. CONSTRUIR HTML
-        let html = `<div class="conta-card mb-6">
-            <form onsubmit="event.preventDefault(); ContaApp.filtrarReporte('pnl')" class="space-y-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-                    <div><label for="periodoA-fecha-inicio" class="text-sm font-medium">Desde</label><input type="date" id="periodoA-fecha-inicio" class="p-2 border rounded w-full conta-input" value="${fechaInicioA}"></div>
-                    <div><label for="periodoA-fecha-fin" class="text-sm font-medium">Hasta</label><input type="date" id="periodoA-fecha-fin" class="p-2 border rounded w-full conta-input" value="${fechaFinA}"></div>
-                    <div id="comparative-fields" class="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 ${isComparative ? '' : 'hidden'}">
-                        <div><label for="periodoB-fecha-inicio" class="text-sm font-medium">Comparar Desde</label><input type="date" id="periodoB-fecha-inicio" class="p-2 border rounded w-full conta-input" value="${fechaInicioB}"></div>
-                        <div><label for="periodoB-fecha-fin" class="text-sm font-medium">Comparar Hasta</label><input type="date" id="periodoB-fecha-fin" class="p-2 border rounded w-full conta-input" value="${fechaFinB}"></div>
-                    </div>
-                    <div class="flex flex-col gap-2">
-                         <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.toggleComparativePnl()">${isComparative ? 'Quitar Comparación' : '[+] Comparar'}</button>
-                         <button type="submit" class="conta-btn">Generar</button>
-                    </div>
+    // --- MEJORA VISUAL: Se reestructura el formulario ---
+    let html = `<div class="conta-card mb-6">
+        <form onsubmit="event.preventDefault(); ContaApp.filtrarReporte('pnl')" class="space-y-4">
+            <div class="flex flex-wrap items-end gap-4">
+                <div class="p-2 border rounded-lg border-dashed border-[var(--color-border-accent)] flex flex-wrap items-end gap-3">
+                    <div><label for="periodoA-fecha-inicio" class="text-xs font-semibold">Desde</label><input type="date" id="periodoA-fecha-inicio" class="conta-input" value="${fechaInicioA}"></div>
+                    <div><label for="periodoA-fecha-fin" class="text-xs font-semibold">Hasta</label><input type="date" id="periodoA-fecha-fin" class="conta-input" value="${fechaFinA}"></div>
                 </div>
-                <input type="hidden" id="pnl-is-comparative" value="${isComparative ? 'true' : 'false'}">
-            </form>
-        </div>
-        <div class="flex justify-between items-center mb-4"><h2 class="conta-subtitle !mb-0">Estado de Resultados ${isComparative ? 'Comparativo' : ''}</h2>
-            <div><button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarReporteEstilizadoPDF('Estado de Resultados', 'reporte-pnl-area')">Vista Previa PDF</button></div>
-        </div>
-        <div class="conta-card overflow-auto" id="reporte-pnl-area"><table class="min-w-full">`;
+                <div id="comparative-fields" class="p-2 border rounded-lg border-dashed border-[var(--color-border-accent)] flex flex-wrap items-end gap-3 ${isComparative ? '' : 'hidden'}">
+                    <div><label for="periodoB-fecha-inicio" class="text-xs font-semibold">Comparar Desde</label><input type="date" id="periodoB-fecha-inicio" class="conta-input" value="${fechaInicioB}"></div>
+                    <div><label for="periodoB-fecha-fin" class="text-xs font-semibold">Comparar Hasta</label><input type="date" id="periodoB-fecha-fin" class="conta-input" value="${fechaFinB}"></div>
+                </div>
+                <div class="flex flex-col gap-2">
+                     <button type="button" class="conta-btn conta-btn-accent w-fit" onclick="ContaApp.toggleComparativePnl()">${isComparative ? 'Quitar Comparación' : '[+] Comparar'}</button>
+                     <button type="submit" class="conta-btn w-fit">Generar</button>
+                </div>
+            </div>
+            <input type="hidden" id="pnl-is-comparative" value="${isComparative ? 'true' : 'false'}">
+        </form>
+    </div>`;
+    // ... El resto de la función (tabla del reporte) se mantiene igual
+    html += `<div class="flex justify-between items-center mb-4"><h2 class="conta-subtitle !mb-0">Estado de Resultados ${isComparative ? 'Comparativo' : ''}</h2>
+        <div><button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarReporteEstilizadoPDF('Estado de Resultados', 'reporte-pnl-area')">Vista Previa PDF</button></div>
+    </div>
+    <div class="conta-card overflow-auto" id="reporte-pnl-area"><table class="min-w-full">`;
+    
+    html += `<thead><tr><th class="conta-table-th">Descripción</th><th class="conta-table-th text-right">Total</th>`;
+    if (isComparative) {
+        html += `<th class="conta-table-th text-right">Comparativo</th>
+                 <th class="conta-table-th text-right">Variación ($)</th>
+                 <th class="conta-table-th text-right">Variación (%)</th>`;
+    }
+    html += `</tr></thead><tbody>`;
+
+    const renderSection = (cuentaId, plan, level = 0) => {
+        const cuenta = plan.find(c => c.id === cuentaId);
+        const isTitleOrControl = cuenta.tipo === 'TITULO' || cuenta.tipo === 'CONTROL';
+        const style = isTitleOrControl ? `font-weight: bold;` : ``;
+
+        html += `<tr>
+            <td class="py-2" style="padding-left: ${level * 1.5}rem; ${style}">${cuenta.nombre}</td>
+            <td class="py-2 text-right font-mono" style="${style}">${this.formatCurrency(cuenta.saldoA)}</td>`;
         
-        // Encabezados de la tabla dinámicos
-        html += `<thead><tr><th class="conta-table-th">Descripción</th><th class="conta-table-th text-right">Total</th>`;
         if (isComparative) {
-            html += `<th class="conta-table-th text-right">Comparativo</th>
-                     <th class="conta-table-th text-right">Variación ($)</th>
-                     <th class="conta-table-th text-right">Variación (%)</th>`;
+            const variacion = cuenta.saldoA - cuenta.saldoB;
+            const variacionPct = cuenta.saldoB !== 0 ? (variacion / Math.abs(cuenta.saldoB)) * 100 : 0;
+            const variacionClass = variacion >= 0 ? 'variance-positive' : 'variance-negative';
+            html += `<td class="py-2 text-right font-mono" style="${style}">${this.formatCurrency(cuenta.saldoB)}</td>
+                     <td class="py-2 text-right font-mono ${variacionClass}">${this.formatCurrency(variacion)}</td>
+                     <td class="py-2 text-right font-mono ${variacionClass}">${variacionPct.toFixed(2)}%</td>`;
         }
-        html += `</tr></thead><tbody>`;
+        html += `</tr>`;
+        plan.filter(c => c.parentId === cuentaId).sort((a,b) => a.codigo.localeCompare(b.codigo)).forEach(child => renderSection(child.id, plan, level + 1));
+    };
+    
+    renderSection(ingresos.id, planCombinado);
+    renderSection(gastos.id, planCombinado);
 
-        const renderSection = (cuentaId, plan, level = 0) => {
-            const cuenta = plan.find(c => c.id === cuentaId);
-            const isTitleOrControl = cuenta.tipo === 'TITULO' || cuenta.tipo === 'CONTROL';
-            const style = isTitleOrControl ? `font-weight: bold;` : ``;
-
-            html += `<tr>
-                <td class="py-2" style="padding-left: ${level * 1.5}rem; ${style}">${cuenta.nombre}</td>
-                <td class="py-2 text-right font-mono" style="${style}">${this.formatCurrency(cuenta.saldoA)}</td>`;
-            
-            if (isComparative) {
-                const variacion = cuenta.saldoA - cuenta.saldoB;
-                const variacionPct = cuenta.saldoB !== 0 ? (variacion / Math.abs(cuenta.saldoB)) * 100 : 0;
-                const variacionClass = variacion >= 0 ? 'variance-positive' : 'variance-negative';
-                html += `<td class="py-2 text-right font-mono" style="${style}">${this.formatCurrency(cuenta.saldoB)}</td>
-                         <td class="py-2 text-right font-mono ${variacionClass}">${this.formatCurrency(variacion)}</td>
-                         <td class="py-2 text-right font-mono ${variacionClass}">${variacionPct.toFixed(2)}%</td>`;
-            }
-            html += `</tr>`;
-            plan.filter(c => c.parentId === cuentaId).sort((a,b) => a.codigo.localeCompare(b.codigo)).forEach(child => renderSection(child.id, plan, level + 1));
-        };
-        
-        renderSection(ingresos.id, planCombinado);
-        renderSection(gastos.id, planCombinado);
-
-        // Fila de Total dinámico
-        html += `<tr class="border-t-2 border-[var(--color-border-accent)] font-bold text-lg">
-            <td class="py-2">Resultado Neto</td>
-            <td class="py-2 text-right font-mono">${this.formatCurrency(resultadoA)}</td>`;
-        if (isComparative) {
-            const resultadoB = ingresos.saldoB - gastos.saldoB;
-            const resultadoVariacion = resultadoA - resultadoB;
-            const resultadoVariacionPct = resultadoB !== 0 ? (resultadoVariacion / Math.abs(resultadoB)) * 100 : 0;
-            html += `<td class="py-2 text-right font-mono">${this.formatCurrency(resultadoB)}</td>
-                     <td class="py-2 text-right font-mono ${resultadoVariacion >= 0 ? 'variance-positive' : 'variance-negative'}">${this.formatCurrency(resultadoVariacion)}</td>
-                     <td class="py-2 text-right font-mono ${resultadoVariacion >= 0 ? 'variance-positive' : 'variance-negative'}">${resultadoVariacionPct.toFixed(2)}%</td>`;
-        }
-        html += `</tr></tbody></table></div>`;
-        document.getElementById('reporte-contenido').innerHTML = html;
-    },
+    html += `<tr class="border-t-2 border-[var(--color-border-accent)] font-bold text-lg">
+        <td class="py-2">Resultado Neto</td>
+        <td class="py-2 text-right font-mono">${this.formatCurrency(resultadoA)}</td>`;
+    if (isComparative) {
+        const resultadoB = ingresos.saldoB - gastos.saldoB;
+        const resultadoVariacion = resultadoA - resultadoB;
+        const resultadoVariacionPct = resultadoB !== 0 ? (resultadoVariacion / Math.abs(resultadoB)) * 100 : 0;
+        html += `<td class="py-2 text-right font-mono">${this.formatCurrency(resultadoB)}</td>
+                 <td class="py-2 text-right font-mono ${resultadoVariacion >= 0 ? 'variance-positive' : 'variance-negative'}">${this.formatCurrency(resultadoVariacion)}</td>
+                 <td class="py-2 text-right font-mono ${resultadoVariacion >= 0 ? 'variance-positive' : 'variance-negative'}">${resultadoVariacionPct.toFixed(2)}%</td>`;
+    }
+    html += `</tr></tbody></table></div>`;
+    document.getElementById('reporte-contenido').innerHTML = html;
+},
     toggleComparativePnl() {
         const isComparativeInput = document.getElementById('pnl-is-comparative');
         const currentlyComparative = isComparativeInput.value === 'true';

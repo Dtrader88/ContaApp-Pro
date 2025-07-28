@@ -24,111 +24,113 @@ Object.assign(ContaApp, {
     }
 },
 
-                        renderGastosHistorial(filters = {}) {
-        document.getElementById('page-actions-header').innerHTML = `
-            <div class="flex gap-2 flex-wrap">
-                <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarGastosCSV()"><i class="fa-solid fa-file-csv me-2"></i>Exportar CSV</button>
-                <button class="conta-btn" onclick="ContaApp.abrirModalGasto()">+ Nuevo Gasto</button>
-            </div>`;
-        
-        let todosLosGastos = this.transacciones.filter(t => t.tipo === 'gasto');
+        renderGastosHistorial(filters = {}) {
+    document.getElementById('page-actions-header').innerHTML = `
+        <div class="flex gap-2 flex-wrap">
+            <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarGastosCSV()"><i class="fa-solid fa-file-csv me-2"></i>Exportar CSV</button>
+            <button class="conta-btn" onclick="ContaApp.abrirModalGasto()">+ Nuevo Gasto</button>
+        </div>`;
+    
+    let todosLosGastos = this.transacciones.filter(t => t.tipo === 'gasto');
 
-        const hoy = new Date();
-        const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0,10);
-        const gastosDelMes = todosLosGastos.filter(g => g.fecha >= primerDiaMes).reduce((sum, g) => sum + g.total, 0);
-        let proveedorPrincipal = 'N/A';
-        if (todosLosGastos.length > 0) {
-            const gastosPorProveedor = todosLosGastos.reduce((acc, g) => {
-                if(g.contactoId) acc[g.contactoId] = (acc[g.contactoId] || 0) + g.total;
-                return acc;
-            }, {});
-            if (Object.keys(gastosPorProveedor).length > 0) {
-                const maxProveedorId = Object.keys(gastosPorProveedor).reduce((a, b) => gastosPorProveedor[a] > gastosPorProveedor[b] ? a : b);
-                const proveedor = this.findById(this.contactos, maxProveedorId);
-                if (proveedor) proveedorPrincipal = proveedor.nombre;
-            }
+    const hoy = new Date();
+    const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0,10);
+    const gastosDelMes = todosLosGastos.filter(g => g.fecha >= primerDiaMes).reduce((sum, g) => sum + g.total, 0);
+    let proveedorPrincipal = 'N/A';
+    if (todosLosGastos.length > 0) {
+        const gastosPorProveedor = todosLosGastos.reduce((acc, g) => {
+            if(g.contactoId) acc[g.contactoId] = (acc[g.contactoId] || 0) + g.total;
+            return acc;
+        }, {});
+        if (Object.keys(gastosPorProveedor).length > 0) {
+            const maxProveedorId = Object.keys(gastosPorProveedor).reduce((a, b) => gastosPorProveedor[a] > gastosPorProveedor[b] ? a : b);
+            const proveedor = this.findById(this.contactos, maxProveedorId);
+            if (proveedor) proveedorPrincipal = proveedor.nombre;
         }
-        let categoriaPrincipal = 'N/A';
-        if (todosLosGastos.length > 0) {
-            const gastosPorCategoria = todosLosGastos.flatMap(g => g.items || []).reduce((acc, item) => {
-                acc[item.cuentaId] = (acc[item.cuentaId] || 0) + item.monto;
-                return acc;
-            }, {});
-            if (Object.keys(gastosPorCategoria).length > 0) {
-                const maxCategoriaId = Object.keys(gastosPorCategoria).reduce((a, b) => gastosPorCategoria[a] > gastosPorCategoria[b] ? a : b);
-                const cuenta = this.findById(this.planDeCuentas, maxCategoriaId);
-                if (cuenta) categoriaPrincipal = cuenta.nombre;
-            }
+    }
+    let categoriaPrincipal = 'N/A';
+    if (todosLosGastos.length > 0) {
+        const gastosPorCategoria = todosLosGastos.flatMap(g => g.items || []).reduce((acc, item) => {
+            acc[item.cuentaId] = (acc[item.cuentaId] || 0) + item.monto;
+            return acc;
+        }, {});
+        if (Object.keys(gastosPorCategoria).length > 0) {
+            const maxCategoriaId = Object.keys(gastosPorCategoria).reduce((a, b) => gastosPorCategoria[a] > gastosPorCategoria[b] ? a : b);
+            const cuenta = this.findById(this.planDeCuentas, maxCategoriaId);
+            if (cuenta) categoriaPrincipal = cuenta.nombre;
         }
+    }
 
-        const kpiHTML = `
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div class="conta-card kpi-dashboard-card"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-calendar-day fa-fw me-2"></i> Gastos del Mes</span><p class="font-bold text-xl conta-text-danger mt-1">${this.formatCurrency(gastosDelMes)}</p></div>
-                <div class="conta-card kpi-dashboard-card"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-truck-fast fa-fw me-2"></i> Proveedor Principal</span><p class="font-bold text-xl conta-text-accent mt-1 truncate">${proveedorPrincipal}</p></div>
-                <div class="conta-card kpi-dashboard-card"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-tags fa-fw me-2"></i> Categoría Principal</span><p class="font-bold text-xl conta-text-primary mt-1 truncate">${categoriaPrincipal}</p></div>
-            </div>
-        `;
+    // --- MEJORA VISUAL: Contenedor flex para centrar y unificar tarjetas ---
+    const kpiHTML = `
+        <div class="flex flex-wrap justify-center gap-4 mb-4">
+            <div class="conta-card kpi-dashboard-card w-64"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-calendar-day fa-fw me-2"></i> Gastos del Mes</span><p class="font-bold text-xl conta-text-danger mt-1">${this.formatCurrency(gastosDelMes)}</p></div>
+            <div class="conta-card kpi-dashboard-card w-64"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-truck-fast fa-fw me-2"></i> Proveedor Principal</span><p class="font-bold text-xl conta-text-accent mt-1 truncate">${proveedorPrincipal}</p></div>
+            <div class="conta-card kpi-dashboard-card w-64"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-tags fa-fw me-2"></i> Categoría Principal</span><p class="font-bold text-xl conta-text-primary mt-1 truncate">${categoriaPrincipal}</p></div>
+        </div>
+    `;
+    
+    let contentHTML;
+    if (todosLosGastos.length === 0) {
+        contentHTML = this.generarEstadoVacioHTML('fa-receipt','Aún no tienes gastos','Registra tu primer gasto o compra para mantener tus finanzas al día.','+ Crear Primer Gasto',"ContaApp.abrirModalGasto()");
+    } else {
+        // ... El resto de la función (filtros y tabla) se mantiene igual
+        let gastosFiltrados = todosLosGastos;
+        if (filters.search) {
+            const term = filters.search.toLowerCase();
+            gastosFiltrados = gastosFiltrados.filter(g => {
+                const proveedor = this.findById(this.contactos, g.contactoId);
+                return g.id.toString().includes(term) || g.descripcion.toLowerCase().includes(term) || (proveedor && proveedor.nombre.toLowerCase().includes(term));
+            });
+        }
+        if (filters.startDate) gastosFiltrados = gastosFiltrados.filter(g => g.fecha >= filters.startDate);
+        if (filters.endDate) gastosFiltrados = gastosFiltrados.filter(g => g.fecha <= filters.endDate);
+
+        const filterFormHTML = `<div class="conta-card p-3 mb-4">
+            <form onsubmit="event.preventDefault(); ContaApp.filtrarLista('gastos');" class="flex flex-wrap items-end gap-3">
+                <div><label class="text-xs font-semibold">Buscar por Proveedor, Desc. o #</label><input type="search" id="gastos-search" class="conta-input md:w-72" value="${filters.search || ''}"></div>
+                <div><label class="text-xs font-semibold">Desde</label><input type="date" id="gastos-start-date" class="conta-input" value="${filters.startDate || ''}"></div>
+                <div><label class="text-xs font-semibold">Hasta</label><input type="date" id="gastos-end-date" class="conta-input" value="${filters.endDate || ''}"></div>
+                <button type="submit" class="conta-btn">Filtrar</button>
+            </form>
+        </div>`;
         
-        let contentHTML;
-        if (todosLosGastos.length === 0) {
-            contentHTML = this.generarEstadoVacioHTML('fa-receipt','Aún no tienes gastos','Registra tu primer gasto o compra para mantener tus finanzas al día.','+ Crear Primer Gasto',"ContaApp.abrirModalGasto()");
+        let resultsHTML;
+        if (gastosFiltrados.length === 0) {
+             resultsHTML = `<div class="conta-card text-center p-8 text-[var(--color-text-secondary)]">
+                              <i class="fa-solid fa-filter-circle-xmark fa-3x mb-4 opacity-50"></i>
+                              <h3 class="font-bold text-lg">Sin Resultados</h3>
+                              <p>No se encontraron gastos que coincidan con los filtros aplicados.</p>
+                            </div>`;
         } else {
-            let gastosFiltrados = todosLosGastos;
-            if (filters.search) {
-                const term = filters.search.toLowerCase();
-                gastosFiltrados = gastosFiltrados.filter(g => {
-                    const proveedor = this.findById(this.contactos, g.contactoId);
-                    return g.id.toString().includes(term) || g.descripcion.toLowerCase().includes(term) || (proveedor && proveedor.nombre.toLowerCase().includes(term));
-                });
-            }
-            if (filters.startDate) gastosFiltrados = gastosFiltrados.filter(g => g.fecha >= filters.startDate);
-            if (filters.endDate) gastosFiltrados = gastosFiltrados.filter(g => g.fecha <= filters.endDate);
-
-            const filterFormHTML = `<div class="conta-card p-3 mb-4">
-                <form onsubmit="event.preventDefault(); ContaApp.filtrarLista('gastos');" class="flex flex-wrap items-end gap-3">
-                    <div><label class="text-xs font-semibold">Buscar por Proveedor, Desc. o #</label><input type="search" id="gastos-search" class="conta-input md:w-72" value="${filters.search || ''}"></div>
-                    <div><label class="text-xs font-semibold">Desde</label><input type="date" id="gastos-start-date" class="conta-input" value="${filters.startDate || ''}"></div>
-                    <div><label class="text-xs font-semibold">Hasta</label><input type="date" id="gastos-end-date" class="conta-input" value="${filters.endDate || ''}"></div>
-                    <button type="submit" class="conta-btn">Filtrar</button>
-                </form>
-            </div>`;
-            
-            let resultsHTML;
-            if (gastosFiltrados.length === 0) {
-                 resultsHTML = `<div class="conta-card text-center p-8 text-[var(--color-text-secondary)]">
-                                  <i class="fa-solid fa-filter-circle-xmark fa-3x mb-4 opacity-50"></i>
-                                  <h3 class="font-bold text-lg">Sin Resultados</h3>
-                                  <p>No se encontraron gastos que coincidan con los filtros aplicados.</p>
-                                </div>`;
-            } else {
-                let tableRowsHTML = '';
-                gastosFiltrados.sort((a, b) => new Date(b.fecha) - new Date(a.fecha) || b.id - a.id).forEach(g => {
-                    const proveedor = this.findById(this.contactos, g.contactoId);
-                    const estado = g.estado || 'Pendiente';
-                    let estadoClass = estado === 'Pagado' ? 'tag-success' : (estado === 'Parcial' ? 'tag-accent' : 'tag-warning');
-                    tableRowsHTML += `<tr>
-                        <td class="conta-table-td font-mono">${g.id}</td>
-                        <td class="conta-table-td">${g.fecha}</td>
-                        <td class="conta-table-td">${proveedor?.nombre || 'N/A'}</td>
-                        <td class="conta-table-td">${g.descripcion}</td>
-                        <td class="conta-table-td text-right font-mono">${this.formatCurrency(g.total)}</td>
-                        <td class="conta-table-td"><span class="tag ${estadoClass}">${estado}</span></td>
-                        <td class="conta-table-td text-center">
-                            <button class="conta-btn-icon edit" title="Duplicar Gasto" onclick="ContaApp.abrirModalGasto(${g.id})"><i class="fa-solid fa-copy"></i></button>
-                        </td>
-                    </tr>`;
-                });
-                resultsHTML = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
-                    <th class="conta-table-th">#</th><th class="conta-table-th">Fecha</th><th class="conta-table-th">Proveedor</th>
-                    <th class="conta-table-th">Descripción</th><th class="conta-table-th text-right">Total</th><th class="conta-table-th">Estado</th>
-                    <th class="conta-table-th text-center">Acciones</th>
-                </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
-            }
-            contentHTML = filterFormHTML + resultsHTML;
+            let tableRowsHTML = '';
+            gastosFiltrados.sort((a, b) => new Date(b.fecha) - new Date(a.fecha) || b.id - a.id).forEach(g => {
+                const proveedor = this.findById(this.contactos, g.contactoId);
+                const estado = g.estado || 'Pendiente';
+                let estadoClass = estado === 'Pagado' ? 'tag-success' : (estado === 'Parcial' ? 'tag-accent' : 'tag-warning');
+                tableRowsHTML += `<tr>
+                    <td class="conta-table-td font-mono">${g.id}</td>
+                    <td class="conta-table-td">${g.fecha}</td>
+                    <td class="conta-table-td">${proveedor?.nombre || 'N/A'}</td>
+                    <td class="conta-table-td">${g.descripcion}</td>
+                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(g.total)}</td>
+                    <td class="conta-table-td"><span class="tag ${estadoClass}">${estado}</span></td>
+                    <td class="conta-table-td text-center">
+                        <button class="conta-btn-icon edit" title="Duplicar Gasto" onclick="ContaApp.abrirModalGasto(${g.id})"><i class="fa-solid fa-copy"></i></button>
+                    </td>
+                </tr>`;
+            });
+            resultsHTML = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
+                <th class="conta-table-th">#</th><th class="conta-table-th">Fecha</th><th class="conta-table-th">Proveedor</th>
+                <th class="conta-table-th">Descripción</th><th class="conta-table-th text-right">Total</th><th class="conta-table-th">Estado</th>
+                <th class="conta-table-th text-center">Acciones</th>
+            </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
         }
-        
-        document.getElementById('gastos-contenido').innerHTML = kpiHTML + contentHTML;
-    },
+        contentHTML = filterFormHTML + resultsHTML;
+    }
+    
+    document.getElementById('gastos-contenido').innerHTML = kpiHTML + contentHTML;
+},
     renderGastosRecurrentes() {
         // Botón para generar los gastos del mes actual
         document.getElementById('page-actions-header').innerHTML = `<button class="conta-btn conta-btn-accent" onclick="ContaApp.generarGastosRecurrentesDelMes()"><i class="fa-solid fa-magic-sparkles me-2"></i>Generar Gastos del Mes</button>`;

@@ -17,44 +17,38 @@ Object.assign(ContaApp, {
     let cuentaIdSeleccionada = params.cuentaIdFiltrada || (cuentasBancarias.length > 0 ? cuentasBancarias[0].id : (cuentasTarjeta.length > 0 ? cuentasTarjeta[0].id : null));
     const tabActiva = params.tab || 'pending';
 
-    // ===== INICIO DE LA MEJORA: AÑADIR BOTONES DE TRANSFERENCIA Y PAGO =====
     document.getElementById('page-actions-header').innerHTML = `
         <div class="flex gap-2 flex-wrap">
-            <button class="conta-btn" onclick="ContaApp.abrirModalTransferencia()">
-                <i class="fa-solid fa-exchange-alt me-2"></i>Nueva Transferencia
-            </button>
-            <button class="conta-btn" onclick="ContaApp.abrirModalPagoTarjeta()">
-                <i class="fa-solid fa-credit-card me-2"></i>Pagar Tarjeta
-            </button>
-            <button class="conta-btn conta-btn-accent" onclick="ContaApp.abrirModalImportarBanco(${cuentaIdSeleccionada})">
-                <i class="fa-solid fa-upload me-2"></i>Importar Movimientos
-            </button>
-            <button class="conta-btn conta-btn-accent" onclick="ContaApp.abrirModalIniciarConciliacion()">
-                <i class="fa-solid fa-check-double me-2"></i>Reconciliar Cuenta
-            </button>
+            <button class="conta-btn" onclick="ContaApp.abrirModalTransferencia()"><i class="fa-solid fa-exchange-alt me-2"></i>Nueva Transferencia</button>
+            <button class="conta-btn" onclick="ContaApp.abrirModalPagoTarjeta()"><i class="fa-solid fa-credit-card me-2"></i>Pagar Tarjeta</button>
+            <button class="conta-btn conta-btn-accent" onclick="ContaApp.abrirModalImportarBanco(${cuentaIdSeleccionada})"><i class="fa-solid fa-upload me-2"></i>Importar Movimientos</button>
+            <button class="conta-btn conta-btn-accent" onclick="ContaApp.abrirModalIniciarConciliacion()"><i class="fa-solid fa-check-double me-2"></i>Reconciliar Cuenta</button>
         </div>
     `;
-    // ===== FIN DE LA MEJORA =====
 
     let tarjetasHTML = '';
     if (todasLasCuentas.length > 0) {
         tarjetasHTML = todasLasCuentas.map(c => {
             const transaccionesPendientes = (this.bancoImportado[c.id] || []).filter(t => t.status === 'pending').length;
+            // --- MEJORA VISUAL: Se añaden clases de color dinámicas ---
+            const esTarjeta = c.parentId === 230;
+            const saldoColor = esTarjeta ? 'conta-text-danger' : (c.saldo >= 0 ? 'conta-text-success' : 'conta-text-danger');
+            
             return `
-                <div class="conta-card conta-card-clickable flex-shrink-0 w-60 ${c.id === cuentaIdSeleccionada ? 'active-filter-card' : ''}" onclick="ContaApp.irModulo('bancos', { cuentaIdFiltrada: ${c.id} })">
+                <div class="conta-card conta-card-clickable flex-shrink-0 w-64 ${c.id === cuentaIdSeleccionada ? 'active-filter-card' : ''}" onclick="ContaApp.irModulo('bancos', { cuentaIdFiltrada: ${c.id} })">
                     <div class="flex justify-between items-center text-xs">
                         <span>${c.nombre}</span>
                         ${transaccionesPendientes > 0 ? `<span class="bg-[var(--color-primary)] text-white rounded-full h-5 w-5 flex items-center justify-center font-bold">${transaccionesPendientes}</span>` : ''}
                     </div>
-                    <p class="font-bold text-xl mt-1">${this.formatCurrency(c.saldo)}</p>
+                    <p class="font-bold text-xl mt-1 ${saldoColor}">${this.formatCurrency(c.saldo)}</p>
                 </div>`;
         }).join('');
     }
 
     let tablaHTML = '';
     if (cuentaIdSeleccionada) {
+        // ... (El resto de la función (lógica de la tabla) se mantiene igual)
         const transaccionesCuenta = (this.bancoImportado[cuentaIdSeleccionada] || []).filter(t => t.status === tabActiva).sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
-        
         const groupedAccounts = { 'Activos': [], 'Pasivos': [], 'Patrimonio': [], 'Ingresos': [], 'Gastos': [] };
         this.planDeCuentas.filter(c => c.tipo === 'DETALLE').forEach(c => {
             const code = c.codigo[0];
@@ -93,7 +87,8 @@ Object.assign(ContaApp, {
          tablaHTML = this.generarEstadoVacioHTML('fa-university', 'Sin Cuentas Bancarias', 'Crea tu primera cuenta de banco desde el Plan de Cuentas para empezar.', 'Ir a Plan de Cuentas', "ContaApp.irModulo('plan-de-cuentas')");
     }
 
-    const layoutHTML = `<h3 class="conta-subtitle flex justify-between items-center flex-wrap gap-2"> <span>Cuentas</span> <div class="flex gap-2"> <button class="conta-btn conta-btn-small conta-btn-accent" onclick="ContaApp.exportarVistaBancoCSV(${cuentaIdSeleccionada}, '${tabActiva}')"> <i class="fa-solid fa-file-csv me-2"></i>Exportar Vista </button> </div> </h3> <div class="flex gap-4 overflow-x-auto pb-4">${tarjetasHTML}</div>${tablaHTML}`;
+    // --- MEJORA VISUAL: Se añade justify-center al contenedor ---
+    const layoutHTML = `<h3 class="conta-subtitle">Cuentas</h3><div class="flex justify-center gap-4 overflow-x-auto pb-4">${tarjetasHTML}</div>${tablaHTML}`;
     document.getElementById('bancos').innerHTML = layoutHTML;
 },
 abrirModalIniciarConciliacion() {
