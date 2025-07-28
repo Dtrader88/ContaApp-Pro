@@ -194,13 +194,39 @@ Object.assign(ContaApp, {
         const isEditing = id !== null;
 
         try {
-            const data = {
-                descripcion: document.getElementById('op-descripcion').value,
-                fecha: document.getElementById('op-fecha').value,
-                productoTerminadoId: parseInt(document.getElementById('op-producto-terminado-id').value),
-                cantidadProducida: parseFloat(document.getElementById('op-cantidad-producir').value),
-                productoFinalNombre: document.getElementById('op-producto-terminado-input').value.trim()
-            };
+            // Recolectar datos del formulario
+            const descripcion = document.getElementById('op-descripcion').value;
+            const fecha = document.getElementById('op-fecha').value;
+            let productoTerminadoId = parseInt(document.getElementById('op-producto-terminado-id').value);
+            const productoFinalNombre = document.getElementById('op-producto-terminado-input').value.trim();
+            const cantidadProducida = parseFloat(document.getElementById('op-cantidad-producir').value);
+
+            // Si no se seleccionó un producto existente (se escribió uno nuevo)
+            if (isNaN(productoTerminadoId)) {
+                if (!productoFinalNombre) {
+                    throw new Error('Debes especificar el nombre del producto final a fabricar.');
+                }
+                // Verificar si ya existe un producto con ese nombre para evitar duplicados
+                let productoExistente = this.productos.find(p => p.nombre.toLowerCase() === productoFinalNombre.toLowerCase());
+                if (productoExistente) {
+                    productoTerminadoId = productoExistente.id;
+                } else {
+                    // Crear el nuevo producto sobre la marcha
+                    const nuevoProducto = {
+                        id: this.idCounter++,
+                        nombre: productoFinalNombre,
+                        tipo: 'producto',
+                        stock: 0,
+                        stockMinimo: 0,
+                        costo: 0, // El costo se calculará al completar la producción
+                        precio: 0, // El precio se define en la pestaña de "Producción Terminada"
+                        cuentaIngresoId: 40101
+                    };
+                    this.productos.push(nuevoProducto);
+                    productoTerminadoId = nuevoProducto.id;
+                    this.showToast(`Producto "${productoFinalNombre}" creado en el inventario.`, 'info');
+                }
+            }
 
             const componentes = [];
             document.querySelectorAll('#op-componentes-container .dynamic-row').forEach(row => {
@@ -211,7 +237,7 @@ Object.assign(ContaApp, {
                 }
             });
 
-            if (!data.productoTerminadoId || componentes.length === 0 || !data.cantidadProducida || data.cantidadProducida <= 0) {
+            if (!productoTerminadoId || componentes.length === 0 || !cantidadProducida || cantidadProducida <= 0) {
                 throw new Error('Debes completar todos los campos de la orden con valores válidos.');
             }
             
@@ -224,11 +250,11 @@ Object.assign(ContaApp, {
             if (isEditing) {
                 const ordenExistente = this.findById(this.ordenesProduccion, id);
                 if (ordenExistente) {
-                    ordenExistente.descripcion = data.descripcion;
-                    ordenExistente.fecha = data.fecha;
-                    ordenExistente.productoTerminadoId = data.productoTerminadoId;
-                    ordenExistente.productoFinalNombre = data.productoFinalNombre;
-                    ordenExistente.cantidadProducida = data.cantidadProducida;
+                    ordenExistente.descripcion = descripcion;
+                    ordenExistente.fecha = fecha;
+                    ordenExistente.productoTerminadoId = productoTerminadoId;
+                    ordenExistente.productoFinalNombre = productoFinalNombre;
+                    ordenExistente.cantidadProducida = cantidadProducida;
                     ordenExistente.componentes = componentes;
                     ordenExistente.costoTotal = costoTotalProyectado;
                 }
@@ -236,7 +262,7 @@ Object.assign(ContaApp, {
                 const nuevaOrden = {
                     id: this.idCounter++,
                     numero: `OP-${this.idCounter}`,
-                    ...data,
+                    descripcion, fecha, productoTerminadoId, cantidadProducida, productoFinalNombre,
                     componentes,
                     costoTotal: costoTotalProyectado,
                     estado: 'Pendiente'
@@ -487,7 +513,6 @@ Object.assign(ContaApp, {
                 </table>
             </div>
             <div class="flex justify-end gap-2 mt-8">
-                <button class="conta-btn" onclick="ContaApp.abrirModalVerAsientos(${orden.id})">Ver Asiento</button>
                 <button class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cerrar</button>
             </div>
         `;
