@@ -154,36 +154,38 @@ Object.assign(ContaApp, {
 },
 
     agregarComponenteOP(componente = {}) {
-        const container = document.getElementById('op-componentes-container');
-        const materiasPrimasOptions = this.productos
-            .filter(p => p.tipo === 'producto')
-            .map(p => `<option value="${p.id}" ${componente.productoId === p.id ? 'selected' : ''}>${p.nombre}</option>`)
-            .join('');
+    const container = document.getElementById('op-componentes-container');
+    
+    // --- MEJORA CLAVE: Filtramos solo productos categorizados como Materias Primas (ID 13002) ---
+    const materiasPrimasOptions = this.productos
+        .filter(p => p.cuentaInventarioId === 13002) 
+        .map(p => `<option value="${p.id}" ${componente.productoId === p.id ? 'selected' : ''}>${p.nombre}</option>`)
+        .join('');
 
-        const itemHTML = `
-            <div class="grid grid-cols-12 gap-2 items-center dynamic-row">
-                <div class="col-span-6">
-                    <select class="w-full conta-input op-componente-id" onchange="ContaApp.actualizarUnidadMedidaOP(this)" required>
-                        <option value="">-- Selecciona una materia prima --</option>
-                        ${materiasPrimasOptions}
-                    </select>
-                </div>
-                <div class="col-span-2">
-                     <input type="number" step="any" class="w-full conta-input text-right op-componente-cantidad" placeholder="Cantidad" value="${componente.cantidad || ''}" required>
-                </div>
-                <div class="col-span-3">
-                    <input type="text" class="w-full conta-input bg-gray-100 dark:bg-gray-700 op-componente-unidad-display" readonly>
-                </div>
-                <button type="button" class="col-span-1 conta-btn-icon delete" onclick="this.closest('.dynamic-row').remove()">🗑️</button>
+    const itemHTML = `
+        <div class="grid grid-cols-12 gap-2 items-center dynamic-row">
+            <div class="col-span-6">
+                <select class="w-full conta-input op-componente-id" onchange="ContaApp.actualizarUnidadMedidaOP(this)" required>
+                    <option value="">-- Selecciona una materia prima --</option>
+                    ${materiasPrimasOptions}
+                </select>
             </div>
-        `;
-        container.insertAdjacentHTML('beforeend', itemHTML);
+            <div class="col-span-2">
+                 <input type="number" step="any" class="w-full conta-input text-right op-componente-cantidad" placeholder="Cantidad" value="${componente.cantidad || ''}" required>
+            </div>
+            <div class="col-span-3">
+                <input type="text" class="w-full conta-input bg-gray-100 dark:bg-gray-700 op-componente-unidad-display" readonly>
+            </div>
+            <button type="button" class="col-span-1 conta-btn-icon delete" onclick="this.closest('.dynamic-row').remove()">🗑️</button>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', itemHTML);
 
-        const nuevaFila = container.querySelector('.dynamic-row:last-child');
-        if (nuevaFila) {
-            this.actualizarUnidadMedidaOP(nuevaFila.querySelector('.op-componente-id'));
-        }
-    },
+    const nuevaFila = container.querySelector('.dynamic-row:last-child');
+    if (nuevaFila) {
+        this.actualizarUnidadMedidaOP(nuevaFila.querySelector('.op-componente-id'));
+    }
+},
     actualizarUnidadMedidaOP(selectProducto) {
         const fila = selectProducto.closest('.dynamic-row');
         const productoId = parseInt(selectProducto.value);
