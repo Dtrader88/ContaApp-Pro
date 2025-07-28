@@ -197,6 +197,11 @@ Object.assign(ContaApp, {
         .filter(p => p.tipo === 'producto')
         .map(p => `<option value="${p.nombre}" data-id="${p.id}"></option>`)
         .join('');
+    // --- INICIO DE LA MEJORA: Opciones para el nuevo selector de unidad ---
+    const unidadesOptions = this.unidadesMedida
+        .map(u => `<option value="${u.id}">${u.nombre}</option>`)
+        .join('');
+    // --- FIN DE LA MEJORA ---
 
     const itemHTML = `
         <div class="grid grid-cols-12 gap-2 items-center dynamic-row compra-item-row">
@@ -207,7 +212,7 @@ Object.assign(ContaApp, {
             </div>
             <input type="number" min="1" class="col-span-2 conta-input text-right compra-item-cantidad" placeholder="Cant." oninput="ContaApp.actualizarTotalesCompra()">
             <div class="col-span-2">
-                <input type="text" class="w-full conta-input bg-gray-100 dark:bg-gray-700 compra-item-unidad-display" readonly placeholder="Unidad">
+                <select class="w-full conta-input compra-item-unidad-select">${unidadesOptions}</select>
             </div>
             <input type="number" step="0.01" min="0" class="col-span-1 conta-input text-right compra-item-costo" placeholder="Costo" oninput="ContaApp.actualizarTotalesCompra()">
             <button type="button" class="col-span-1 conta-btn-icon delete" onclick="this.closest('.compra-item-row').remove(); ContaApp.actualizarTotalesCompra();">🗑️</button>
@@ -308,6 +313,7 @@ Object.assign(ContaApp, {
             }
 
             const fecha = document.getElementById('compra-fecha').value;
+            // ... (el resto de las variables se mantienen igual)
             const referencia = document.getElementById('compra-referencia').value;
             const descripcion = document.getElementById('compra-descripcion').value;
             const cuentaInventarioId = parseInt(document.getElementById('compra-cuenta-inventario-id').value);
@@ -334,10 +340,13 @@ Object.assign(ContaApp, {
                 const productoNombre = row.querySelector('.compra-item-producto-input').value.trim();
                 const cantidad = parseFloat(row.querySelector('.compra-item-cantidad').value);
                 const costoUnitario = parseFloat(row.querySelector('.compra-item-costo').value);
+                // --- INICIO DE LA MEJORA: Leer la unidad de medida de la fila ---
+                const unidadMedidaId = parseInt(row.querySelector('.compra-item-unidad-select').value);
+                // --- FIN DE LA MEJORA ---
 
                 if (!productoNombre || !(cantidad > 0) || !(costoUnitario >= 0)) continue;
 
-                if (isNaN(productoId)) { // Si no tiene ID, es un producto nuevo
+                if (isNaN(productoId)) {
                     const productoExistente = this.productos.find(p => p.nombre.toLowerCase() === productoNombre.toLowerCase());
                     if (productoExistente) {
                         productoId = productoExistente.id;
@@ -346,10 +355,12 @@ Object.assign(ContaApp, {
                             id: this.idCounter++,
                             nombre: productoNombre,
                             tipo: 'producto',
-                            stock: 0, // El stock se añadirá con esta compra
-                            costo: 0, // El costo se establecerá con esta compra
-                            precio: 0, // El precio de venta se establece después
-                            unidadMedidaId: 1 // Se asigna 'Unidad' por defecto
+                            stock: 0,
+                            costo: 0,
+                            precio: 0,
+                            // --- INICIO DE LA MEJORA: Guardar la unidad seleccionada ---
+                            unidadMedidaId: unidadMedidaId
+                            // --- FIN DE LA MEJORA ---
                         };
                         this.productos.push(nuevoProducto);
                         productoId = nuevoProducto.id;
@@ -527,7 +538,7 @@ Object.assign(ContaApp, {
     handleCompraProductoChange(inputEl) {
     const fila = inputEl.closest('.compra-item-row');
     const hiddenInputId = fila.querySelector('.compra-item-producto-id');
-    const unidadDisplay = fila.querySelector('.compra-item-unidad-display');
+    const unidadSelect = fila.querySelector('.compra-item-unidad-select'); // Ahora es un select
     const datalist = document.getElementById('productos-datalist-compra');
     let found = false;
 
@@ -538,16 +549,20 @@ Object.assign(ContaApp, {
             
             const producto = this.findById(this.productos, productoId);
             if(producto) {
-                const unidad = this.findById(this.unidadesMedida, producto.unidadMedidaId);
-                unidadDisplay.value = unidad ? unidad.nombre : 'N/A';
+                // Si encontramos un producto existente, seleccionamos su unidad y deshabilitamos el campo
+                unidadSelect.value = producto.unidadMedidaId || 1;
+                unidadSelect.disabled = true;
             }
             found = true;
             break;
         }
     }
     if (!found) {
+        // Si es un producto nuevo, limpiamos el ID oculto y habilitamos el selector de unidad
         hiddenInputId.value = '';
-        unidadDisplay.value = 'Unidad'; // Por defecto para productos nuevos
+        unidadSelect.disabled = false;
+        unidadSelect.value = 1; // Seleccionamos 'Unidad' por defecto
     }
 },
+
 });
