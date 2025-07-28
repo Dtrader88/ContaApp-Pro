@@ -53,6 +53,7 @@ const ContaApp = {
 
         this.loadAll(dataString); 
 
+        // Condición mejorada: mostrar asistente si no hay datos O si los datos están vacíos
         if (!dataString || Object.keys(JSON.parse(dataString)).length === 0) {
             this.abrirAsistenteApertura();
         } else {
