@@ -1096,7 +1096,10 @@ renderAnticipos(containerId) {
                 <button class="conta-btn" onclick="ContaApp.abrirModalGasto()">+ Nuevo Gasto</button>
             </div>`;
         
-        let gastos = this.transacciones.filter(t => t.tipo === 'gasto');
+        // ===== INICIO DE LA CORRECCIÓN =====
+        // Ahora el filtro incluye tanto 'gasto' como 'compra_inventario'.
+        let gastos = this.transacciones.filter(t => t.tipo === 'gasto' || t.tipo === 'compra_inventario');
+        // ===== FIN DE LA CORRECCIÓN =====
         
         if (params.search) {
             const term = params.search.toLowerCase();
