@@ -192,33 +192,29 @@ Object.assign(ContaApp, {
         }
     },
     agregarItemCompra() {
-        const container = document.getElementById('compra-items-container');
-        const productosOptions = this.productos
-            .filter(p => p.tipo === 'producto')
-            .map(p => `<option value="${p.id}">${p.nombre}</option>`)
-            .join('');
+    const container = document.getElementById('compra-items-container');
+    const productosDatalist = this.productos
+        .filter(p => p.tipo === 'producto')
+        .map(p => `<option value="${p.nombre}" data-id="${p.id}"></option>`)
+        .join('');
 
-        const itemHTML = `
-            <div class="grid grid-cols-12 gap-2 items-center dynamic-row compra-item-row">
-                <div class="col-span-6 flex items-center gap-2">
-                    <select class="w-full conta-input compra-item-producto-id" onchange="ContaApp.actualizarUnidadMedidaCompra(this)">${productosOptions}</select>
-                    <button type="button" class="conta-btn conta-btn-small" onclick="ContaApp.abrirSubModalNuevoProducto('compra')">+</button>
-                </div>
-                <input type="number" min="1" class="col-span-2 conta-input text-right compra-item-cantidad" placeholder="Cant." oninput="ContaApp.actualizarTotalesCompra()">
-                <div class="col-span-2">
-                    <input type="text" class="w-full conta-input bg-gray-100 dark:bg-gray-700 compra-item-unidad-display" readonly>
-                </div>
-                <input type="number" step="0.01" min="0" class="col-span-1 conta-input text-right compra-item-costo" placeholder="Costo" oninput="ContaApp.actualizarTotalesCompra()">
-                <button type="button" class="col-span-1 conta-btn-icon delete" onclick="this.closest('.compra-item-row').remove(); ContaApp.actualizarTotalesCompra();">🗑️</button>
+    const itemHTML = `
+        <div class="grid grid-cols-12 gap-2 items-center dynamic-row compra-item-row">
+            <div class="col-span-6 flex items-center gap-2">
+                <input list="productos-datalist-compra" class="w-full conta-input compra-item-producto-input" placeholder="Escribe o selecciona un producto..." oninput="ContaApp.handleCompraProductoInput(this)">
+                <input type="hidden" class="compra-item-producto-id">
+                <datalist id="productos-datalist-compra">${productosDatalist}</datalist>
             </div>
-        `;
-        container.insertAdjacentHTML('beforeend', itemHTML);
-        
-        const nuevaFila = container.querySelector('.compra-item-row:last-child');
-        if (nuevaFila) {
-            this.actualizarUnidadMedidaCompra(nuevaFila.querySelector('.compra-item-producto-id'));
-        }
-    },
+            <input type="number" min="1" class="col-span-2 conta-input text-right compra-item-cantidad" placeholder="Cant." oninput="ContaApp.actualizarTotalesCompra()">
+            <div class="col-span-2">
+                <input type="text" class="w-full conta-input bg-gray-100 dark:bg-gray-700 compra-item-unidad-display" readonly placeholder="Unidad">
+            </div>
+            <input type="number" step="0.01" min="0" class="col-span-1 conta-input text-right compra-item-costo" placeholder="Costo" oninput="ContaApp.actualizarTotalesCompra()">
+            <button type="button" class="col-span-1 conta-btn-icon delete" onclick="this.closest('.compra-item-row').remove(); ContaApp.actualizarTotalesCompra();">🗑️</button>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', itemHTML);
+},
 
     actualizarTotalesCompra() {
         let total = 0;
@@ -299,98 +295,117 @@ Object.assign(ContaApp, {
         document.body.removeChild(document.getElementById('sub-modal-bg'));
     },
     async guardarCompra(e) {
-        e.preventDefault();
-        const tipoSeleccionado = document.querySelector('input[name="compra-tipo"]:checked').value;
-        const submitButton = document.getElementById('guardar-compra-btn');
-        this.toggleButtonLoading(submitButton, true);
+    e.preventDefault();
+    const tipoSeleccionado = document.querySelector('input[name="compra-tipo"]:checked').value;
+    const submitButton = document.getElementById('guardar-compra-btn');
+    this.toggleButtonLoading(submitButton, true);
 
-        try {
-            if (tipoSeleccionado === 'reventa' || tipoSeleccionado === 'materia_prima') {
-                const proveedorId = parseInt(document.getElementById('compra-proveedor-id').value);
-
-                // --- INICIO DE LA VALIDACIÓN MEJORADA ---
-                if (!proveedorId || isNaN(proveedorId)) {
-                    throw new Error('Debe seleccionar un proveedor válido de la lista.');
-                }
-                // --- FIN DE LA VALIDACIÓN MEJORADA ---
-
-                const fecha = document.getElementById('compra-fecha').value;
-                const referencia = document.getElementById('compra-referencia').value;
-                const descripcion = document.getElementById('compra-descripcion').value;
-                const cuentaInventarioId = parseInt(document.getElementById('compra-cuenta-inventario-id').value);
-                const cuentaPagoId = parseInt(document.getElementById('compra-pago-id').value);
-                const archivo = document.getElementById('compra-comprobante').files[0];
-                let comprobanteDataUrl = null;
-
-                if (archivo) {
-                    if (archivo.size > 1024 * 1024) { throw new Error('El archivo es demasiado grande (máx 1MB).'); }
-                    comprobanteDataUrl = await new Promise((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onload = () => resolve(reader.result);
-                        reader.onerror = error => reject(error);
-                        reader.readAsDataURL(archivo);
-                    });
-                }
-                
-                const items = [];
-                let totalCompra = 0;
-                document.querySelectorAll('.compra-item-row').forEach(row => {
-                    const productoId = parseInt(row.querySelector('.compra-item-producto-id').value);
-                    const cantidad = parseFloat(row.querySelector('.compra-item-cantidad').value);
-                    const costoUnitario = parseFloat(row.querySelector('.compra-item-costo').value);
-
-                    if (productoId && cantidad > 0 && costoUnitario >= 0) {
-                        items.push({ productoId, cantidad, costoUnitario });
-                        totalCompra += cantidad * costoUnitario;
-                    }
-                });
-
-                if (items.length === 0) { throw new Error('Debe añadir al menos un ítem a la compra.'); }
-
-                items.forEach(item => {
-                    const producto = this.findById(this.productos, item.productoId);
-                    if (producto) {
-                        const valorTotalStockActual = (producto.stock || 0) * (producto.costo || 0);
-                        const valorCompra = item.cantidad * item.costoUnitario;
-                        const nuevoStock = (producto.stock || 0) + item.cantidad;
-
-                        producto.costo = nuevoStock > 0 ? (valorTotalStockActual + valorCompra) / nuevoStock : item.costoUnitario;
-                        producto.stock = nuevoStock;
-                    }
-                });
-                
-                const descripcionFinal = descripcion || `Compra de inventario s/f #${referencia || 'N/A'}`;
-                
-                const nuevaCompra = {
-                    id: this.idCounter++, tipo: 'compra_inventario',
-                    fecha, contactoId: proveedorId, referencia, descripcion: descripcionFinal,
-                    items, total: totalCompra, comprobanteDataUrl
-                };
-                this.transacciones.push(nuevaCompra);
-
-                const asiento = this.crearAsiento(fecha, descripcionFinal,
-                    [{ cuentaId: cuentaInventarioId, debe: totalCompra, haber: 0 }, { cuentaId: cuentaPagoId, debe: 0, haber: totalCompra }],
-                    nuevaCompra.id
-                );
-                
-                if (asiento) {
-                    this.saveAll();
-                    this.closeModal();
-                    this.irModulo('compras');
-                    this.showToast('Compra de inventario registrada con éxito.', 'success');
-                }
-
-            } else if (tipoSeleccionado === 'activo_fijo') {
-                this.closeModal();
-                this.abrirModalActivoFijo();
+    try {
+        if (tipoSeleccionado === 'reventa' || tipoSeleccionado === 'materia_prima') {
+            const proveedorId = parseInt(document.getElementById('compra-proveedor-id').value);
+            if (!proveedorId || isNaN(proveedorId)) {
+                throw new Error('Debe seleccionar un proveedor válido de la lista.');
             }
-        } catch (error) {
-            this.showToast(error.message, 'error');
-            console.error("Error al guardar la compra:", error);
-        } finally {
-            this.toggleButtonLoading(submitButton, false);
+
+            const fecha = document.getElementById('compra-fecha').value;
+            const referencia = document.getElementById('compra-referencia').value;
+            const descripcion = document.getElementById('compra-descripcion').value;
+            const cuentaInventarioId = parseInt(document.getElementById('compra-cuenta-inventario-id').value);
+            const cuentaPagoId = parseInt(document.getElementById('compra-pago-id').value);
+            const archivo = document.getElementById('compra-comprobante').files[0];
+            let comprobanteDataUrl = null;
+
+            if (archivo) {
+                if (archivo.size > 1024 * 1024) { throw new Error('El archivo es demasiado grande (máx 1MB).'); }
+                comprobanteDataUrl = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = error => reject(error);
+                    reader.readAsDataURL(archivo);
+                });
+            }
+            
+            const items = [];
+            let totalCompra = 0;
+            const itemRows = document.querySelectorAll('.compra-item-row');
+
+            for (const row of itemRows) {
+                let productoId = parseInt(row.querySelector('.compra-item-producto-id').value);
+                const productoNombre = row.querySelector('.compra-item-producto-input').value.trim();
+                const cantidad = parseFloat(row.querySelector('.compra-item-cantidad').value);
+                const costoUnitario = parseFloat(row.querySelector('.compra-item-costo').value);
+
+                if (!productoNombre || !(cantidad > 0) || !(costoUnitario >= 0)) continue;
+
+                if (isNaN(productoId)) { // Si no tiene ID, es un producto nuevo
+                    const productoExistente = this.productos.find(p => p.nombre.toLowerCase() === productoNombre.toLowerCase());
+                    if (productoExistente) {
+                        productoId = productoExistente.id;
+                    } else {
+                        const nuevoProducto = {
+                            id: this.idCounter++,
+                            nombre: productoNombre,
+                            tipo: 'producto',
+                            stock: 0,
+                            costo: 0,
+                            precio: 0,
+                            unidadMedidaId: 1 // Asignar 'Unidad' por defecto
+                        };
+                        this.productos.push(nuevoProducto);
+                        productoId = nuevoProducto.id;
+                    }
+                }
+                
+                items.push({ productoId, cantidad, costoUnitario });
+                totalCompra += cantidad * costoUnitario;
+            }
+
+            if (items.length === 0) { throw new Error('Debe añadir al menos un ítem a la compra.'); }
+
+            items.forEach(item => {
+                const producto = this.findById(this.productos, item.productoId);
+                if (producto) {
+                    const valorTotalStockActual = (producto.stock || 0) * (producto.costo || 0);
+                    const valorCompra = item.cantidad * item.costoUnitario;
+                    const nuevoStock = (producto.stock || 0) + item.cantidad;
+
+                    producto.costo = nuevoStock > 0 ? (valorTotalStockActual + valorCompra) / nuevoStock : item.costoUnitario;
+                    producto.stock = nuevoStock;
+                }
+            });
+            
+            const descripcionFinal = descripcion || `Compra de inventario s/f #${referencia || 'N/A'}`;
+            
+            const nuevaCompra = {
+                id: this.idCounter++, tipo: 'compra_inventario',
+                fecha, contactoId: proveedorId, referencia, descripcion: descripcionFinal,
+                items, total: totalCompra, comprobanteDataUrl, estado: 'Pendiente'
+            };
+            this.transacciones.push(nuevaCompra);
+
+            const asiento = this.crearAsiento(fecha, descripcionFinal,
+                [{ cuentaId: cuentaInventarioId, debe: totalCompra, haber: 0 }, { cuentaId: cuentaPagoId, debe: 0, haber: totalCompra }],
+                nuevaCompra.id
+            );
+            
+            if (asiento) {
+                this.saveAll();
+                this.closeModal();
+                this.irModulo('compras');
+                this.showToast('Compra de inventario registrada con éxito.', 'success');
+            }
+
+        } else if (tipoSeleccionado === 'activo_fijo') {
+            this.closeModal();
+            this.abrirModalActivoFijo();
         }
-    },
+    } catch (error) {
+        this.showToast(error.message, 'error');
+        console.error("Error al guardar la compra:", error);
+    } finally {
+        this.toggleButtonLoading(submitButton, false);
+    }
+},
     abrirModalDetalleCompra(compraId) {
         const compra = this.findById(this.transacciones, compraId);
         if (!compra) return;
@@ -509,4 +524,35 @@ Object.assign(ContaApp, {
         `;
         this.showModal(modalHTML, '4xl');
     },
+    actualizarUnidadMedidaCompra(selectProducto) {
+    const fila = selectProducto.closest('.compra-item-row');
+    const productoId = parseInt(selectProducto.value);
+    const producto = this.findById(this.productos, productoId);
+    const unidadDisplay = fila.querySelector('.compra-item-unidad-display');
+
+    if (producto && unidadDisplay) {
+        const unidad = this.findById(this.unidadesMedida, producto.unidadMedidaId);
+        unidadDisplay.value = unidad ? unidad.nombre : 'N/A';
+    } else if (unidadDisplay) {
+        unidadDisplay.value = '';
+    }
+},
+handleCompraProductoInput(input) {
+    const fila = input.closest('.compra-item-row');
+    const hiddenInput = fila.querySelector('.compra-item-producto-id');
+    const datalist = document.getElementById('productos-datalist-compra');
+    let found = false;
+    for (let option of datalist.options) {
+        if (option.value === input.value) {
+            hiddenInput.value = option.dataset.id;
+            this.actualizarUnidadMedidaCompra(hiddenInput);
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        hiddenInput.value = '';
+        this.actualizarUnidadMedidaCompra(hiddenInput);
+    }
+},
 });

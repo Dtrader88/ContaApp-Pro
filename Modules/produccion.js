@@ -418,41 +418,30 @@ Object.assign(ContaApp, {
     },
 
     facturarProduccionSeleccionada() {
-        const itemsParaFacturar = [];
-        let error = null;
-        document.querySelectorAll('.prod-terminada-check:checked').forEach(checkbox => {
-            const productoId = parseInt(checkbox.dataset.productoId);
-            const producto = this.findById(this.productos, productoId);
-            const cantidadInput = document.querySelector(`.cantidad-a-vender-input[data-producto-id="${productoId}"]`);
-            const cantidad = parseFloat(cantidadInput.value);
-
-            if (producto && cantidad > 0) {
-                if (cantidad > producto.stock) {
-                    error = `Cantidad a vender de "${producto.nombre}" excede el stock.`;
-                }
-                itemsParaFacturar.push({
-                    itemType: 'producto',
-                    productoId: producto.id,
-                    cantidad: cantidad,
-                    precio: producto.precio,
-                    costo: producto.costo
-                });
-            }
-        });
-        
-        if (error) {
-            this.showToast(error, 'error');
-            return;
+    const itemsParaFacturar = [];
+    document.querySelectorAll('.prod-terminada-check:checked').forEach(checkbox => {
+        const productoId = parseInt(checkbox.dataset.productoId);
+        const producto = this.findById(this.productos, productoId);
+        if (producto) {
+            itemsParaFacturar.push({
+                itemType: 'producto',
+                productoId: producto.id,
+                cantidad: 1, // Cantidad por defecto, se ajusta en la factura
+                precio: producto.precio || 0,
+                costo: producto.costo
+            });
         }
+    });
 
-        if (itemsParaFacturar.length === 0) {
-            this.showToast('Debes seleccionar al menos un producto y especificar una cantidad a vender.', 'error');
-            return;
-        }
+    if (itemsParaFacturar.length === 0) {
+        this.showToast('Debes seleccionar al menos un producto para facturar.', 'error');
+        return;
+    }
 
-        ContaApp.tempItemsParaVenta = itemsParaFacturar;
-        this.abrirModalVenta();
-    },
+    // Usamos la variable temporal para pasar los datos al modal de venta
+    ContaApp.tempItemsParaVenta = itemsParaFacturar;
+    this.abrirModalVenta();
+},
     abrirModalDetalleOrdenProduccion(ordenId) {
         const orden = this.findById(this.ordenesProduccion, ordenId);
         if (!orden) return;
