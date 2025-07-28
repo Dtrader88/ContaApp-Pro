@@ -459,7 +459,7 @@ irAtras() {
         this.irModulo(previousState.mod, previousState.params, true);
     },
             irModulo(mod, params = {}, isBackNavigation = false) {
-        if (!this.licencia) {
+        if (!this.licencia || !this.licencia.modulosActivos) {
             console.warn(`Intento de navegar al módulo '${mod}' antes de que la licencia esté cargada. Abortando.`);
             return;
         }
