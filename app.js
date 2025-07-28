@@ -784,87 +784,91 @@ irAtras() {
         this.repository.saveAll(dataToSave);
     },
         // CAMBIO CLAVE: la función ahora recibe los datos como argumento
-        loadAll(dataString){ 
-        const defaultData = {
-            empresa: { 
-                nombre: "Tu Empresa", logo: 'images/logo.png', direccion: '123 Calle Ficticia', 
-                telefono: '+1 (555) 123-4567', email: 'contacto@tuempresa.com', 
-                taxId: 'J-12345678-9', taxRate: 16,
-                presupuestos: {},
-                dashboardWidgets: ['ingresos', 'gastos', 'resultadoNeto', 'bancos'],
-                dashboardContentWidgets: {
-                    order: ['financialPerformance', 'activity-feed', 'topExpenses', 'quick-actions'],
-                    settings: {
-                        financialPerformance: { timeRange: 'last6months', visible: true },
-                        'activity-feed': { visible: true },
-                        topExpenses: { timeRange: 'currentMonth', visible: true },
-                        'quick-actions': { visible: true }
-                    }
-                },
-                dashboardLayout: 'grid',
-                pdfTemplate: 'clasica',
-                pdfColor: '#1877f2'
+        loadAll(dataString){
+    const defaultData = {
+        empresa: {
+            nombre: "Tu Empresa", logo: 'images/logo.png', direccion: '123 Calle Ficticia',
+            telefono: '+1 (555) 123-4567', email: 'contacto@tuempresa.com',
+            taxId: 'J-12345678-9', taxRate: 16,
+            presupuestos: {},
+            dashboardWidgets: ['ingresos', 'gastos', 'resultadoNeto', 'bancos'],
+            dashboardContentWidgets: {
+                order: ['financialPerformance', 'activity-feed', 'topExpenses', 'quick-actions'],
+                settings: {
+                    financialPerformance: { timeRange: 'last6months', visible: true },
+                    'activity-feed': { visible: true },
+                    topExpenses: { timeRange: 'currentMonth', visible: true },
+                    'quick-actions': { visible: true }
+                }
             },
-            licencia: {
-                cliente: "Usuario Principal",
-                paquete: "Profesional",
-                modulosActivos: [
-                    "VENTAS", "GASTOS", "CXC", "CXP",
-                    "PLAN_DE_CUENTAS", "DIARIO_GENERAL",
-                    "CONFIGURACION", "INVENTARIO_BASE", "FINANZAS_AVANZADO",
-                    "CONTABILIDAD_AVANZADO", "REPORTES_AVANZADOS", "ACTIVOS_AVANZADOS",
-                    "PRODUCCION", "NOMINAS"
-                ]
-            },
-            idCounter: 1000,
-            planDeCuentas: this.getPlanDeCuentasDefault(),
-            asientos: [],
-            transacciones: [],
-            contactos: [],
-            productos: [],
-            recurrentes: [],
-            activosFijos: [],
-            listasMateriales: [],
-            ordenesProduccion: [],
-            unidadesMedida: [
-                { id: 1, nombre: 'Unidad' },
-                { id: 2, nombre: 'Caja' },
-                { id: 3, nombre: 'Kg' },
-                { id: 4, nombre: 'Litro' },
-                { id: 5, nombre: 'Metro' }
-            ],
-            bancoImportado: {}
-        };
+            dashboardLayout: 'grid',
+            pdfTemplate: 'clasica',
+            pdfColor: '#1877f2'
+        },
+        licencia: {
+            cliente: "Usuario Principal",
+            paquete: "Profesional",
+            modulosActivos: [
+                "VENTAS", "GASTOS", "CXC", "CXP",
+                "PLAN_DE_CUENTAS", "DIARIO_GENERAL",
+                "CONFIGURACION", "INVENTARIO_BASE", "FINANZAS_AVANZADO",
+                "CONTABILIDAD_AVANZADO", "REPORTES_AVANZADOS", "ACTIVOS_AVANZADOS",
+                "PRODUCCION", "NOMINAS"
+            ]
+        },
+        idCounter: 1000,
+        planDeCuentas: this.getPlanDeCuentasDefault(),
+        asientos: [],
+        transacciones: [],
+        contactos: [],
+        productos: [],
+        recurrentes: [],
+        activosFijos: [],
+        listasMateriales: [],
+        ordenesProduccion: [],
+        unidadesMedida: [
+            { id: 1, nombre: 'Unidad' },
+            { id: 2, nombre: 'Caja' },
+            { id: 3, nombre: 'Kg' },
+            { id: 4, nombre: 'Litro' },
+            { id: 5, nombre: 'Metro' }
+        ],
+        bancoImportado: {}
+    };
+
+    if (dataString) {
+        const data = JSON.parse(dataString);
+        this.empresa = { ...defaultData.empresa, ...data.empresa };
+        this.licencia = data.licencia || defaultData.licencia;
+        this.idCounter = data.idCounter || defaultData.idCounter;
         
-        if (dataString) {
-            const data = JSON.parse(dataString);
-            this.empresa = { ...defaultData.empresa, ...data.empresa };
-            this.licencia = data.licencia || defaultData.licencia; 
-            this.idCounter = data.idCounter || defaultData.idCounter;
-            this.planDeCuentas = (data.planDeCuentas && data.planDeCuentas.length > 0) ? data.planDeCuentas : defaultData.planDeCuentas;
-            this.asientos = data.asientos || defaultData.asientos;
-            this.transacciones = data.transacciones || defaultData.transacciones;
-            this.contactos = data.contactos || defaultData.contactos;
-            this.productos = data.productos || defaultData.productos;
-            this.recurrentes = data.recurrentes || defaultData.recurrentes;
-            this.activosFijos = data.activosFijos || [];
-            this.listasMateriales = data.listasMateriales || [];
-            this.ordenesProduccion = data.ordenesProduccion || [];
-            this.unidadesMedida = data.unidadesMedida && data.unidadesMedida.length > 0 ? data.unidadesMedida : defaultData.unidadesMedida;
-            this.bancoImportado = data.bancoImportado || defaultData.bancoImportado;
+        // --- INICIO DE LA CORRECCIÓN ---
+        // Se simplifican las validaciones para evitar el error con `null.length`
+        this.planDeCuentas = data.planDeCuentas || defaultData.planDeCuentas;
+        this.asientos = data.asientos || defaultData.asientos;
+        this.transacciones = data.transacciones || defaultData.transacciones;
+        this.contactos = data.contactos || defaultData.contactos;
+        this.productos = data.productos || defaultData.productos;
+        this.recurrentes = data.recurrentes || defaultData.recurrentes;
+        this.activosFijos = data.activosFijos || [];
+        this.listasMateriales = data.listasMateriales || [];
+        this.ordenesProduccion = data.ordenesProduccion || [];
+        this.unidadesMedida = data.unidadesMedida || defaultData.unidadesMedida;
+        this.bancoImportado = data.bancoImportado || defaultData.bancoImportado;
+        // --- FIN DE LA CORRECCIÓN ---
 
-            this.verificarYActualizarPlanDeCuentas();
+        this.verificarYActualizarPlanDeCuentas();
 
-            if (!this.empresa.presupuestos) this.empresa.presupuestos = {};
-            if (!this.empresa.dashboardWidgets) this.empresa.dashboardWidgets = defaultData.empresa.dashboardWidgets;
-            if (!this.empresa.dashboardContentWidgets || !this.empresa.dashboardContentWidgets.order) {
-                this.empresa.dashboardContentWidgets = defaultData.empresa.dashboardContentWidgets;
-            }
-            if (!this.empresa.dashboardLayout) this.empresa.dashboardLayout = defaultData.empresa.dashboardLayout;
-        } else {
-            Object.assign(this, defaultData);
+        if (!this.empresa.presupuestos) this.empresa.presupuestos = {};
+        if (!this.empresa.dashboardWidgets) this.empresa.dashboardWidgets = defaultData.empresa.dashboardWidgets;
+        if (!this.empresa.dashboardContentWidgets || !this.empresa.dashboardContentWidgets.order) {
+            this.empresa.dashboardContentWidgets = defaultData.empresa.dashboardContentWidgets;
         }
-    },
+        if (!this.empresa.dashboardLayout) this.empresa.dashboardLayout = defaultData.empresa.dashboardLayout;
+    } else {
+        Object.assign(this, defaultData);
+    }
+},
 verificarYActualizarPlanDeCuentas() {
         console.log("--- INICIANDO verificarYActualizarPlanDeCuentas ---");
         const planPorDefecto = this.getPlanDeCuentasDefault();
