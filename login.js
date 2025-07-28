@@ -54,14 +54,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.location.href = 'index.html';
             })
             .catch((error) => {
-                if (error.code === 'auth/email-already-in-use') {
-                    errorMessageDiv.textContent = 'Error: El correo ya está en uso.';
-                } else if (error.code === 'auth/weak-password') {
-                    errorMessageDiv.textContent = 'Error: La contraseña debe tener al menos 6 caracteres.';
-                } else {
-                    errorMessageDiv.textContent = 'Error al registrar el usuario.';
-                }
-                console.error("Error de registro:", error);
+                // Mostramos el error completo en la consola para un análisis detallado.
+                console.error("Error de registro detallado:", error);
+
+                // Mostramos un mensaje de error mucho más útil en la pantalla.
+                // Esto nos dirá exactamente por qué Firebase está rechazando la solicitud.
+                let detailedMessage = `Error: ${error.message} (código: ${error.code})`;
+                errorMessageDiv.textContent = detailedMessage;
             });
     };
     // Asignar los eventos a los botones
