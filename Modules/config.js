@@ -159,69 +159,75 @@ renderConfig_Licencia() {
         `;
         document.getElementById('config-contenido').innerHTML = configHTML;
     },
-                renderConfig_Personalizacion() {
-        const personalizacionHTML = `
-            <div class="conta-card">
-                <h3 class="conta-subtitle">Personalización de la Interfaz</h3>
-                <div class="flex justify-between items-center mt-4">
-                   <p class="text-[var(--color-text-secondary)]">Elige qué indicadores (KPIs) quieres ver en tu dashboard principal.</p>
-                   <button class="conta-btn conta-btn-accent" onclick="ContaApp.abrirModalPersonalizarDashboard()">
-                        <i class="fa-solid fa-wand-magic-sparkles me-2"></i>Personalizar Dashboard
-                   </button>
+        renderConfig_Personalizacion() {
+    // --- MEJORA VISUAL: Se rediseña la página con un layout de 2 columnas ---
+    const personalizacionHTML = `
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <div class="lg:col-span-2 space-y-6">
+                <div class="conta-card">
+                    <h3 class="conta-subtitle">Personalización de la Interfaz</h3>
+                    <div class="flex justify-between items-center mt-4">
+                       <p class="text-[var(--color-text-secondary)] text-sm">Elige qué indicadores (KPIs) y widgets quieres ver en tu dashboard principal.</p>
+                       <button class="conta-btn conta-btn-accent w-fit" onclick="ContaApp.abrirModalPersonalizarDashboard()">
+                            <i class="fa-solid fa-wand-magic-sparkles me-2"></i>Personalizar
+                       </button>
+                    </div>
+                </div>
+
+                <div class="conta-card">
+                     <h3 class="conta-subtitle">Personalización de Documentos (PDF)</h3>
+                     <form onsubmit="event.preventDefault(); ContaApp.guardarConfigPersonalizacion()">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                            <div>
+                                <label for="pdf-template" class="text-sm font-medium">Plantilla de Factura</label>
+                                <select id="pdf-template" class="w-full conta-input mt-1">
+                                    <option value="clasica" ${this.empresa.pdfTemplate === 'clasica' ? 'selected' : ''}>Clásica</option>
+                                    <option value="moderna" ${this.empresa.pdfTemplate === 'moderna' ? 'selected' : ''}>Moderna</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="pdf-color" class="text-sm font-medium">Color de Acento</label>
+                                <input type="color" id="pdf-color" class="w-full h-10 conta-input mt-1" value="${this.empresa.pdfColor || '#1877f2'}">
+                            </div>
+                        </div>
+                         <div class="text-right mt-6">
+                            <button type="submit" class="conta-btn w-fit">Guardar Personalización</button>
+                        </div>
+                     </form>
+                </div>
+
+                <div class="conta-card">
+                    <h3 class="conta-subtitle">Copia de Seguridad (JSON)</h3>
+                    <p class="text-[var(--color-text-secondary)] text-sm mb-4">Usa esto para guardar una copia exacta de los datos de la app, o para restaurarla en este u otro navegador.</p>
+                    <div class="flex flex-col md:flex-row gap-3">
+                       <button class="conta-btn conta-btn-accent flex-1" onclick="ContaApp.exportarDatos()">Exportar Datos (.json)</button>
+                       <button class="conta-btn flex-1" onclick="document.getElementById('import-file-input').click()">Importar Datos (.json)</button>
+                       <input type="file" id="import-file-input" class="hidden" accept=".json" onchange="ContaApp.importarDatos(event)">
+                    </div>
                 </div>
             </div>
 
-            <div class="conta-card mt-6">
-                 <h3 class="conta-subtitle">Personalización de Documentos (PDF)</h3>
-                 <form onsubmit="event.preventDefault(); ContaApp.guardarConfigPersonalizacion()">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                        <div>
-                            <label for="pdf-template" class="text-sm font-medium">Plantilla de Factura</label>
-                            <select id="pdf-template" class="w-full conta-input mt-1">
-                                <option value="clasica" ${this.empresa.pdfTemplate === 'clasica' ? 'selected' : ''}>Clásica</option>
-                                <option value="moderna" ${this.empresa.pdfTemplate === 'moderna' ? 'selected' : ''}>Moderna</option>
-                            </select>
+            <div class="lg:col-span-1 space-y-6">
+                <div class="conta-card">
+                     <h3 class="conta-subtitle conta-text-danger">Zona de Peligro</h3>
+                     <div class="space-y-4 mt-4">
+                        <div class="p-3 rounded-lg border border-dashed border-[var(--color-border-accent)]">
+                            <p class="text-[var(--color-text-secondary)] text-sm mb-2">Sincroniza tu catálogo de cuentas con la última versión del software. Útil después de una actualización.</p>
+                            <button class="conta-btn conta-btn-accent w-fit" onclick="ContaApp.forzarActualizacionPlanDeCuentas()">Forzar Actualización</button>
                         </div>
-                        <div>
-                            <label for="pdf-color" class="text-sm font-medium">Color de Acento</label>
-                            <input type="color" id="pdf-color" class="w-full h-10 conta-input mt-1" value="${this.empresa.pdfColor || '#1877f2'}">
+                        <div class="p-3 rounded-lg border border-dashed border-[var(--color-border-accent)]">
+                            <p class="text-[var(--color-text-secondary)] text-sm mb-2">Borrar todos los datos y empezar de cero. Esta acción es irreversible.</p>
+                            <button class="conta-btn conta-btn-danger w-fit" onclick="ContaApp.resetearDatos()">Resetear Aplicación</button>
                         </div>
-                    </div>
-                     <div class="text-right mt-6">
-                        <button type="submit" class="conta-btn">Guardar Personalización</button>
-                    </div>
-                 </form>
-            </div>
-
-            <div class="conta-card mt-6">
-                <h3 class="conta-subtitle">Copia de Seguridad (JSON)</h3>
-                <p class="text-[var(--color-text-secondary)] text-sm mb-4">Usa esto para guardar una copia exacta de los datos de la app, o para restaurarla en este u otro navegador.</p>
-                <div class="flex flex-col md:flex-row gap-3">
-                   <button class="conta-btn conta-btn-accent flex-1" onclick="ContaApp.exportarDatos()">Exportar Datos (.json)</button>
-                   <button class="conta-btn flex-1" onclick="document.getElementById('import-file-input').click()">Importar Datos (.json)</button>
-                   <input type="file" id="import-file-input" class="hidden" accept=".json" onchange="ContaApp.importarDatos(event)">
+                     </div>
                 </div>
             </div>
-            <div class="conta-card mt-6">
-                 <h3 class="conta-subtitle conta-text-danger">Zona de Peligro</h3>
-                 <!-- INICIO DE LA MEJORA -->
-                 <div class="border-t border-[var(--color-border-accent)] mt-4 pt-4">
-                    <div class="flex justify-between items-center">
-                        <p class="text-[var(--color-text-secondary)] text-sm">Sincroniza tu catálogo de cuentas con la última versión del software. Útil después de una actualización.</p>
-                        <button class="conta-btn conta-btn-accent" onclick="ContaApp.forzarActualizacionPlanDeCuentas()">Forzar Actualización de Cuentas</button>
-                    </div>
-                 </div>
-                 <!-- FIN DE LA MEJORA -->
-                 <div class="border-t border-[var(--color-border-accent)] mt-4 pt-4">
-                    <div class="flex justify-between items-center">
-                        <p class="text-[var(--color-text-secondary)] text-sm">Borrar todos los datos y empezar de cero. Esta acción es irreversible.</p>
-                        <button class="conta-btn conta-btn-danger" onclick="ContaApp.resetearDatos()">Resetear Aplicación</button>
-                    </div>
-                 </div>
-            </div>
-        `;
-        document.getElementById('config-contenido').innerHTML = personalizacionHTML;
-    },
+
+        </div>
+    `;
+    document.getElementById('config-contenido').innerHTML = personalizacionHTML;
+},
         guardarConfigPersonalizacion() {
         this.empresa.pdfTemplate = document.getElementById('pdf-template').value;
         this.empresa.pdfColor = document.getElementById('pdf-color').value;
