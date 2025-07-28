@@ -201,7 +201,7 @@ Object.assign(ContaApp, {
     const itemHTML = `
         <div class="grid grid-cols-12 gap-2 items-center dynamic-row compra-item-row">
             <div class="col-span-6 flex items-center gap-2">
-                <input list="productos-datalist-compra" class="w-full conta-input compra-item-producto-input" placeholder="Escribe o selecciona un producto..." oninput="ContaApp.handleCompraProductoInput(this)">
+                <input list="productos-datalist-compra" class="w-full conta-input compra-item-producto-input" placeholder="Escribe o selecciona un producto..." onchange="ContaApp.handleCompraProductoChange(this)">
                 <input type="hidden" class="compra-item-producto-id">
                 <datalist id="productos-datalist-compra">${productosDatalist}</datalist>
             </div>
@@ -346,10 +346,10 @@ Object.assign(ContaApp, {
                             id: this.idCounter++,
                             nombre: productoNombre,
                             tipo: 'producto',
-                            stock: 0,
-                            costo: 0,
-                            precio: 0,
-                            unidadMedidaId: 1 // Asignar 'Unidad' por defecto
+                            stock: 0, // El stock se añadirá con esta compra
+                            costo: 0, // El costo se establecerá con esta compra
+                            precio: 0, // El precio de venta se establece después
+                            unidadMedidaId: 1 // Se asigna 'Unidad' por defecto
                         };
                         this.productos.push(nuevoProducto);
                         productoId = nuevoProducto.id;
@@ -524,35 +524,30 @@ Object.assign(ContaApp, {
         `;
         this.showModal(modalHTML, '4xl');
     },
-    actualizarUnidadMedidaCompra(selectProducto) {
-    const fila = selectProducto.closest('.compra-item-row');
-    const productoId = parseInt(selectProducto.value);
-    const producto = this.findById(this.productos, productoId);
+    handleCompraProductoChange(inputEl) {
+    const fila = inputEl.closest('.compra-item-row');
+    const hiddenInputId = fila.querySelector('.compra-item-producto-id');
     const unidadDisplay = fila.querySelector('.compra-item-unidad-display');
-
-    if (producto && unidadDisplay) {
-        const unidad = this.findById(this.unidadesMedida, producto.unidadMedidaId);
-        unidadDisplay.value = unidad ? unidad.nombre : 'N/A';
-    } else if (unidadDisplay) {
-        unidadDisplay.value = '';
-    }
-},
-handleCompraProductoInput(input) {
-    const fila = input.closest('.compra-item-row');
-    const hiddenInput = fila.querySelector('.compra-item-producto-id');
     const datalist = document.getElementById('productos-datalist-compra');
     let found = false;
+
     for (let option of datalist.options) {
-        if (option.value === input.value) {
-            hiddenInput.value = option.dataset.id;
-            this.actualizarUnidadMedidaCompra(hiddenInput);
+        if (option.value === inputEl.value) {
+            const productoId = parseInt(option.dataset.id);
+            hiddenInputId.value = productoId;
+            
+            const producto = this.findById(this.productos, productoId);
+            if(producto) {
+                const unidad = this.findById(this.unidadesMedida, producto.unidadMedidaId);
+                unidadDisplay.value = unidad ? unidad.nombre : 'N/A';
+            }
             found = true;
             break;
         }
     }
     if (!found) {
-        hiddenInput.value = '';
-        this.actualizarUnidadMedidaCompra(hiddenInput);
+        hiddenInputId.value = '';
+        unidadDisplay.value = 'Unidad'; // Por defecto para productos nuevos
     }
 },
 });
