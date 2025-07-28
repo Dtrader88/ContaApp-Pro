@@ -30,12 +30,27 @@ document.addEventListener('DOMContentLoaded', () => {
         const email = emailInput.value;
         const password = passwordInput.value;
         errorMessageDiv.textContent = '';
+        const db = firebase.firestore();
 
         auth.createUserWithEmailAndPassword(email, password)
             .then((userCredential) => {
-                // Registro exitoso, simplemente redirigir.
-                // init.js se encargará de crear el perfil y el workspace en el primer inicio de sesión.
-                console.log("Usuario creado en Authentication. Redirigiendo...");
+                const user = userCredential.user;
+                console.log("Usuario creado en Authentication con UID:", user.uid);
+
+                const workspaceRef = db.collection("workspaces").doc(user.uid);
+                const userProfileRef = db.collection("usuarios").doc(user.uid);
+
+                const batch = db.batch();
+                batch.set(workspaceRef, {}); // Creamos el documento del workspace vacío
+                batch.set(userProfileRef, {
+                    email: user.email,
+                    rol: "administrador",
+                    workspaceId: user.uid
+                });
+                return batch.commit();
+            })
+            .then(() => {
+                console.log("Workspace y perfil creados. Redirigiendo...");
                 window.location.href = 'index.html';
             })
             .catch((error) => {
