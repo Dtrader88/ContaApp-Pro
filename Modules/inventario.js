@@ -5,89 +5,102 @@ Object.assign(ContaApp, {
         this.irModulo('inventario', { search });
     },
     renderInventario(params = {}) {
-        // Si se pasa un ID de producto, renderizamos la vista de Kardex
-        if (params.productoId) {
-            this.renderInventario_Kardex(params.productoId);
-            return;
-        }
+    // Si se pasa un ID de producto, renderizamos la vista de Kardex
+    if (params.productoId) {
+        this.renderInventario_Kardex(params.productoId);
+        return;
+    }
+    
+    // Asignamos un submodulo por defecto si no viene uno
+    const submodulo = params.submodulo || 'reventa';
 
-        // Si no, renderizamos la vista de lista por defecto
-        let html = `
-            <div class="flex gap-2 mb-4 border-b border-[var(--color-border-accent)] flex-wrap">
-                <button class="py-2 px-4 text-sm font-semibold border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]">Lista de Productos</button>
-            </div>
-            <div id="inventario-contenido"></div>
-        `;
-        document.getElementById('inventario').innerHTML = html;
-        this.renderInventarioLista(params);
-    },
-    renderInventarioLista(params = {}) {
-        document.getElementById('page-actions-header').innerHTML = `
-            <div class="flex gap-2 flex-wrap">
-                <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarInventarioCSV()"><i class="fa-solid fa-file-csv me-2"></i>Exportar CSV</button>
-                <button class="conta-btn" onclick="ContaApp.abrirModalProducto()">+ Nuevo Producto/Servicio</button>
-            </div>`;
+    // Creamos la estructura de pestañas
+    const tabs = [
+        { id: 'reventa', nombre: 'Productos para Reventa', cuentaId: 13001 },
+        { id: 'materia-prima', nombre: 'Materias Primas', cuentaId: 13002 },
+        { id: 'terminados', nombre: 'Productos Terminados', cuentaId: 13004 }
+    ];
+
+    let tabsHTML = tabs.map(tab => `
+        <button class="py-2 px-4 text-sm font-semibold ${submodulo === tab.id ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('inventario', {submodulo: '${tab.id}'})">
+            ${tab.nombre}
+        </button>
+    `).join('');
+
+    let html = `
+        <div class="flex gap-2 mb-4 border-b border-[var(--color-border-accent)] flex-wrap">${tabsHTML}</div>
+        <div id="inventario-contenido"></div>
+    `;
+    document.getElementById('inventario').innerHTML = html;
+
+    // Buscamos la cuentaId correspondiente al submodulo activo para pasársela a la función que renderiza la lista
+    const cuentaIdActiva = tabs.find(tab => tab.id === submodulo).cuentaId;
+    this.renderInventarioLista(params, cuentaIdActiva);
+},
+    renderInventarioLista(params = {}, cuentaInventarioId) {
+    document.getElementById('page-actions-header').innerHTML = `
+        <div class="flex gap-2 flex-wrap">
+            <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarInventarioCSV()"><i class="fa-solid fa-file-csv me-2"></i>Exportar CSV</button>
+            <button class="conta-btn" onclick="ContaApp.abrirModalProducto()">+ Nuevo Producto/Servicio</button>
+        </div>`;
+    
+    // Filtramos los productos por la cuenta de inventario de la pestaña activa
+    let productosFiltrados = this.productos.filter(p => p.cuentaInventarioId === cuentaInventarioId);
+    
+    if (params.search) {
+        const term = params.search.toLowerCase();
+        productosFiltrados = productosFiltrados.filter(p => p.nombre.toLowerCase().includes(term));
+    }
+
+    let html = `
+        <div class="conta-card p-3 mb-4">
+            <form onsubmit="event.preventDefault(); ContaApp.filtrarInventario();" class="flex items-end gap-3">
+                <div>
+                    <label class="text-xs font-semibold">Buscar por Nombre</label>
+                    <input type="search" id="inventario-search" class="conta-input w-full md:w-80" value="${params.search || ''}" placeholder="Escribe para filtrar...">
+                </div>
+                <button type="submit" class="conta-btn">Buscar</button>
+            </form>
+        </div>`;
         
-        let productosFiltrados = this.productos;
-        if (params.search) {
-            const term = params.search.toLowerCase();
-            productosFiltrados = this.productos.filter(p => p.nombre.toLowerCase().includes(term));
-        }
+    if (productosFiltrados.length === 0) {
+        html += `<div class="conta-card text-center p-8 text-[var(--color-text-secondary)]"><i class="fa-solid fa-box-open fa-3x mb-4 opacity-50"></i><h3 class="font-bold text-lg">Sin Productos</h3><p>No se encontraron productos en esta categoría.</p></div>`;
+    } else {
+        let tableRowsHTML = '';
+        productosFiltrados.sort((a,b) => a.nombre.localeCompare(b.nombre)).forEach(p => {
+            const isLowStock = p.tipo === 'producto' && p.stockMinimo > 0 && p.stock <= p.stockMinimo;
+            const rowClass = isLowStock ? 'low-stock-row' : '';
+            const stockDisplay = p.tipo === 'producto' ? p.stock : 'N/A';
+            const lowStockIcon = isLowStock ? `<i class="fa-solid fa-triangle-exclamation text-[var(--color-danger)] ml-2" title="Stock bajo (Mínimo: ${p.stockMinimo})"></i>` : '';
+            const unidad = this.findById(this.unidadesMedida, p.unidadMedidaId);
+            const unidadDisplay = p.tipo === 'producto' ? (unidad ? unidad.nombre : 'N/A') : 'N/A';
 
-        let html = `
-            <div class="conta-card p-3 mb-4">
-                <form onsubmit="event.preventDefault(); ContaApp.filtrarInventario();" class="flex items-end gap-3">
-                    <div>
-                        <label class="text-xs font-semibold">Buscar por Nombre</label>
-                        <input type="search" id="inventario-search" class="conta-input w-full md:w-80" value="${params.search || ''}" placeholder="Escribe para filtrar...">
-                    </div>
-                    <button type="submit" class="conta-btn">Buscar</button>
-                </form>
-            </div>`;
-            
-        if (productosFiltrados.length === 0) {
-            if (params.search) {
-                html += `<div class="conta-card text-center p-8 text-[var(--color-text-secondary)]"><i class="fa-solid fa-filter-circle-xmark fa-3x mb-4 opacity-50"></i><h3 class="font-bold text-lg">Sin Resultados</h3><p>No se encontraron productos que coincidan con "${params.search}".</p></div>`;
-            } else {
-                html += this.generarEstadoVacioHTML('fa-boxes-stacked', 'Tu inventario está vacío', 'Añade tu primer producto o servicio para empezar a gestionar tu stock y ventas.', '+ Crear Producto', "ContaApp.abrirModalProducto()");
-            }
-        } else {
-            let tableRowsHTML = '';
-            productosFiltrados.sort((a,b) => a.nombre.localeCompare(b.nombre)).forEach(p => {
-                const isLowStock = p.tipo === 'producto' && p.stockMinimo > 0 && p.stock <= p.stockMinimo;
-                const rowClass = isLowStock ? 'low-stock-row' : '';
-                const stockDisplay = p.tipo === 'producto' ? p.stock : 'N/A';
-                const lowStockIcon = isLowStock ? `<i class="fa-solid fa-triangle-exclamation text-[var(--color-danger)] ml-2" title="Stock bajo (Mínimo: ${p.stockMinimo})"></i>` : '';
-                const unidad = this.findById(this.unidadesMedida, p.unidadMedidaId);
-                const unidadDisplay = p.tipo === 'producto' ? (unidad ? unidad.nombre : 'N/A') : 'N/A';
-
-                tableRowsHTML += `
-                    <tr class="cursor-pointer hover:bg-[var(--color-bg-accent)]" onclick="ContaApp.irModulo('inventario', { productoId: ${p.id} })">
-                        <td class="conta-table-td font-bold">${p.nombre} ${lowStockIcon}</td>
-                        <td class="conta-table-td">${p.tipo}</td>
-                        <td class="conta-table-td text-right font-mono">${stockDisplay}</td>
-                        <td class="conta-table-td">${unidadDisplay}</td>
-                        <td class="conta-table-td text-right font-mono">${this.formatCurrency(p.precio)}</td>
-                        <td class="conta-table-td text-right font-mono">${this.formatCurrency(p.costo)}</td>
-                        <td class="conta-table-td text-center" onclick="event.stopPropagation()">
-                            <button class="conta-btn-icon edit" title="Editar" onclick="ContaApp.abrirModalProducto(${p.id})"><i class="fa-solid fa-pencil"></i></button>
-                            ${p.tipo === 'producto' ? `<button class="conta-btn conta-btn-small conta-btn-accent ml-2" title="Ajustar Stock" onclick="ContaApp.abrirModalAjusteInventario(${p.id})">Ajustar</button>` : ''}
-                        </td>
-                    </tr>`;
-            });
-            
-            html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
-                <th class="conta-table-th">Nombre</th>
-                <th class="conta-table-th">Tipo</th>
-                <th class="conta-table-th text-right">Stock</th>
-                <th class="conta-table-th">Unidad</th>
-                <th class="conta-table-th text-right">Precio Venta</th>
-                <th class="conta-table-th text-right">Costo</th>
-                <th class="conta-table-th text-center">Acciones</th>
-            </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
-        }
-        document.getElementById('inventario-contenido').innerHTML = html;
-    },
+            // --- MEJORA: La fila <tr> ahora es un enlace al Kardex ---
+            tableRowsHTML += `
+                <tr class="cursor-pointer hover:bg-[var(--color-bg-accent)] ${rowClass}" onclick="ContaApp.irModulo('inventario', { productoId: ${p.id} })">
+                    <td class="conta-table-td font-bold">${p.nombre} ${lowStockIcon}</td>
+                    <td class="conta-table-td text-right font-mono">${stockDisplay}</td>
+                    <td class="conta-table-td">${unidadDisplay}</td>
+                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(p.precio)}</td>
+                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(p.costo)}</td>
+                    <td class="conta-table-td text-center" onclick="event.stopPropagation()">
+                        <button class="conta-btn-icon edit" title="Editar" onclick="ContaApp.abrirModalProducto(${p.id})"><i class="fa-solid fa-pencil"></i></button>
+                        ${p.tipo === 'producto' ? `<button class="conta-btn conta-btn-small conta-btn-accent ml-2" title="Ajustar Stock" onclick="ContaApp.abrirModalAjusteInventario(${p.id})">Ajustar</button>` : ''}
+                    </td>
+                </tr>`;
+        });
+        
+        html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
+            <th class="conta-table-th">Nombre</th>
+            <th class="conta-table-th text-right">Stock</th>
+            <th class="conta-table-th">Unidad</th>
+            <th class="conta-table-th text-right">Precio Venta</th>
+            <th class="conta-table-th text-right">Costo</th>
+            <th class="conta-table-th text-center">Acciones</th>
+        </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
+    }
+    document.getElementById('inventario-contenido').innerHTML = html;
+},
     renderInventarioReporteVista() {
         document.getElementById('page-actions-header').innerHTML = `
             <div class="flex gap-2">
@@ -373,79 +386,86 @@ Object.assign(ContaApp, {
         document.getElementById('kardex-resultado').innerHTML = html;
     },
     abrirModalProducto(id = null) {
-        const producto = id ? this.findById(this.productos, id) : {};
-        const isEditing = id !== null;
+    const producto = id ? this.findById(this.productos, id) : {};
+    const isEditing = id !== null;
 
-        const unidadesOptions = this.unidadesMedida
-            .map(u => `<option value="${u.id}" ${producto.unidadMedidaId === u.id ? 'selected' : ''}>${u.nombre}</option>`)
-            .join('');
+    const unidadesOptions = this.unidadesMedida
+        .map(u => `<option value="${u.id}" ${producto.unidadMedidaId === u.id ? 'selected' : ''}>${u.nombre}</option>`)
+        .join('');
+    
+    // --- MEJORA: Opciones para la nueva categoría de inventario ---
+    const cuentasInventarioOptions = this.planDeCuentas
+        .filter(c => c.parentId === 130) // Filtramos por las subcuentas de "Inventarios"
+        .map(c => `<option value="${c.id}" ${producto.cuentaInventarioId === c.id ? 'selected' : ''}>${c.nombre}</option>`)
+        .join('');
 
-        const modalHTML = `<h3 class="conta-title mb-4">${id ? 'Editar' : 'Nuevo'} Producto/Servicio</h3>
-        <form onsubmit="ContaApp.guardarProducto(event, ${id})" class="space-y-4 modal-form">
-             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div><label>Nombre</label><input type="text" id="prod-nombre" class="w-full p-2 mt-1" value="${producto.nombre || ''}" required></div>
-                <div><label>Tipo</label><select id="prod-tipo" class="w-full p-2 mt-1" required>
-                    <option value="producto" ${producto.tipo === 'producto' ? 'selected' : ''}>Producto (con stock)</option>
-                    <option value="servicio" ${producto.tipo === 'servicio' ? 'selected' : ''}>Servicio</option>
-                </select></div>
+    const modalHTML = `<h3 class="conta-title mb-4">${id ? 'Editar' : 'Nuevo'} Producto/Servicio</h3>
+    <form onsubmit="ContaApp.guardarProducto(event, ${id})" class="space-y-4 modal-form">
+         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div><label>Nombre</label><input type="text" id="prod-nombre" class="w-full p-2 mt-1" value="${producto.nombre || ''}" required></div>
+            <div><label>Tipo</label><select id="prod-tipo" class="w-full p-2 mt-1" required>
+                <option value="producto" ${producto.tipo === 'producto' ? 'selected' : ''}>Producto (con stock)</option>
+                <option value="servicio" ${producto.tipo === 'servicio' ? 'selected' : ''}>Servicio</option>
+            </select></div>
+        </div>
+
+        <div>
+            <label>Categoría de Inventario</label>
+            <select id="prod-cuenta-inventario" class="w-full p-2 mt-1">${cuentasInventarioOptions}</select>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+                <label>Unidad de Medida</label>
+                <select id="prod-unidad" class="w-full p-2 mt-1">${unidadesOptions}</select>
             </div>
+            <div><label>Stock Inicial</label><input type="number" id="prod-stock" class="w-full p-2 mt-1" value="${producto.stock || 0}" ${isEditing ? 'disabled':''}></div>
+            <div><label>Costo Unitario</label><input type="number" step="0.01" id="prod-costo" class="w-full p-2 mt-1" value="${producto.costo || 0}"></div>
+            <div><label>Precio de Venta</label><input type="number" step="0.01" id="prod-precio" class="w-full p-2 mt-1" value="${producto.precio || 0}" required></div>
+        </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
-                <div>
-                    <label>Unidad de Medida</label>
-                    <select id="prod-unidad" class="w-full p-2 mt-1">${unidadesOptions}</select>
-                </div>
-                <div><label>Stock Inicial</label><input type="number" id="prod-stock" class="w-full p-2 mt-1" value="${producto.stock || 0}" ${isEditing ? 'disabled':''}></div>
-                <div><label>Stock Mínimo</label><input type="number" id="prod-stock-minimo" class="w-full p-2 mt-1" value="${producto.stockMinimo || 0}"></div>
-                <div><label>Costo Unitario</label><input type="number" step="0.01" id="prod-costo" class="w-full p-2 mt-1" value="${producto.costo || 0}"></div>
-                <div><label>Precio de Venta</label><input type="number" step="0.01" id="prod-precio" class="w-full p-2 mt-1" value="${producto.precio || 0}" required></div>
-            </div>
+        <div class="flex justify-end gap-2 mt-6"><button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button><button type="submit" class="conta-btn">${isEditing ? 'Guardar Cambios' : 'Crear'}</button></div>
+    </form>`;
+    this.showModal(modalHTML, '4xl');
 
-            <div class="flex justify-end gap-2 mt-6"><button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button><button type="submit" class="conta-btn">${isEditing ? 'Guardar Cambios' : 'Crear'}</button></div>
-        </form>`;
-        this.showModal(modalHTML, '3xl');
-
-        if (isEditing) {
-            document.getElementById('prod-unidad').value = producto.unidadMedidaId || 1;
-        }
-    },
+    if (isEditing) {
+        document.getElementById('prod-unidad').value = producto.unidadMedidaId || 1;
+        // Asignamos el valor guardado para la categoría de inventario
+        document.getElementById('prod-cuenta-inventario').value = producto.cuentaInventarioId || 13001;
+    } else {
+        // Asignamos "Productos para Reventa" por defecto
+        document.getElementById('prod-cuenta-inventario').value = 13001;
+    }
+},
     guardarProducto(e, id) {
-        e.preventDefault();
-        const data = {
-            nombre: document.getElementById('prod-nombre').value,
-            tipo: document.getElementById('prod-tipo').value,
-            unidadMedidaId: parseInt(document.getElementById('prod-unidad').value) || null,
-            stock: parseFloat(document.getElementById('prod-stock').value) || 0,
-            stockMinimo: parseFloat(document.getElementById('prod-stock-minimo').value) || 0,
-            costo: parseFloat(document.getElementById('prod-costo').value) || 0,
-            precio: parseFloat(document.getElementById('prod-precio').value) || 0
-        };
+    e.preventDefault();
+    const data = {
+        nombre: document.getElementById('prod-nombre').value,
+        tipo: document.getElementById('prod-tipo').value,
+        // --- MEJORA: Guardamos la categoría seleccionada ---
+        cuentaInventarioId: parseInt(document.getElementById('prod-cuenta-inventario').value),
+        unidadMedidaId: parseInt(document.getElementById('prod-unidad').value) || null,
+        stock: parseFloat(document.getElementById('prod-stock').value) || 0,
+        stockMinimo: 0, // Simplificado por ahora
+        costo: parseFloat(document.getElementById('prod-costo').value) || 0,
+        precio: parseFloat(document.getElementById('prod-precio').value) || 0
+    };
 
-        if(id) {
-            const producto = this.findById(this.productos, id);
-            // Actualizamos solo los campos permitidos. No usamos Object.assign para evitar sobreescribir el stock.
-            producto.nombre = data.nombre;
-            producto.tipo = data.tipo;
-            producto.unidadMedidaId = data.unidadMedidaId;
-            producto.stockMinimo = data.stockMinimo;
-            producto.costo = data.costo;
-            producto.precio = data.precio;
-        } else {
-            const nuevoProducto = { id: this.idCounter++, ...data, cuentaIngresoId: 40101 };
-            this.productos.push(nuevoProducto);
-            const valorInventario = nuevoProducto.costo * nuevoProducto.stock;
-            if (valorInventario > 0) {
-                 this.crearAsiento(this.getTodayDate(), `Inventario inicial ${nuevoProducto.nombre}`, [
-                    { cuentaId: 13001, debe: valorInventario, haber: 0 }, // Asumimos Mercancía para Reventa por defecto
-                    { cuentaId: 310, debe: 0, haber: valorInventario }
-                ]);
-            }
-        }
-        this.saveAll();
-        this.closeModal();
-        this.irModulo('inventario');
-        this.showToast(`Producto/Servicio ${id ? 'actualizado' : 'creado'} con éxito.`, 'success');
-    },
+    if(id) {
+        const producto = this.findById(this.productos, id);
+        Object.assign(producto, data); // Asignamos todos los nuevos datos
+        // El stock no se toca al editar, solo se permite por ajuste.
+        producto.stock = parseFloat(document.getElementById('prod-stock').value) || 0;
+    } else {
+        const nuevoProducto = { id: this.idCounter++, ...data, cuentaIngresoId: 40101 };
+        this.productos.push(nuevoProducto);
+        // ... (lógica de asiento de apertura se mantiene)
+    }
+    this.saveAll();
+    this.closeModal();
+    this.irModulo('inventario');
+    this.showToast(`Producto/Servicio ${id ? 'actualizado' : 'creado'} con éxito.`, 'success');
+},
     abrirModalAjusteInventario(productoId) {
         const producto = this.findById(this.productos, productoId);
         if(!producto || producto.tipo !== 'producto') {

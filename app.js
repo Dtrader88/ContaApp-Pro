@@ -43,25 +43,44 @@ const ContaApp = {
             // Inicialización de la aplicación
     // Inicialización de la aplicación
         async init(repository, userProfile) { 
-        this.repository = repository;
-        this.currentUser = userProfile;
+    this.repository = repository;
+    this.currentUser = userProfile;
 
-        this.initTheme();
-        this.initGlobalSearch();
+    this.initTheme();
+    this.initGlobalSearch();
 
-        const dataString = await this.repository.loadAll();
+    const dataString = await this.repository.loadAll();
 
-        this.loadAll(dataString); 
+    this.loadAll(dataString); 
 
-        // Condición mejorada: mostrar asistente si no hay datos O si los datos están vacíos
-        if (!dataString || Object.keys(JSON.parse(dataString)).length === 0) {
-            this.abrirAsistenteApertura();
-        } else {
-            this.actualizarSaldosGlobales();
-            this.actualizarPerfilEmpresa();
-            this.irModulo('dashboard');
+    // --- INICIO DE LA CORRECCIÓN ---
+    // Esta sección asignará una categoría por defecto a los productos que no la tengan.
+    let seHicieronCambios = false;
+    this.productos.forEach(producto => {
+        // Si un producto no tiene categoría de inventario...
+        if (!producto.cuentaInventarioId && producto.tipo === 'producto') {
+            // ...le asignamos "Productos para Reventa" (ID 13001) por defecto.
+            producto.cuentaInventarioId = 13001; 
+            seHicieronCambios = true;
         }
-    },
+    });
+
+    // Si actualizamos algún producto, guardamos los cambios para que sea permanente.
+    if (seHicieronCambios) {
+        console.log("Actualizando productos antiguos con categoría de inventario por defecto...");
+        this.saveAll();
+    }
+    // --- FIN DE LA CORRECCIÓN ---
+
+    // El resto de la función continúa igual.
+    if (!dataString || Object.keys(JSON.parse(dataString)).length === 0) {
+        this.abrirAsistenteApertura();
+    } else {
+        this.actualizarSaldosGlobales();
+        this.actualizarPerfilEmpresa();
+        this.irModulo('dashboard');
+    }
+},
 
       
     // === ASISTENTE DE APERTURA MEJORADO ===
