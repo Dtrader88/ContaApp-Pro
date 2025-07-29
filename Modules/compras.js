@@ -3,66 +3,66 @@
 Object.assign(ContaApp, {
 
     renderCompras(params = {}) {
-        document.getElementById('page-actions-header').innerHTML = `<button class="conta-btn" onclick="ContaApp.abrirModalNuevaCompra()">+ Nueva Compra</button>`;
+    document.getElementById('page-actions-header').innerHTML = `<button class="conta-btn" onclick="ContaApp.abrirModalNuevaCompra()">+ Nueva Compra</button>`;
 
-        const compras = this.transacciones.filter(t => t.tipo === 'compra_inventario');
+    const compras = this.transacciones.filter(t => t.tipo === 'compra_inventario');
+    
+    let html;
+    if (compras.length === 0) {
+        html = this.generarEstadoVacioHTML(
+            'fa-shopping-basket', 'Aún no tienes compras de inventario',
+            'Usa este módulo para registrar la compra de mercancía para reventa o materias primas.',
+            '+ Registrar Primera Compra', "ContaApp.abrirModalNuevaCompra()"
+        );
+    } else {
+        html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
+            <thead>
+                <tr>
+                    <th class="conta-table-th">Fecha</th>
+                    <th class="conta-table-th">Referencia #</th>
+                    <th class="conta-table-th">Proveedor</th>
+                    <th class="conta-table-th">Descripción</th>
+                    <th class="conta-table-th text-right">Total</th>
+                    <th class="conta-table-th">Estado</th>
+                    <th class="conta-table-th text-center">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>`;
         
-        let html;
-        if (compras.length === 0) {
-            html = this.generarEstadoVacioHTML(
-                'fa-shopping-basket', 'Aún no tienes compras de inventario',
-                'Usa este módulo para registrar la compra de mercancía para reventa o materias primas.',
-                '+ Registrar Primera Compra', "ContaApp.abrirModalNuevaCompra()"
-            );
-        } else {
-            html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
-                <thead>
-                    <tr>
-                        <th class="conta-table-th">Fecha</th>
-                        <th class="conta-table-th">Referencia #</th>
-                        <th class="conta-table-th">Proveedor</th>
-                        <th class="conta-table-th">Descripción</th>
-                        <th class="conta-table-th text-right">Total</th>
-                        <th class="conta-table-th">Estado</th>
-                        <th class="conta-table-th text-center">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>`;
+        compras.sort((a,b) => new Date(b.fecha) - new Date(a.fecha)).forEach(compra => {
+            const proveedor = this.findById(this.contactos, compra.contactoId);
+            const isAnulada = compra.estado === 'Anulada';
             
-            compras.sort((a,b) => new Date(b.fecha) - new Date(a.fecha)).forEach(compra => {
-                const proveedor = this.findById(this.contactos, compra.contactoId);
-                const isAnulada = compra.estado === 'Anulada';
-                
-                const rowClass = isAnulada ? 'opacity-50' : '';
-                const estadoTag = isAnulada ? `<span class="tag tag-anulada">Anulada</span>` : `<span class="tag tag-success">Completada</span>`;
+            const rowClass = isAnulada ? 'opacity-50' : '';
+            const estadoTag = isAnulada ? `<span class="tag tag-anulada">Anulada</span>` : `<span class="tag tag-success">Completada</span>`;
 
-                let accionesHTML = `
-                    <button class="conta-btn-icon" title="Ver Detalle" onclick="ContaApp.abrirModalDetalleCompra(${compra.id})"><i class="fa-solid fa-eye"></i></button>
-                `;
-                if (compra.comprobanteDataUrl) {
-                    accionesHTML += `<button class="conta-btn-icon" title="Ver Comprobante Adjunto" onclick="ContaApp.abrirVistaPreviaComprobanteCompra(${compra.id})"><i class="fa-solid fa-paperclip"></i></button>`;
-                }
-                if (!isAnulada) {
-                    accionesHTML += `<button class="conta-btn-icon delete" title="Anular Compra" onclick="ContaApp.anularCompra(${compra.id})"><i class="fa-solid fa-ban"></i></button>`;
-                }
+            let accionesHTML = `
+                <button class="conta-btn-icon" title="Ver Detalle" onclick="event.stopPropagation(); ContaApp.abrirModalDetalleCompra(${compra.id})"><i class="fa-solid fa-eye"></i></button>
+            `;
+            if (compra.comprobanteDataUrl) {
+                accionesHTML += `<button class="conta-btn-icon" title="Ver Comprobante Adjunto" onclick="event.stopPropagation(); ContaApp.abrirVistaPreviaComprobanteCompra(${compra.id})"><i class="fa-solid fa-paperclip"></i></button>`;
+            }
+            if (!isAnulada) {
+                accionesHTML += `<button class="conta-btn-icon delete" title="Anular Compra" onclick="event.stopPropagation(); ContaApp.anularCompra(${compra.id})"><i class="fa-solid fa-ban"></i></button>`;
+            }
 
-                html += `
-                    <tr class="${rowClass}">
-                        <td class="conta-table-td">${compra.fecha}</td>
-                        <td class="conta-table-td font-mono">${compra.referencia || 'N/A'}</td>
-                        <td class="conta-table-td font-bold">${proveedor?.nombre || 'N/A'}</td>
-                        <td class="conta-table-td">${compra.descripcion}</td>
-                        <td class="conta-table-td text-right font-mono">${this.formatCurrency(compra.total)}</td>
-                        <td class="conta-table-td">${estadoTag}</td>
-                        <td class="conta-table-td text-center">${accionesHTML}</td>
-                    </tr>
-                `;
-            });
-            html += `</tbody></table></div>`;
-        }
-        
-        document.getElementById('compras').innerHTML = html;
-    },
+            html += `
+                <tr class="cursor-pointer ${rowClass}" onclick="ContaApp.abrirModalDetalleCompra(${compra.id})">
+                    <td class="conta-table-td">${compra.fecha}</td>
+                    <td class="conta-table-td font-mono">${compra.referencia || 'N/A'}</td>
+                    <td class="conta-table-td font-bold">${proveedor?.nombre || 'N/A'}</td>
+                    <td class="conta-table-td">${compra.descripcion}</td>
+                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(compra.total)}</td>
+                    <td class="conta-table-td">${estadoTag}</td>
+                    <td class="conta-table-td text-center">${accionesHTML}</td>
+                </tr>
+            `;
+        });
+        html += `</tbody></table></div>`;
+    }
+    
+    document.getElementById('compras').innerHTML = html;
+},
 
     abrirModalNuevaCompra() {
         const modalHTML = `

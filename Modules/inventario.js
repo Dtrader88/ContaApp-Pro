@@ -144,139 +144,141 @@ Object.assign(ContaApp, {
             </div>`;
         document.getElementById('inventario-contenido').innerHTML = html; // <-- CORRECCIÓN AQUÍ
     },
-    enderInventario_Kardex(productoId) {
-        const producto = this.findById(this.productos, productoId);
-        if (!producto) {
-            this.showToast('Producto no encontrado.', 'error');
-            this.irModulo('inventario');
-            return;
-        }
+    renderInventario_Kardex(productoId) {
+    const producto = this.findById(this.productos, productoId);
+    if (!producto) {
+        this.showToast('Producto no encontrado.', 'error');
+        this.irModulo('inventario');
+        return;
+    }
 
-        // Cambiamos el título y acciones de la página
-        document.getElementById('page-title-header').innerText = `Kardex de: ${producto.nombre}`;
-        document.getElementById('page-actions-header').innerHTML = `
-            <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarReporteEstilizadoPDF('Kardex - ${producto.nombre}', 'reporte-kardex-area')">Imprimir PDF</button>
+    // Cambiamos el título y acciones de la página
+    document.getElementById('page-title-header').innerText = `Kardex de: ${producto.nombre}`;
+    document.getElementById('page-actions-header').innerHTML = `
+        <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarReporteEstilizadoPDF('Kardex - ${producto.nombre}', 'reporte-kardex-area')">Imprimir PDF</button>
+    `;
+
+    // --- INICIO DE LA LÓGICA COMPLETA DEL KARDEX ---
+    // 1. Recolectar todos los movimientos relevantes
+    let movimientos = [];
+
+    // Compras de este producto
+    this.transacciones.filter(t => t.tipo === 'compra_inventario').forEach(compra => {
+        (compra.items || []).forEach(item => {
+            if (item.productoId === productoId) {
+                movimientos.push({
+                    fecha: compra.fecha,
+                    detalle: `Compra s/f #${compra.referencia || compra.id}`,
+                    entrada: item.cantidad,
+                    salida: 0,
+                    costoUnitario: item.costoUnitario
+                });
+            }
+        });
+    });
+    
+    // Ventas de este producto
+    this.transacciones.filter(t => t.tipo === 'venta' && t.estado !== 'Anulada').forEach(venta => {
+        (venta.items || []).forEach(item => {
+            if (item.itemType === 'producto' && item.productoId === productoId) {
+                movimientos.push({
+                    fecha: venta.fecha,
+                    detalle: `Venta s/f #${venta.numeroFactura || venta.id}`,
+                    entrada: 0,
+                    salida: item.cantidad,
+                    costoUnitario: item.costo // Costo al momento de la venta
+                });
+            }
+        });
+    });
+    
+    // Ajustes de inventario
+    this.transacciones.filter(t => t.tipo === 'ajuste_inventario' && t.productoId === productoId).forEach(ajuste => {
+         movimientos.push({
+            fecha: ajuste.fecha,
+            detalle: `Ajuste: ${ajuste.descripcion}`,
+            entrada: ajuste.tipoAjuste === 'entrada' ? ajuste.cantidad : 0,
+            salida: ajuste.tipoAjuste === 'salida' ? ajuste.cantidad : 0,
+            costoUnitario: ajuste.costo
+        });
+    });
+
+    // Órdenes de Producción (Consumo como materia prima)
+    (this.ordenesProduccion || []).filter(op => op.estado === 'Completada').forEach(op => {
+        (op.componentes || []).forEach(comp => {
+            if (comp.productoId === productoId) {
+                movimientos.push({
+                    fecha: op.fecha,
+                    detalle: `Consumo en OP #${op.id}: ${op.descripcion}`,
+                    entrada: 0,
+                    salida: comp.cantidad,
+                    costoUnitario: producto.costo // Usamos el costo promedio actual para el consumo
+                });
+            }
+        });
+    });
+
+    // Órdenes de Producción (Creación como producto terminado)
+    (this.ordenesProduccion || []).filter(op => op.estado === 'Completada' && op.productoTerminadoId === productoId).forEach(op => {
+        const costoUnitarioProduccion = op.cantidadProducida > 0 ? op.costoTotal / op.cantidadProducida : 0;
+        movimientos.push({
+            fecha: op.fecha,
+            detalle: `Producción Terminada OP #${op.id}: ${op.descripcion}`,
+            entrada: op.cantidadProducida,
+            salida: 0,
+            costoUnitario: costoUnitarioProduccion
+        });
+    });
+
+    // 2. Ordenar todos los movimientos por fecha
+    movimientos.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+    // 3. Construir la tabla del Kardex
+    let saldoCorriente = 0;
+    let valorCorriente = 0;
+    let costoPromedio = 0;
+
+    let filasHTML = movimientos.map(mov => {
+        const totalEntrada = mov.entrada * mov.costoUnitario;
+        const totalSalida = mov.salida * costoPromedio; // Salidas se valoran al costo promedio actual
+        
+        valorCorriente += totalEntrada - totalSalida;
+        saldoCorriente += mov.entrada - mov.salida;
+        costoPromedio = saldoCorriente > 0 ? valorCorriente / saldoCorriente : 0;
+        
+        return `
+            <tr>
+                <td class="conta-table-td">${mov.fecha}</td>
+                <td class="conta-table-td">${mov.detalle}</td>
+                <td class="conta-table-td text-right font-mono">${mov.entrada || ''}</td>
+                <td class="conta-table-td text-right font-mono">${mov.salida || ''}</td>
+                <td class="conta-table-td text-right font-mono font-bold">${saldoCorriente}</td>
+                <td class="conta-table-td text-right font-mono">${this.formatCurrency(mov.costoUnitario)}</td>
+                <td class="conta-table-td text-right font-mono">${this.formatCurrency(valorCorriente)}</td>
+            </tr>
         `;
+    }).join('');
 
-        // --- INICIO DE LA LÓGICA COMPLETA DEL KARDEX ---
-        // 1. Recolectar todos los movimientos relevantes
-        let movimientos = [];
+    const html = `
+        <div class="conta-card overflow-auto" id="reporte-kardex-area">
+            <table class="min-w-full text-sm conta-table-zebra">
+                <thead>
+                    <tr>
+                        <th class="conta-table-th">Fecha</th>
+                        <th class="conta-table-th">Detalle</th>
+                        <th class="conta-table-th text-right">Entrada</th>
+                        <th class="conta-table-th text-right">Salida</th>
+                        <th class="conta-table-th text-right">Saldo (Stock)</th>
+                        <th class="conta-table-th text-right">Costo Unitario</th>
+                        <th class="conta-table-th text-right">Valor Total</th>
+                    </tr>
+                </thead>
+                <tbody>${filasHTML}</tbody>
+            </table>
+        </div>`;
 
-        // Compras de este producto
-        this.transacciones.filter(t => t.tipo === 'compra_inventario').forEach(compra => {
-            compra.items.forEach(item => {
-                if (item.productoId === productoId) {
-                    movimientos.push({
-                        fecha: compra.fecha,
-                        detalle: `Compra s/f #${compra.referencia || compra.id}`,
-                        entrada: item.cantidad,
-                        salida: 0,
-                        costoUnitario: item.costoUnitario
-                    });
-                }
-            });
-        });
-        
-        // Ventas de este producto
-        this.transacciones.filter(t => t.tipo === 'venta' && t.estado !== 'Anulada').forEach(venta => {
-            venta.items.forEach(item => {
-                if (item.itemType === 'producto' && item.productoId === productoId) {
-                    movimientos.push({
-                        fecha: venta.fecha,
-                        detalle: `Venta s/f #${venta.numeroFactura || venta.id}`,
-                        entrada: 0,
-                        salida: item.cantidad,
-                        costoUnitario: item.costo // Costo al momento de la venta
-                    });
-                }
-            });
-        });
-        
-        // Ajustes de inventario
-        this.transacciones.filter(t => t.tipo === 'ajuste_inventario' && t.productoId === productoId).forEach(ajuste => {
-             movimientos.push({
-                fecha: ajuste.fecha,
-                detalle: `Ajuste: ${ajuste.descripcion}`,
-                entrada: ajuste.tipoAjuste === 'entrada' ? ajuste.cantidad : 0,
-                salida: ajuste.tipoAjuste === 'salida' ? ajuste.cantidad : 0,
-                costoUnitario: ajuste.costo
-            });
-        });
-
-        // Órdenes de Producción (Consumo como materia prima)
-        (this.ordenesProduccion || []).filter(op => op.estado === 'Completada').forEach(op => {
-            op.componentes.forEach(comp => {
-                if (comp.productoId === productoId) {
-                    movimientos.push({
-                        fecha: op.fecha,
-                        detalle: `Consumo en OP #${op.id}: ${op.descripcion}`,
-                        entrada: 0,
-                        salida: comp.cantidad,
-                        costoUnitario: producto.costo // Usamos el costo promedio actual para el consumo
-                    });
-                }
-            });
-        });
-
-        // Órdenes de Producción (Creación como producto terminado)
-        (this.ordenesProduccion || []).filter(op => op.estado === 'Completada' && op.productoTerminadoId === productoId).forEach(op => {
-            const costoUnitarioProduccion = op.costoTotal / op.cantidadProducida;
-            movimientos.push({
-                fecha: op.fecha,
-                detalle: `Producción Terminada OP #${op.id}: ${op.descripcion}`,
-                entrada: op.cantidadProducida,
-                salida: 0,
-                costoUnitario: costoUnitarioProduccion
-            });
-        });
-
-        // 2. Ordenar todos los movimientos por fecha
-        movimientos.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
-
-        // 3. Construir la tabla del Kardex
-        let saldoCorriente = 0;
-        let valorCorriente = 0;
-
-        let filasHTML = movimientos.map(mov => {
-            const totalEntrada = mov.entrada * mov.costoUnitario;
-            const totalSalida = mov.salida * mov.costoUnitario;
-            saldoCorriente += mov.entrada - mov.salida;
-            valorCorriente += totalEntrada - totalSalida;
-            
-            return `
-                <tr>
-                    <td class="conta-table-td">${mov.fecha}</td>
-                    <td class="conta-table-td">${mov.detalle}</td>
-                    <td class="conta-table-td text-right font-mono">${mov.entrada || ''}</td>
-                    <td class="conta-table-td text-right font-mono">${mov.salida || ''}</td>
-                    <td class="conta-table-td text-right font-mono font-bold">${saldoCorriente}</td>
-                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(mov.costoUnitario)}</td>
-                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(valorCorriente)}</td>
-                </tr>
-            `;
-        }).join('');
-
-        const html = `
-            <div class="conta-card overflow-auto" id="reporte-kardex-area">
-                <table class="min-w-full text-sm conta-table-zebra">
-                    <thead>
-                        <tr>
-                            <th class="conta-table-th">Fecha</th>
-                            <th class="conta-table-th">Detalle</th>
-                            <th class="conta-table-th text-right">Entrada</th>
-                            <th class="conta-table-th text-right">Salida</th>
-                            <th class="conta-table-th text-right">Saldo (Stock)</th>
-                            <th class="conta-table-th text-right">Costo Unitario</th>
-                            <th class="conta-table-th text-right">Valor Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>${filasHTML}</tbody>
-                </table>
-            </div>`;
-
-        document.getElementById('inventario').innerHTML = html;
-        // --- FIN DE LA LÓGICA COMPLETA DEL KARDEX ---
-    },
+    document.getElementById('inventario').innerHTML = html;
+},
 
     generarReporteKardex() {
         const productoId = parseInt(document.getElementById('kardex-producto').value);

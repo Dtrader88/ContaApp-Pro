@@ -271,7 +271,6 @@ tfoot tr:hover { background-color: var(--color-bg-accent); }
     transform: scale(1.2);
 }
 .widget-full-height {
-    height: 320px; /* Altura fija para todos los widgets */
     display: flex;
     flex-direction: column;
 }

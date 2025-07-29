@@ -1,112 +1,127 @@
 Object.assign(ContaApp, {
 renderDashboard() {
-        // --- INICIO DE LA CORRECCIÓN DEFINITIVA ---
-        // Asegurarse de que las propiedades de personalización existan ANTES de usarlas.
-        if (!this.empresa.dashboardWidgets) {
-            this.empresa.dashboardWidgets = ['ingresos', 'gastos', 'resultadoNeto', 'bancos'];
-        }
-        if (!this.empresa.dashboardContentWidgets || !this.empresa.dashboardContentWidgets.order) {
-            this.empresa.dashboardContentWidgets = {
-                order: ['financialPerformance', 'activity-feed', 'topExpenses', 'quick-actions'],
-                settings: {
-                    financialPerformance: { timeRange: 'last6months', visible: true },
-                    'activity-feed': { visible: true },
-                    topExpenses: { timeRange: 'currentMonth', visible: true },
-                    'quick-actions': { visible: true }
-                }
-            };
-        }
-        // --- FIN DE LA CORRECCIÓN DEFINITIVA ---
-
-        const { ingresosPeriodo, gastosPeriodo } = this.getDashboardKpiData();
-        const saldosAcumulados = this.getSaldosPorPeriodo();
-        const bancosSaldo = saldosAcumulados.find(c => c.codigo === '110')?.saldo || 0;
-        const cxcSaldo = saldosAcumulados.find(c => c.codigo === '120')?.saldo || 0;
-        const cxpSaldo = saldosAcumulados.find(c => c.codigo === '210')?.saldo || 0;
-        const inventarioSaldo = saldosAcumulados.find(c => c.codigo === '130')?.saldo || 0;
-
-        const currentLayout = this.empresa.dashboardLayout || 'grid';
-        document.getElementById('page-actions-header').innerHTML = `
-            <div class="flex items-center gap-4">
-                <div class="flex items-center gap-1">
-                    <button class="conta-btn-icon layout-toggle ${currentLayout === 'grid' ? 'active' : ''}" title="Vista de Cuadrícula" onclick="ContaApp.toggleDashboardLayout('grid')"><i class="fa-solid fa-grip"></i></button>
-                    <button class="conta-btn-icon layout-toggle ${currentLayout === 'list' ? 'active' : ''}" title="Vista de Lista" onclick="ContaApp.toggleDashboardLayout('list')"><i class="fa-solid fa-bars"></i></button>
-                </div>
-                <button class="conta-btn conta-btn-small conta-btn-accent" onclick="ContaApp.abrirModalPersonalizarDashboard()"><i class="fa-solid fa-wand-magic-sparkles me-2"></i> Personalizar</button>
-            </div>`;
-        
-        const kpiWidgetDefinitions = {
-            ingresos: { title: 'Ingresos (Últ. 30 días)', value: () => ingresosPeriodo, colorClass: 'conta-text-success', link: "ContaApp.irModulo('ventas')" },
-            gastos: { title: 'Gastos (Últ. 30 días)', value: () => gastosPeriodo, colorClass: 'conta-text-danger', link: "ContaApp.irModulo('gastos')" },
-            resultadoNeto: { title: 'Resultado Neto (Últ. 30 días)', value: () => ingresosPeriodo - gastosPeriodo, colorClass: 'dinamica', link: "ContaApp.irModulo('reportes', { submodulo: 'pnl' })" },
-            bancos: { title: 'Saldo en Bancos (Actual)', value: () => bancosSaldo, colorClass: 'conta-text-primary', link: "ContaApp.irModulo('bancos')" },
-            cxc: { title: 'Cuentas por Cobrar (Actual)', value: () => cxcSaldo, colorClass: 'conta-text-accent', link: "ContaApp.irModulo('cxc')" },
-            cxp: { title: 'Cuentas por Pagar (Actual)', value: () => cxpSaldo, colorClass: 'conta-text-danger', link: "ContaApp.irModulo('cxp')" },
-            inventario: { title: 'Valor de Inventario (Actual)', value: () => inventarioSaldo, colorClass: 'conta-text-primary', link: "ContaApp.irModulo('inventario')" }
-        };
-
-        const kpiWidgetsHTML = this.empresa.dashboardWidgets.map(widgetId => {
-            const widget = kpiWidgetDefinitions[widgetId];
-            if (!widget) return '';
-            const valor = widget.value();
-            let colorClass = widget.colorClass;
-            if (colorClass === 'dinamica') colorClass = valor >= 0 ? 'conta-text-success' : 'conta-text-danger';
-            return `<a onclick="${widget.link}" class="conta-card conta-card-clickable kpi-dashboard-card w-64">
-                        <div class="flex justify-between items-start"><span class="text-xs text-[var(--color-text-secondary)]">${widget.title}</span><div class="h-8 w-20"><canvas id="sparkline-${widgetId}"></canvas></div></div>
-                        <p class="font-bold text-2xl ${colorClass} mt-1">${this.formatCurrency(valor)}</p>
-                    </a>`;
-        }).join('');
-
-        const timeRangeSelectorHTML = (chartId, timeRange) => `
-            <select class="conta-input conta-input-small" onchange="ContaApp.updateChartTimeRange('${chartId}', this.value)">
-                <option value="currentMonth" ${timeRange === 'currentMonth' ? 'selected' : ''}>Este Mes</option>
-                <option value="last3months" ${timeRange === 'last3months' ? 'selected' : ''}>Últimos 3 Meses</option>
-                <option value="last6months" ${timeRange === 'last6months' ? 'selected' : ''}>Últimos 6 Meses</option>
-                <option value="yearToDate" ${timeRange === 'yearToDate' ? 'selected' : ''}>Año Actual</option>
-            </select>
-        `;
-
-        const contentWidgetDefinitions = {
-            financialPerformance: (settings) => `<div class="flex justify-between items-center mb-2"><h3 class="conta-subtitle !mb-0 !border-0">Ingresos vs. Gastos</h3>${timeRangeSelectorHTML('financialPerformance', settings.timeRange)}</div><div id="financial-performance-container" class="relative flex-grow"><canvas id="financialPerformanceChart"></canvas></div>`,
-            'activity-feed': () => `<h3 class="conta-subtitle">Actividad Reciente</h3><div id="activity-feed-container" class="overflow-y-auto pr-2 flex-grow"></div>`,
-            topExpenses: (settings) => `<div class="flex justify-between items-center mb-2"><h3 class="conta-subtitle !mb-0 !border-0">Principales Gastos</h3>${timeRangeSelectorHTML('topExpenses', settings.timeRange)}</div><div id="top-expenses-container" class="relative flex-grow"><canvas id="top-expenses-chart"></canvas></div>`,
-            'quick-actions': () => `<h3 class="conta-subtitle !mb-4">Acciones Rápidas</h3>
-                <div class="grid grid-cols-2 gap-4 h-full content-center">
-                    <button onclick="ContaApp.abrirModalVenta()" class="quick-action-button"><i class="fa-solid fa-cart-plus fa-2x"></i><span class="text-sm font-semibold">Venta</span></button>
-                    <button onclick="ContaApp.abrirModalGasto()" class="quick-action-button"><i class="fa-solid fa-receipt fa-2x"></i><span class="text-sm font-semibold">Gasto</span></button>
-                    <button onclick="ContaApp.abrirModalRegistroPagoRapido()" class="quick-action-button"><i class="fa-solid fa-exchange-alt fa-2x"></i><span class="text-sm font-semibold">Transacción</span></button>
-                    <button onclick="ContaApp.abrirModalAsientoManual()" class="quick-action-button"><i class="fa-solid fa-book-medical fa-2x"></i><span class="text-sm font-semibold">Asiento</span></button>
-                </div>`
-        };
-
-        const contentWidgetsHTML = this.empresa.dashboardContentWidgets.order.map(widgetId => {
-            const settings = this.empresa.dashboardContentWidgets.settings[widgetId] || { visible: true };
-            if (!settings.visible) return '';
-            const widgetContent = contentWidgetDefinitions[widgetId] ? contentWidgetDefinitions[widgetId](settings) : '';
-            return `<div class="conta-card widget-full-height" data-widget-id="${widgetId}">${widgetContent}</div>`;
-        }).join('');
-        
-        const layoutClass = currentLayout === 'grid' ? 'lg:grid-cols-2' : 'lg:grid-cols-1';
-        const dashboardHTML = `<div class="flex flex-wrap justify-center gap-4 mb-4">${kpiWidgetsHTML}</div><div id="dashboard-grid" class="grid grid-cols-1 ${layoutClass} gap-6">${contentWidgetsHTML}</div>`;
-        
-        document.getElementById("dashboard").innerHTML = dashboardHTML;
-        
-        this.empresa.dashboardContentWidgets.order.forEach(widgetId => {
-            const settings = this.empresa.dashboardContentWidgets.settings[widgetId];
-            if (settings && settings.visible) {
-                if (widgetId === 'financialPerformance') {
-                    this.renderFinancialPerformanceChart(settings.timeRange);
-                } else if (widgetId === 'topExpenses') {
-                    this.renderTopExpensesChart(settings.timeRange);
-                } else if (widgetId === 'activity-feed') {
-                    this.renderActivityFeed();
-                }
+    if (!this.empresa.dashboardWidgets) {
+        this.empresa.dashboardWidgets = ['ingresos', 'gastos', 'resultadoNeto', 'bancos'];
+    }
+    if (!this.empresa.dashboardContentWidgets || !this.empresa.dashboardContentWidgets.order) {
+        this.empresa.dashboardContentWidgets = {
+            order: ['financialPerformance', 'activity-feed', 'topExpenses', 'quick-actions'],
+            settings: {
+                financialPerformance: { timeRange: 'last6months', visible: true },
+                'activity-feed': { visible: true },
+                topExpenses: { timeRange: 'currentMonth', visible: true },
+                'quick-actions': { visible: true }
             }
-        });
+        };
+    }
 
-        this.initDashboardDragAndDrop();
-        this.renderSparklines();
-    },
+    const { ingresosPeriodo, gastosPeriodo } = this.getDashboardKpiData();
+    const saldosAcumulados = this.getSaldosPorPeriodo();
+    const bancosSaldo = saldosAcumulados.find(c => c.codigo === '110')?.saldo || 0;
+    const cxcSaldo = saldosAcumulados.find(c => c.codigo === '120')?.saldo || 0;
+    const inventarioSaldo = saldosAcumulados.find(c => c.codigo === '130')?.saldo || 0;
+
+    // --- INICIO DE LA CORRECCIÓN DE SALDO CXP ---
+    // Calculamos el saldo de Cuentas por Pagar basándonos solo en las facturas pendientes.
+    const cxpSaldo = this.transacciones
+        .filter(t => (t.tipo === 'gasto' || t.tipo === 'compra_inventario') && (t.estado === 'Pendiente' || t.estado === 'Parcial'))
+        .reduce((sum, t) => sum + (t.total - (t.montoPagado || 0)), 0);
+    // --- FIN DE LA CORRECCIÓN DE SALDO CXP ---
+
+    const currentLayout = this.empresa.dashboardLayout || 'grid';
+    document.getElementById('page-actions-header').innerHTML = `
+        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-1">
+                <button class="conta-btn-icon layout-toggle ${currentLayout === 'grid' ? 'active' : ''}" title="Vista de Cuadrícula" onclick="ContaApp.toggleDashboardLayout('grid')"><i class="fa-solid fa-grip"></i></button>
+                <button class="conta-btn-icon layout-toggle ${currentLayout === 'list' ? 'active' : ''}" title="Vista de Lista" onclick="ContaApp.toggleDashboardLayout('list')"><i class="fa-solid fa-bars"></i></button>
+            </div>
+            <button class="conta-btn conta-btn-small conta-btn-accent" onclick="ContaApp.abrirModalPersonalizarDashboard()"><i class="fa-solid fa-wand-magic-sparkles me-2"></i> Personalizar</button>
+        </div>`;
+    
+    const kpiWidgetDefinitions = {
+        ingresos: { title: 'Ingresos (Últ. 30 días)', value: () => ingresosPeriodo, colorClass: 'conta-text-success', link: "ContaApp.irModulo('ventas')" },
+        gastos: { title: 'Gastos (Últ. 30 días)', value: () => gastosPeriodo, colorClass: 'conta-text-danger', link: "ContaApp.irModulo('gastos')" },
+        resultadoNeto: { title: 'Resultado Neto (Últ. 30 días)', value: () => ingresosPeriodo - gastosPeriodo, colorClass: 'dinamica', link: "ContaApp.irModulo('reportes', { submodulo: 'pnl' })" },
+        bancos: { title: 'Saldo en Bancos (Actual)', value: () => bancosSaldo, colorClass: 'conta-text-primary', link: "ContaApp.irModulo('bancos')" },
+        cxc: { title: 'Cuentas por Cobrar (Actual)', value: () => cxcSaldo, colorClass: 'conta-text-accent', link: "ContaApp.irModulo('cxc')" },
+        cxp: { title: 'Cuentas por Pagar (Actual)', value: () => cxpSaldo, colorClass: 'conta-text-danger', link: "ContaApp.irModulo('cxp')" },
+        inventario: { title: 'Valor de Inventario (Actual)', value: () => inventarioSaldo, colorClass: 'conta-text-primary', link: "ContaApp.irModulo('inventario')" }
+    };
+
+    const kpiWidgetsHTML = this.empresa.dashboardWidgets.map(widgetId => {
+        const widget = kpiWidgetDefinitions[widgetId];
+        if (!widget) return '';
+        const valor = widget.value();
+        let colorClass = widget.colorClass;
+        if (colorClass === 'dinamica') colorClass = valor >= 0 ? 'conta-text-success' : 'conta-text-danger';
+        return `<a onclick="${widget.link}" class="conta-card conta-card-clickable kpi-dashboard-card w-64">
+                    <div class="flex justify-between items-start"><span class="text-xs text-[var(--color-text-secondary)]">${widget.title}</span><div class="h-8 w-20"><canvas id="sparkline-${widgetId}"></canvas></div></div>
+                    <p class="font-bold text-2xl ${colorClass} mt-1">${this.formatCurrency(valor)}</p>
+                </a>`;
+    }).join('');
+
+    const timeRangeSelectorHTML = (chartId, timeRange) => `
+        <select class="conta-input conta-input-small" onchange="ContaApp.updateChartTimeRange('${chartId}', this.value)">
+            <option value="currentMonth" ${timeRange === 'currentMonth' ? 'selected' : ''}>Este Mes</option>
+            <option value="last3months" ${timeRange === 'last3months' ? 'selected' : ''}>Últimos 3 Meses</option>
+            <option value="last6months" ${timeRange === 'last6months' ? 'selected' : ''}>Últimos 6 Meses</option>
+            <option value="yearToDate" ${timeRange === 'yearToDate' ? 'selected' : ''}>Año Actual</option>
+        </select>
+    `;
+
+    const contentWidgetDefinitions = {
+        financialPerformance: (settings) => `<div class="flex justify-between items-center mb-2"><h3 class="conta-subtitle !mb-0 !border-0">Ingresos vs. Gastos</h3>${timeRangeSelectorHTML('financialPerformance', settings.timeRange)}</div><div id="financial-performance-container" class="relative flex-grow"><canvas id="financialPerformanceChart"></canvas></div>`,
+        'activity-feed': () => `<h3 class="conta-subtitle">Actividad Reciente</h3><div id="activity-feed-container" class="overflow-y-auto pr-2 flex-grow"></div>`,
+        topExpenses: (settings) => `<div class="flex justify-between items-center mb-2"><h3 class="conta-subtitle !mb-0 !border-0">Principales Gastos</h3>${timeRangeSelectorHTML('topExpenses', settings.timeRange)}</div><div id="top-expenses-container" class="relative flex-grow"><canvas id="top-expenses-chart"></canvas></div>`,
+        'quick-actions': () => `<h3 class="conta-subtitle !mb-4">Acciones Rápidas</h3>
+            <div class="grid grid-cols-2 gap-4 h-full content-center">
+                <button onclick="ContaApp.abrirModalVenta()" class="quick-action-button"><i class="fa-solid fa-cart-plus fa-2x"></i><span class="text-sm font-semibold">Venta</span></button>
+                <button onclick="ContaApp.abrirModalGasto()" class="quick-action-button"><i class="fa-solid fa-receipt fa-2x"></i><span class="text-sm font-semibold">Gasto</span></button>
+                <button onclick="ContaApp.abrirModalRegistroPagoRapido()" class="quick-action-button"><i class="fa-solid fa-exchange-alt fa-2x"></i><span class="text-sm font-semibold">Transacción</span></button>
+                <button onclick="ContaApp.abrirModalAsientoManual()" class="quick-action-button"><i class="fa-solid fa-book-medical fa-2x"></i><span class="text-sm font-semibold">Asiento</span></button>
+            </div>`
+    };
+
+    const contentWidgetsHTML = this.empresa.dashboardContentWidgets.order.map(widgetId => {
+        const settings = this.empresa.dashboardContentWidgets.settings[widgetId] || { visible: true };
+        if (!settings.visible) return '';
+        const widgetContent = contentWidgetDefinitions[widgetId] ? contentWidgetDefinitions[widgetId](settings) : '';
+        return `<div class="conta-card widget-full-height" data-widget-id="${widgetId}">${widgetContent}</div>`;
+    }).join('');
+    
+    const layoutClass = currentLayout === 'grid' ? 'lg:grid-cols-2' : 'lg:grid-cols-1';
+
+    // --- INICIO DE LA CORRECCIÓN DE ALTURA ---
+    const dashboardHTML = `
+        <div class="h-full flex flex-col">
+            <div class="flex flex-wrap justify-center gap-4 mb-4 flex-shrink-0">
+                ${kpiWidgetsHTML}
+            </div>
+            <div id="dashboard-grid" class="grid grid-cols-1 ${layoutClass} gap-6 flex-grow">
+                ${contentWidgetsHTML}
+            </div>
+        </div>
+    `;
+    // --- FIN DE LA CORRECCIÓN DE ALTURA ---
+    
+    document.getElementById("dashboard").innerHTML = dashboardHTML;
+    
+    // Es importante asegurarse de que el div 'dashboard' también pueda crecer.
+    document.getElementById("dashboard").style.height = '100%';
+
+    this.empresa.dashboardContentWidgets.order.forEach(widgetId => {
+        const settings = this.empresa.dashboardContentWidgets.settings[widgetId];
+        if (settings && settings.visible) {
+            if (widgetId === 'financialPerformance') this.renderFinancialPerformanceChart(settings.timeRange);
+            else if (widgetId === 'topExpenses') this.renderTopExpensesChart(settings.timeRange);
+            else if (widgetId === 'activity-feed') this.renderActivityFeed();
+        }
+    });
+
+    this.initDashboardDragAndDrop();
+    this.renderSparklines();
+},
+
 getDashboardKpiData() {
         const hoy = new Date();
         const hace30Dias = new Date(new Date().setDate(hoy.getDate() - 30)).toISOString().slice(0, 10);

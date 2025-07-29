@@ -261,25 +261,35 @@ Object.assign(ContaApp, {
         document.getElementById('reporte-contenido').innerHTML = html;
     },
         renderMayorAnalitico(params = {}) {
-        const cuentasOptions = this.planDeCuentas.filter(c => c.tipo === 'DETALLE')
-            .sort((a,b) => a.codigo.localeCompare(b.codigo, undefined, {numeric: true}))
-            .map(c => `<option value="${c.id}" ${c.id === params.cuentaId ? 'selected' : ''}>${c.codigo} - ${c.nombre}</option>`).join('');
+    const cuentasOptions = this.planDeCuentas.filter(c => c.tipo === 'DETALLE')
+        .sort((a,b) => a.codigo.localeCompare(b.codigo, undefined, {numeric: true}))
+        .map(c => `<option value="${c.id}" ${parseInt(c.id) === parseInt(params.cuentaId) ? 'selected' : ''}>${c.codigo} - ${c.nombre}</option>`).join('');
 
-        let html = `<div class="conta-card mb-6">
-            <form onsubmit="event.preventDefault(); ContaApp.generarReporteMayor()" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                <div class="md:col-span-2"><label for="mayor-cuenta" class="text-sm font-medium">Cuenta</label><select id="mayor-cuenta" class="p-2 border rounded w-full conta-input">${cuentasOptions}</select></div>
-                <div><label for="mayor-fecha-inicio" class="text-sm font-medium">Desde</label><input type="date" id="mayor-fecha-inicio" class="p-2 border rounded w-full conta-input" value="${params.startDate || ''}"></div>
-                <div><label for="mayor-fecha-fin" class="text-sm font-medium">Hasta</label><input type="date" id="mayor-fecha-fin" class="p-2 border rounded w-full conta-input" value="${params.endDate || this.getTodayDate()}"></div>
-                <button type="submit" class="conta-btn w-full md:w-auto">Generar Reporte</button>
-            </form>
-        </div>
-        <div id="mayor-resultado"></div>`;
-        document.getElementById('reporte-contenido').innerHTML = html;
-        
-        if (params.cuentaId) {
-            this.generarReporteMayor();
-        }
-    },
+    // --- MEJORA VISUAL: Se cambia 'grid' por 'flex' para compactar el formulario ---
+    let html = `<div class="conta-card mb-6">
+        <form onsubmit="event.preventDefault(); ContaApp.generarReporteMayor()" class="flex flex-wrap items-end gap-4">
+            <div class="flex-grow" style="min-width: 300px;">
+                <label for="mayor-cuenta" class="text-xs font-semibold">Cuenta</label>
+                <select id="mayor-cuenta" class="conta-input w-full">${cuentasOptions}</select>
+            </div>
+            <div>
+                <label for="mayor-fecha-inicio" class="text-xs font-semibold">Desde</label>
+                <input type="date" id="mayor-fecha-inicio" class="conta-input" value="${params.startDate || ''}">
+            </div>
+            <div>
+                <label for="mayor-fecha-fin" class="text-xs font-semibold">Hasta</label>
+                <input type="date" id="mayor-fecha-fin" class="conta-input" value="${params.endDate || this.getTodayDate()}">
+            </div>
+            <button type="submit" class="conta-btn">Generar Reporte</button>
+        </form>
+    </div>
+    <div id="mayor-resultado"></div>`;
+    document.getElementById('reporte-contenido').innerHTML = html;
+    
+    if (params.cuentaId) {
+        this.generarReporteMayor();
+    }
+},
         generarReporteMayor() {
         const cuentaId = parseInt(document.getElementById('mayor-cuenta').value);
         const fechaInicio = document.getElementById('mayor-fecha-inicio').value;

@@ -41,144 +41,149 @@ ordenarVentasPor(columna) {
         }
     },
     renderVentas_TabHistorial(filters = {}) {
-        document.getElementById('page-actions-header').innerHTML = `
-            <div class="flex gap-2 flex-wrap">
-                <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarVentasCSV()"><i class="fa-solid fa-file-csv me-2"></i>Exportar CSV</button>
-                <button class="conta-btn conta-btn-accent" onclick="ContaApp.abrirModalCotizacion()">+ Nueva Cotización</button>
-                <button class="conta-btn" onclick="ContaApp.abrirModalVenta()">+ Nueva Venta</button>
-            </div>`;
+    document.getElementById('page-actions-header').innerHTML = `
+        <div class="flex gap-2 flex-wrap">
+            <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarVentasCSV()"><i class="fa-solid fa-file-csv me-2"></i>Exportar CSV</button>
+            <button class="conta-btn conta-btn-accent" onclick="ContaApp.abrirModalCotizacion()">+ Nueva Cotización</button>
+            <button class="conta-btn" onclick="ContaApp.abrirModalVenta()">+ Nueva Venta</button>
+        </div>`;
 
-        let todasLasTransacciones = this.transacciones.filter(t => t.tipo === 'venta' || t.tipo === 'nota_credito');
-        
-        const hoy = new Date();
-        const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0,10);
-        const ventasNetasDelMes = todasLasTransacciones.filter(t => t.fecha >= primerDiaMes && t.estado !== 'Anulada').reduce((sum, t) => {
-            if (t.tipo === 'venta') return sum + t.total;
-            if (t.tipo === 'nota_credito') return sum - t.total;
-            return sum;
-        }, 0);
-        const ventasActivas = todasLasTransacciones.filter(t => t.tipo === 'venta' && t.estado !== 'Anulada');
-        const ticketPromedio = ventasActivas.length > 0 ? (ventasActivas.reduce((sum, v) => sum + v.total, 0) / ventasActivas.length) : 0;
-        let productoEstrella = 'N/A';
-        if (ventasActivas.length > 0) {
-            const ventasPorItem = ventasActivas.flatMap(v => v.items).reduce((acc, item) => { let itemId = item.itemType === 'producto' ? `P-${item.productoId}` : `S-${item.cuentaId}`; let totalVentaItem = item.cantidad * item.precio; acc[itemId] = (acc[itemId] || 0) + totalVentaItem; return acc; }, {});
-            if(Object.keys(ventasPorItem).length > 0) { 
-                const maxVendidoId = Object.keys(ventasPorItem).reduce((a, b) => ventasPorItem[a] > ventasPorItem[b] ? a : b); 
-                const [tipo, id] = maxVendidoId.split('-'); 
-                if (tipo === 'P') { 
-                    const producto = this.findById(this.productos, id); 
-                    if(producto) productoEstrella = producto.nombre; 
-                } else { 
-                    const cuenta = this.findById(this.planDeCuentas, id);
-                    if(cuenta) productoEstrella = cuenta.nombre; 
-                } 
-            }
+    let todasLasTransacciones = this.transacciones.filter(t => t.tipo === 'venta' || t.tipo === 'nota_credito');
+    
+    // ... (La sección de kpiHTML se mantiene igual)
+    const hoy = new Date();
+    const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0,10);
+    const ventasNetasDelMes = todasLasTransacciones.filter(t => t.fecha >= primerDiaMes && t.estado !== 'Anulada').reduce((sum, t) => {
+        if (t.tipo === 'venta') return sum + t.total;
+        if (t.tipo === 'nota_credito') return sum - t.total;
+        return sum;
+    }, 0);
+    const ventasActivas = todasLasTransacciones.filter(t => t.tipo === 'venta' && t.estado !== 'Anulada');
+    const ticketPromedio = ventasActivas.length > 0 ? (ventasActivas.reduce((sum, v) => sum + v.total, 0) / ventasActivas.length) : 0;
+    let productoEstrella = 'N/A';
+    if (ventasActivas.length > 0) {
+        const ventasPorItem = ventasActivas.flatMap(v => v.items).reduce((acc, item) => { let itemId = item.itemType === 'producto' ? `P-${item.productoId}` : `S-${item.cuentaId}`; let totalVentaItem = item.cantidad * item.precio; acc[itemId] = (acc[itemId] || 0) + totalVentaItem; return acc; }, {});
+        if(Object.keys(ventasPorItem).length > 0) { 
+            const maxVendidoId = Object.keys(ventasPorItem).reduce((a, b) => ventasPorItem[a] > ventasPorItem[b] ? a : b); 
+            const [tipo, id] = maxVendidoId.split('-'); 
+            if (tipo === 'P') { 
+                const producto = this.findById(this.productos, id); 
+                if(producto) productoEstrella = producto.nombre; 
+            } else { 
+                const cuenta = this.findById(this.planDeCuentas, id);
+                if(cuenta) productoEstrella = cuenta.nombre; 
+            } 
         }
-        const kpiHTML = `<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div class="conta-card kpi-dashboard-card"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-calendar-day fa-fw me-2"></i> Ventas Netas del Mes</span><p class="font-bold text-xl conta-text-primary mt-1">${this.formatCurrency(ventasNetasDelMes)}</p></div>
-            <div class="conta-card kpi-dashboard-card"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-receipt fa-fw me-2"></i> Ticket Promedio (Ventas)</span><p class="font-bold text-xl conta-text-success mt-1">${this.formatCurrency(ticketPromedio)}</p></div>
-            <div class="conta-card kpi-dashboard-card"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-star fa-fw me-2"></i> Producto/Servicio Estrella</span><p class="font-bold text-xl conta-text-accent mt-1 truncate">${productoEstrella}</p></div>
+    }
+    const kpiHTML = `<div class="flex flex-wrap justify-center gap-4 mb-4">
+        <div class="conta-card kpi-dashboard-card w-64 text-center"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-calendar-day fa-fw me-2"></i> Ventas Netas del Mes</span><p class="font-bold text-xl conta-text-primary mt-1">${this.formatCurrency(ventasNetasDelMes)}</p></div>
+        <div class="conta-card kpi-dashboard-card w-64 text-center"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-receipt fa-fw me-2"></i> Ticket Promedio (Ventas)</span><p class="font-bold text-xl conta-text-success mt-1">${this.formatCurrency(ticketPromedio)}</p></div>
+        <div class="conta-card kpi-dashboard-card w-64 text-center"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-star fa-fw me-2"></i> Producto/Servicio Estrella</span><p class="font-bold text-xl conta-text-accent mt-1 truncate">${productoEstrella}</p></div>
+    </div>`;
+    
+    let contentHTML;
+    if (todasLasTransacciones.length === 0) {
+        contentHTML = this.generarEstadoVacioHTML('fa-shopping-cart','Aún no tienes ventas registradas','Haz clic en el botón para crear tu primera factura y empezar a crecer.','+ Crear Primera Venta',"ContaApp.abrirModalVenta()");
+    } else {
+        let transaccionesFiltradas = todasLasTransacciones;
+        if (filters.search) {
+            const term = filters.search.toLowerCase();
+            transaccionesFiltradas = transaccionesFiltradas.filter(t => {
+                const cliente = this.findById(this.contactos, t.contactoId);
+                return t.numeroFactura?.toLowerCase().includes(term) || t.numeroNota?.toLowerCase().includes(term) || (cliente && cliente.nombre.toLowerCase().includes(term));
+            });
+        }
+        if (filters.startDate) { transaccionesFiltradas = transaccionesFiltradas.filter(t => t.fecha >= filters.startDate); }
+        if (filters.endDate) { transaccionesFiltradas = transaccionesFiltradas.filter(t => t.fecha <= filters.endDate); }
+        
+        const filterFormHTML = `<div class="conta-card p-3 mb-4">
+            <form onsubmit="event.preventDefault(); ContaApp.filtrarLista('ventas');" class="flex flex-wrap items-end gap-3">
+                <div><label class="text-xs font-semibold">Buscar por Cliente o #</label><input type="search" id="ventas-search" class="conta-input md:w-72" value="${filters.search || ''}"></div>
+                <div><label class="text-xs font-semibold">Desde</label><input type="date" id="ventas-start-date" class="conta-input" value="${filters.startDate || ''}"></div>
+                <div><label class="text-xs font-semibold">Hasta</label><input type="date" id="ventas-end-date" class="conta-input" value="${filters.endDate || ''}"></div>
+                <button type="submit" class="conta-btn">Filtrar</button>
+            </form>
         </div>`;
         
-        let contentHTML;
-        if (todasLasTransacciones.length === 0) {
-            contentHTML = this.generarEstadoVacioHTML('fa-shopping-cart','Aún no tienes ventas registradas','Haz clic en el botón para crear tu primera factura y empezar a crecer.','+ Crear Primera Venta',"ContaApp.abrirModalVenta()");
+        let resultsHTML;
+        if (transaccionesFiltradas.length === 0) {
+            resultsHTML = `<div class="conta-card text-center p-8 text-[var(--color-text-secondary)]">
+                             <i class="fa-solid fa-filter-circle-xmark fa-3x mb-4 opacity-50"></i>
+                             <h3 class="font-bold text-lg">Sin Resultados</h3>
+                             <p>No se encontraron transacciones que coincidan con los filtros aplicados.</p>
+                           </div>`;
         } else {
-            let transaccionesFiltradas = todasLasTransacciones;
-            if (filters.search) {
-                const term = filters.search.toLowerCase();
-                transaccionesFiltradas = transaccionesFiltradas.filter(t => {
-                    const cliente = this.findById(this.contactos, t.contactoId);
-                    return t.numeroFactura?.toLowerCase().includes(term) || t.numeroNota?.toLowerCase().includes(term) || (cliente && cliente.nombre.toLowerCase().includes(term));
-                });
-            }
-            if (filters.startDate) { transaccionesFiltradas = transaccionesFiltradas.filter(t => t.fecha >= filters.startDate); }
-            if (filters.endDate) { transaccionesFiltradas = transaccionesFiltradas.filter(t => t.fecha <= filters.endDate); }
+            const { column, order } = this.ventasSortState;
+            transaccionesFiltradas.sort((a, b) => {
+                let valA, valB;
+                if (column === 'cliente') {
+                    valA = this.findById(this.contactos, a.contactoId)?.nombre || '';
+                    valB = this.findById(this.contactos, b.contactoId)?.nombre || '';
+                } else { valA = a[column]; valB = b[column]; }
+                if (typeof valA === 'string') { return order === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA); } 
+                else { return order === 'asc' ? valA - valB : valB - valA; }
+            });
             
-            const filterFormHTML = `<div class="conta-card p-3 mb-4">
-                <form onsubmit="event.preventDefault(); ContaApp.filtrarLista('ventas');" class="flex flex-wrap items-end gap-3">
-                    <div><label class="text-xs font-semibold">Buscar por Cliente o #</label><input type="search" id="ventas-search" class="conta-input md:w-72" value="${filters.search || ''}"></div>
-                    <div><label class="text-xs font-semibold">Desde</label><input type="date" id="ventas-start-date" class="conta-input" value="${filters.startDate || ''}"></div>
-                    <div><label class="text-xs font-semibold">Hasta</label><input type="date" id="ventas-end-date" class="conta-input" value="${filters.endDate || ''}"></div>
-                    <button type="submit" class="conta-btn">Filtrar</button>
-                </form>
-            </div>`;
-            
-            let resultsHTML;
-            if (transaccionesFiltradas.length === 0) {
-                resultsHTML = `<div class="conta-card text-center p-8 text-[var(--color-text-secondary)]">
-                                 <i class="fa-solid fa-filter-circle-xmark fa-3x mb-4 opacity-50"></i>
-                                 <h3 class="font-bold text-lg">Sin Resultados</h3>
-                                 <p>No se encontraron transacciones que coincidan con los filtros aplicados.</p>
-                               </div>`;
-            } else {
-                const { column, order } = this.ventasSortState;
-                transaccionesFiltradas.sort((a, b) => {
-                    let valA, valB;
-                    if (column === 'cliente') {
-                        valA = this.findById(this.contactos, a.contactoId)?.nombre || '';
-                        valB = this.findById(this.contactos, b.contactoId)?.nombre || '';
-                    } else { valA = a[column]; valB = b[column]; }
-                    if (typeof valA === 'string') { return order === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA); } 
-                    else { return order === 'asc' ? valA - valB : valB - valA; }
-                });
+            const generarEncabezado = (nombreColumna, clave) => {
+                let icono = '';
+                if (this.ventasSortState.column === clave) {
+                    icono = this.ventasSortState.order === 'asc' ? '<i class="fa-solid fa-arrow-up ml-2"></i>' : '<i class="fa-solid fa-arrow-down ml-2"></i>';
+                }
+                return `<th class="conta-table-th cursor-pointer" onclick="ContaApp.ordenarVentasPor('${clave}')">${nombreColumna} ${icono}</th>`;
+            };
+
+            let tableRowsHTML = '';
+            transaccionesFiltradas.forEach(t => {
+                const cliente = this.findById(this.contactos, t.contactoId);
+                let estadoClass = '', estadoTexto = t.estado, totalDisplay, numeroDisplay, accionesHTML, rowOnclick;
+
+                if (t.tipo === 'venta') {
+                    switch(t.estado) {
+                        case 'Pagada': estadoClass = 'tag-success'; break;
+                        case 'Pendiente': estadoClass = 'tag-warning'; break;
+                        case 'Parcial': estadoClass = 'tag-accent'; break;
+                        case 'Anulada': estadoClass = 'tag-anulada'; break;
+                        default: estadoClass = 'tag-neutral';
+                    }
+                    totalDisplay = this.formatCurrency(t.total);
+                    numeroDisplay = t.numeroFactura || t.id;
+                    accionesHTML = `<button class="conta-btn-icon" title="Ver Factura" onclick="event.stopPropagation(); ContaApp.abrirVistaPreviaFactura(${t.id})"><i class="fa-solid fa-file-lines"></i></button>
+                                    <button class="conta-btn-icon edit" title="Duplicar Venta" onclick="event.stopPropagation(); ContaApp.abrirModalVenta(null, null, ${t.id})"><i class="fa-solid fa-copy"></i></button>
+                                    ${t.estado !== 'Anulada' ? `<button class="conta-btn-icon delete" title="Anular Factura" onclick="event.stopPropagation(); ContaApp.anularVenta(${t.id})"><i class="fa-solid fa-ban"></i></button>` : ''}`;
+                    rowOnclick = `ContaApp.abrirVistaPreviaFactura(${t.id})`;
+                } else {
+                    estadoClass = 'tag-nota-credito';
+                    estadoTexto = 'Nota de Crédito';
+                    totalDisplay = `-${this.formatCurrency(t.total)}`;
+                    numeroDisplay = t.numeroNota || t.id;
+                    accionesHTML = `<button class="conta-btn-icon" title="Ver Nota de Crédito" onclick="event.stopPropagation(); ContaApp.abrirVistaPreviaNotaCredito(${t.id})"><i class="fa-solid fa-file-lines"></i></button>`;
+                    rowOnclick = `ContaApp.abrirVistaPreviaNotaCredito(${t.id})`;
+                }
                 
-                const generarEncabezado = (nombreColumna, clave) => {
-                    let icono = '';
-                    if (this.ventasSortState.column === clave) {
-                        icono = this.ventasSortState.order === 'asc' ? '<i class="fa-solid fa-arrow-up ml-2"></i>' : '<i class="fa-solid fa-arrow-down ml-2"></i>';
-                    }
-                    return `<th class="conta-table-th cursor-pointer" onclick="ContaApp.ordenarVentasPor('${clave}')">${nombreColumna} ${icono}</th>`;
-                };
+                tableRowsHTML += `<tr class="cursor-pointer" onclick="${rowOnclick}">
+                    <td class="conta-table-td font-mono">${numeroDisplay}</td>
+                    <td class="conta-table-td">${t.fecha}</td>
+                    <td class="conta-table-td">${cliente?.nombre || 'N/A'}</td>
+                    <td class="conta-table-td text-right font-mono ${t.tipo === 'nota_credito' ? 'conta-text-danger' : ''}">${totalDisplay}</td>
+                    <td class="conta-table-td"><span class="tag ${estadoClass}">${estadoTexto}</span></td>
+                    <td class="conta-table-td text-center">${accionesHTML}</td>
+                </tr>`;
+            });
 
-                let tableRowsHTML = '';
-                transaccionesFiltradas.forEach(t => {
-                    const cliente = this.findById(this.contactos, t.contactoId);
-                    let estadoClass = '', estadoTexto = t.estado, totalDisplay, numeroDisplay, accionesHTML;
-                    if (t.tipo === 'venta') {
-                        switch(t.estado) {
-                            case 'Pagada': estadoClass = 'tag-success'; break;
-                            case 'Pendiente': estadoClass = 'tag-warning'; break;
-                            case 'Parcial': estadoClass = 'tag-accent'; break;
-                            case 'Anulada': estadoClass = 'tag-anulada'; break;
-                            default: estadoClass = 'tag-neutral';
-                        }
-                        totalDisplay = this.formatCurrency(t.total);
-                        numeroDisplay = t.numeroFactura || t.id;
-                        accionesHTML = `<button class="conta-btn-icon" title="Ver Factura" onclick="ContaApp.abrirVistaPreviaFactura(${t.id})"><i class="fa-solid fa-file-lines"></i></button>
-                                        <button class="conta-btn-icon edit" title="Duplicar Venta" onclick="ContaApp.abrirModalVenta(null, null, ${t.id})"><i class="fa-solid fa-copy"></i></button>
-                                        ${t.estado !== 'Anulada' ? `<button class="conta-btn-icon delete" title="Anular Factura" onclick="ContaApp.anularVenta(${t.id})"><i class="fa-solid fa-ban"></i></button>` : ''}`;
-                    } else {
-                        estadoClass = 'tag-nota-credito';
-                        estadoTexto = 'Nota de Crédito';
-                        totalDisplay = `-${this.formatCurrency(t.total)}`;
-                        numeroDisplay = t.numeroNota || t.id;
-                        accionesHTML = `<button class="conta-btn-icon" title="Ver Nota de Crédito" onclick="ContaApp.abrirVistaPreviaNotaCredito(${t.id})"><i class="fa-solid fa-file-lines"></i></button>`;
-                    }
-                    tableRowsHTML += `<tr>
-                        <td class="conta-table-td font-mono">${numeroDisplay}</td>
-                        <td class="conta-table-td">${t.fecha}</td>
-                        <td class="conta-table-td">${cliente?.nombre || 'N/A'}</td>
-                        <td class="conta-table-td text-right font-mono ${t.tipo === 'nota_credito' ? 'conta-text-danger' : ''}">${totalDisplay}</td>
-                        <td class="conta-table-td"><span class="tag ${estadoClass}">${estadoTexto}</span></td>
-                        <td class="conta-table-td text-center">${accionesHTML}</td>
-                    </tr>`;
-                });
-
-                resultsHTML = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
-                    ${generarEncabezado('Documento #', 'numeroFactura')}
-                    ${generarEncabezado('Fecha', 'fecha')}
-                    ${generarEncabezado('Cliente', 'cliente')}
-                    ${generarEncabezado('Total', 'total')}
-                    ${generarEncabezado('Estado', 'estado')}
-                    <th class="conta-table-th text-center">Acciones</th>
-                </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
-            }
-            contentHTML = filterFormHTML + resultsHTML;
+            resultsHTML = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
+                ${generarEncabezado('Documento #', 'numeroFactura')}
+                ${generarEncabezado('Fecha', 'fecha')}
+                ${generarEncabezado('Cliente', 'cliente')}
+                ${generarEncabezado('Total', 'total')}
+                ${generarEncabezado('Estado', 'estado')}
+                <th class="conta-table-th text-center">Acciones</th>
+            </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
         }
-        
-        document.getElementById('ventas-contenido').innerHTML = kpiHTML + contentHTML;
-    },
+        contentHTML = filterFormHTML + resultsHTML;
+    }
+    
+    document.getElementById('ventas-contenido').innerHTML = kpiHTML + contentHTML;
+},
     renderVentas_TabCotizaciones(filters = {}) {
         document.getElementById('page-actions-header').innerHTML = `<button class="conta-btn" onclick="ContaApp.abrirModalCotizacion()">+ Nueva Cotización</button>`;
 

@@ -61,12 +61,12 @@ Object.assign(ContaApp, {
         }
     }
 
-    // --- MEJORA VISUAL: Contenedor flex para centrar y unificar tarjetas ---
+    // --- MEJORA VISUAL: Se añade la clase 'text-center' a cada tarjeta ---
     const kpiHTML = `
         <div class="flex flex-wrap justify-center gap-4 mb-4">
-            <div class="conta-card kpi-dashboard-card w-64"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-calendar-day fa-fw me-2"></i> Gastos del Mes</span><p class="font-bold text-xl conta-text-danger mt-1">${this.formatCurrency(gastosDelMes)}</p></div>
-            <div class="conta-card kpi-dashboard-card w-64"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-truck-fast fa-fw me-2"></i> Proveedor Principal</span><p class="font-bold text-xl conta-text-accent mt-1 truncate">${proveedorPrincipal}</p></div>
-            <div class="conta-card kpi-dashboard-card w-64"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-tags fa-fw me-2"></i> Categoría Principal</span><p class="font-bold text-xl conta-text-primary mt-1 truncate">${categoriaPrincipal}</p></div>
+            <div class="conta-card kpi-dashboard-card w-64 text-center"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-calendar-day fa-fw me-2"></i> Gastos del Mes</span><p class="font-bold text-xl conta-text-danger mt-1">${this.formatCurrency(gastosDelMes)}</p></div>
+            <div class="conta-card kpi-dashboard-card w-64 text-center"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-truck-fast fa-fw me-2"></i> Proveedor Principal</span><p class="font-bold text-xl conta-text-accent mt-1 truncate">${proveedorPrincipal}</p></div>
+            <div class="conta-card kpi-dashboard-card w-64 text-center"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-tags fa-fw me-2"></i> Categoría Principal</span><p class="font-bold text-xl conta-text-primary mt-1 truncate">${categoriaPrincipal}</p></div>
         </div>
     `;
     
@@ -74,7 +74,7 @@ Object.assign(ContaApp, {
     if (todosLosGastos.length === 0) {
         contentHTML = this.generarEstadoVacioHTML('fa-receipt','Aún no tienes gastos','Registra tu primer gasto o compra para mantener tus finanzas al día.','+ Crear Primer Gasto',"ContaApp.abrirModalGasto()");
     } else {
-        // ... El resto de la función (filtros y tabla) se mantiene igual
+        // ... (El resto de la función se mantiene igual)
         let gastosFiltrados = todosLosGastos;
         if (filters.search) {
             const term = filters.search.toLowerCase();
