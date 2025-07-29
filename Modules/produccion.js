@@ -326,16 +326,34 @@ Object.assign(ContaApp, {
                     // 3. Actualizar la orden
                     orden.costoTotal = costoRealProduccion; // Actualizar con el costo real
                     orden.estado = 'Completada';
-                    orden.fechaCompletada = this.getTodayDate(); // Opcional: guardar fecha de finalización
+                    orden.fechaCompletada = this.getTodayDate();
 
-                    // 4. Crear el asiento contable
-                    const cuentaMP = 13002;
-                    const cuentaPT = 13004;
-                    const asiento = this.crearAsiento(orden.fechaCompletada, `Completar OP #${orden.numero}: ${orden.descripcion}`,
-                        [
-                            { cuentaId: cuentaPT, debe: costoRealProduccion, haber: 0 },
-                            { cuentaId: cuentaMP, debe: 0, haber: costoRealProduccion }
-                        ],
+                    // 4. Crear el asiento contable dinámico
+                    const cuentaProductosTerminadosId = 13004; // Cuenta de Inventario de Productos Terminados
+
+                    // El asiento empieza con el DÉBITO al producto terminado
+                    const movimientos = [
+                        { cuentaId: cuentaProductosTerminadosId, debe: costoRealProduccion, haber: 0 }
+                    ];
+
+                    // Ahora, creamos un CRÉDITO por cada componente, usando su cuenta de inventario específica
+                    orden.componentes.forEach(comp => {
+                        const materiaPrima = this.findById(this.productos, comp.productoId);
+                        const costoComponente = materiaPrima.costo * comp.cantidad;
+                        // Obtenemos la cuenta correcta (ej: 13001 o 13002) desde el objeto del producto
+                        const cuentaInventarioComponenteId = materiaPrima.cuentaInventarioId; 
+
+                        movimientos.push({
+                            cuentaId: cuentaInventarioComponenteId,
+                            debe: 0,
+                            haber: costoComponente
+                        });
+                    });
+
+                    const asiento = this.crearAsiento(
+                        orden.fechaCompletada, 
+                        `Completar OP #${orden.numero}: ${orden.descripcion}`,
+                        movimientos,
                         orden.id
                     );
 
@@ -343,7 +361,11 @@ Object.assign(ContaApp, {
                         this.saveAll();
                         this.irModulo('produccion');
                         this.showToast('Orden de Producción completada con éxito.', 'success');
+                    } else {
+                        // Si el asiento falla, lanzamos un error para que no se guarden los cambios de inventario.
+                        throw new Error("No se pudo crear el asiento contable de producción. La operación ha sido revertida.");
                     }
+
                 } catch(error) {
                     this.showToast(error.message, 'error');
                     console.error("Error al completar la orden:", error);
@@ -351,6 +373,7 @@ Object.assign(ContaApp, {
             }
         );
     },
+
     renderProduccion_TabTerminada(params = {}) {
     document.getElementById('page-actions-header').innerHTML = `
         <button class="conta-btn conta-btn-success" onclick="ContaApp.facturarProduccionSeleccionada()">

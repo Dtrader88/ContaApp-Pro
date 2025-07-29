@@ -278,11 +278,34 @@ renderConfig_Licencia() {
         );
     },
     exportarDatos() {
-        const data = localStorage.getItem("conta_app_data");
+        // CAMBIO CLAVE: En lugar de leer del localStorage,
+        // construimos el objeto de datos a partir del estado actual de la aplicación,
+        // asegurando que exportamos exactamente lo que se guarda en Firebase.
+        const dataToSave = {
+            empresa: this.empresa,
+            licencia: this.licencia,
+            idCounter: this.idCounter,
+            planDeCuentas: this.planDeCuentas.map(({saldo, ...rest}) => rest),
+            asientos: this.asientos,
+            transacciones: this.transacciones,
+            contactos: this.contactos,
+            productos: this.productos,
+            recurrentes: this.recurrentes,
+            activosFijos: this.activosFijos,
+            listasMateriales: this.listasMateriales,
+            ordenesProduccion: this.ordenesProduccion,
+            unidadesMedida: this.unidadesMedida,
+            bancoImportado: this.bancoImportado
+        };
+        
+        // Convertimos el objeto a un texto JSON bien formateado.
+        const data = JSON.stringify(dataToSave, null, 2);
+
         if (!data) {
             this.showToast("No hay datos para exportar.", 'error');
             return;
         }
+        
         const blob = new Blob([data], {type: "application/json"});
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');

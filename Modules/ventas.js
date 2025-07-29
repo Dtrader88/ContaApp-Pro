@@ -726,7 +726,6 @@ ordenarVentasPor(columna) {
             
             const fecha = document.getElementById('venta-fecha').value;
             const terminosPago = document.getElementById('venta-terminos-pago').value;
-            // ESTA ES LA LÍNEA QUE FALTABA
             const esRecurrente = document.getElementById('venta-recurrente-check').checked;
             const items = [];
             let subtotal = 0;
@@ -790,7 +789,6 @@ ordenarVentasPor(columna) {
                     }
                 }
                 
-                let costoTotal = items.filter(i => i.itemType === 'producto').reduce((sum, i) => sum + (i.costo * i.cantidad), 0);
                 const subtotalConDescuento = subtotal - descuento;
                 const impuesto = subtotalConDescuento * (this.empresa.taxRate / 100);
                 const total = subtotalConDescuento + impuesto;
@@ -815,11 +813,11 @@ ordenarVentasPor(columna) {
                     asientoDescripcion = `Venta a crédito a ${this.findById(this.contactos, clienteId).nombre} #${nuevaVenta.numeroFactura}`;
                 }
                 
-                const cuentaIvaDebitoId = 240, cuentaCostoVentasId = 501, cuentaInventarioId = 130, cuentaDescuentoId = 420;
-                const movimientos = [ { cuentaId: cuentaDebeId, debe: total, haber: 0 }, { cuentaId: cuentaIvaDebitoId, debe: 0, haber: impuesto } ];
+                const cuentaIvaDebitoId = 240, cuentaDescuentoId = 420;
+                const movimientosVenta = [ { cuentaId: cuentaDebeId, debe: total, haber: 0 }, { cuentaId: cuentaIvaDebitoId, debe: 0, haber: impuesto } ];
                 
                 if (descuento > 0) {
-                    movimientos.push({ cuentaId: cuentaDescuentoId, debe: descuento, haber: 0 });
+                    movimientosVenta.push({ cuentaId: cuentaDescuentoId, debe: descuento, haber: 0 });
                 }
 
                 items.forEach(item => {
@@ -827,10 +825,10 @@ ordenarVentasPor(columna) {
                     if (item.itemType === 'producto') {
                         const producto = this.findById(this.productos, item.productoId);
                         const cuentaProductos = this.planDeCuentas.find(c => c.codigo === '401.1');
-                        movimientos.push({ cuentaId: cuentaProductos.id, debe: 0, haber: montoItem });
+                        movimientosVenta.push({ cuentaId: cuentaProductos.id, debe: 0, haber: montoItem });
                         producto.stock -= item.cantidad;
                     } else {
-                        movimientos.push({ cuentaId: item.cuentaId, debe: 0, haber: montoItem });
+                        movimientosVenta.push({ cuentaId: item.cuentaId, debe: 0, haber: montoItem });
                     }
                 });
                 
@@ -841,8 +839,8 @@ ordenarVentasPor(columna) {
                      anticipo.saldoAplicado = (anticipo.saldoAplicado || 0) + montoAAplicar;
                      nuevaVenta.montoPagado += montoAAplicar;
                      const cuentaAnticiposId = 220;
-                     movimientos.push({ cuentaId: cuentaAnticiposId, debe: montoAAplicar, haber: 0 });
-                     movimientos.push({ cuentaId: cuentaDebeId, debe: 0, haber: montoAAplicar });
+                     movimientosVenta.push({ cuentaId: cuentaAnticiposId, debe: montoAAplicar, haber: 0 });
+                     movimientosVenta.push({ cuentaId: cuentaDebeId, debe: 0, haber: montoAAplicar });
                 }
 
                 if (nuevaVenta.montoPagado >= total - 0.01) {
@@ -852,14 +850,38 @@ ordenarVentasPor(columna) {
                 }
                 
                 this.transacciones.push(nuevaVenta);
-                this.crearAsiento(fecha, asientoDescripcion, movimientos, nuevaVenta.id);
+                this.crearAsiento(fecha, asientoDescripcion, movimientosVenta, nuevaVenta.id);
                 
-                if (costoTotal > 0) {
-                    this.crearAsiento(fecha, `Costo de venta #${nuevaVenta.numeroFactura}`, [
-                        { cuentaId: cuentaCostoVentasId, debe: costoTotal, haber: 0 },
-                        { cuentaId: cuentaInventarioId, debe: 0, haber: costoTotal }
-                    ], nuevaVenta.id);
+                // --- INICIO DE LA CORRECCIÓN CONTABLE DEL COSTO ---
+                const costosPorCuenta = items.reduce((acc, item) => {
+                    if (item.itemType === 'producto') {
+                        const producto = this.findById(this.productos, item.productoId);
+                        const cuentaId = producto.cuentaInventarioId;
+                        const costoItem = (producto.costo || 0) * item.cantidad;
+                        if (cuentaId && costoItem > 0) {
+                            acc[cuentaId] = (acc[cuentaId] || 0) + costoItem;
+                        }
+                    }
+                    return acc;
+                }, {});
+
+                const costoTotalVenta = Object.values(costosPorCuenta).reduce((sum, val) => sum + val, 0);
+
+                if (costoTotalVenta > 0) {
+                    const cuentaCostoVentasId = 501;
+                    const movimientosCosto = [
+                        { cuentaId: cuentaCostoVentasId, debe: costoTotalVenta, haber: 0 }
+                    ];
+                    for (const cuentaId in costosPorCuenta) {
+                        movimientosCosto.push({
+                            cuentaId: parseInt(cuentaId),
+                            debe: 0,
+                            haber: costosPorCuenta[cuentaId]
+                        });
+                    }
+                    this.crearAsiento(fecha, `Costo de venta #${nuevaVenta.numeroFactura}`, movimientosCosto, nuevaVenta.id);
                 }
+                // --- FIN DE LA CORRECCIÓN CONTABLE DEL COSTO ---
                 
                 this.isFormDirty = false;
                 this.saveAll();
@@ -875,7 +897,8 @@ ordenarVentasPor(columna) {
         } finally {
             this.toggleButtonLoading(submitButton, false);
         }
-    },    
+    },
+    
     anularVenta(ventaId) {
         const venta = this.findById(this.transacciones, ventaId);
         if (!venta) return;
