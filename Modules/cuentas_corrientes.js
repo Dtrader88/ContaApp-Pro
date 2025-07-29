@@ -261,7 +261,6 @@ getAgingData(tipoContacto, fechaReporte) {
         }
     },
         renderCXC(params = {}) {
-    // --- INICIO DE LA CORRECCIÓN DE NAVEGACIÓN ---
     // Paso 1: Dibujar SIEMPRE la estructura base de la página (pestañas y contenedor de contenido).
     const submodulo = params.submodulo || 'estado-cuenta';
     let html = `
@@ -288,7 +287,6 @@ getAgingData(tipoContacto, fechaReporte) {
         // O la pestaña de anticipos.
         this.renderAnticipos('cxc-contenido');
     }
-    // --- FIN DE LA CORRECCIÓN DE NAVEGACIÓN ---
 },
 
         renderCXC_TabEstadoCuenta(params = {}) {
@@ -302,13 +300,10 @@ getAgingData(tipoContacto, fechaReporte) {
     const searchTerm = params.search ? params.search.trim().toLowerCase() : '';
     const clienteEncontrado = searchTerm ? this.contactos.find(c => c.tipo === 'cliente' && c.nombre.toLowerCase().includes(searchTerm)) : null;
 
-    // --- INICIO DE LA CORRECCIÓN DE NAVEGACIÓN ---
-    // Si se encuentra un cliente, navegamos a su vista de detalle a través de irModulo.
     if (clienteEncontrado) {
         this.irModulo('cxc', { clienteId: clienteEncontrado.id });
         return; 
     }
-    // --- FIN DE LA CORRECCIÓN DE NAVEGACIÓN ---
 
     let html = `
         <div class="conta-card p-3 mb-4">
@@ -329,6 +324,7 @@ getAgingData(tipoContacto, fechaReporte) {
     } else {
         html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
             <thead><tr>
+                <th class="conta-table-th w-10"><input type="checkbox" onchange="ContaApp.toggleAllCheckboxes(this, 'cxc-factura-check')"></th>
                 <th class="conta-table-th">Fecha</th>
                 <th class="conta-table-th">Cliente</th>
                 <th class="conta-table-th">Factura #</th>
@@ -359,6 +355,7 @@ getAgingData(tipoContacto, fechaReporte) {
             }
 
             html += `<tr class="cursor-pointer hover:bg-[var(--color-bg-accent)]" onclick="ContaApp.abrirModalHistorialFactura(${factura.id})">
+                <td class="conta-table-td text-center" onclick="event.stopPropagation();"><input type="checkbox" class="cxc-factura-check" data-factura-id="${factura.id}"></td>
                 <td class="conta-table-td">${factura.fecha}</td>
                 <td class="conta-table-td font-bold">${cliente?.nombre || 'N/A'}</td>
                 <td class="conta-table-td font-mono">${factura.numeroFactura || factura.id}</td>
@@ -1066,7 +1063,6 @@ renderAnticipos(containerId) {
     
     // Módulo: Cuentas por Pagar (CXP)
         renderCXP(params = {}) {
-    // --- INICIO DE LA CORRECCIÓN DE NAVEGACIÓN ---
     // Paso 1: Dibujar SIEMPRE la estructura base de la página.
     const submodulo = params.submodulo || 'estado-cuenta';
     let html = `
@@ -1089,7 +1085,6 @@ renderAnticipos(containerId) {
         // Si no, mostramos la pestaña de estado de cuenta general (aging).
         this.renderCXP_TabEstadoCuenta(params);
     }
-    // --- FIN DE LA CORRECCIÓN DE NAVEGACIÓN ---
 },
     renderCXP_TabEstadoCuenta(params = {}) {
     document.getElementById('page-title-header').innerText = `Cuentas por Pagar`;
@@ -1098,8 +1093,6 @@ renderAnticipos(containerId) {
             <button class="conta-btn conta-btn-success" onclick="ContaApp.procesarSeleccionDePago('proveedor')"><i class="fa-solid fa.money-bill-wave me-2"></i>Registrar Pago</button>
             <button class="conta-btn" onclick="ContaApp.abrirModalGasto()">+ Nuevo Gasto</button>
         </div>`;
-    
-    // La lógica de búsqueda ahora vive en renderCXP, por lo que aquí ya no es necesaria.
     
     let html = `
         <div class="conta-card p-3 mb-4">
@@ -1119,6 +1112,7 @@ renderAnticipos(containerId) {
     } else {
         html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
             <thead><tr>
+                <th class="conta-table-th w-10"><input type="checkbox" onchange="ContaApp.toggleAllCheckboxes(this, 'cxp-gasto-check')"></th>
                 <th class="conta-table-th">Fecha</th>
                 <th class="conta-table-th">Proveedor</th>
                 <th class="conta-table-th">Referencia #</th>
@@ -1137,6 +1131,7 @@ renderAnticipos(containerId) {
             const rowOnclick = factura.tipo === 'compra_inventario' ? `ContaApp.abrirModalDetalleCompra(${factura.id})` : `ContaApp.abrirModalHistorialGasto(${factura.id})`;
 
             html += `<tr class="cursor-pointer hover:bg-[var(--color-bg-accent)]" onclick="${rowOnclick}">
+                <td class="conta-table-td text-center" onclick="event.stopPropagation();"><input type="checkbox" class="cxp-gasto-check" data-factura-id="${factura.id}"></td>
                 <td class="conta-table-td">${factura.fecha}</td>
                 <td class="conta-table-td font-bold">${proveedor?.nombre || 'N/A'}</td>
                 <td class="conta-table-td font-mono">${factura.referencia || 'N/A'}</td>

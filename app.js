@@ -463,15 +463,27 @@ const ContaApp = {
         }
     },
 irAtras() {
-    // --- LÍNEA DE DIAGNÓSTICO AÑADIDA ---
-    console.log("Historial de Navegación al hacer clic en 'Atrás':", JSON.stringify(this.navigationHistory));
-    // --- FIN DE LÍNEA DE DIAGNÓSTICO ---
-
     if (this.navigationHistory.length <= 1) {
         return;
     }
-    this.navigationHistory.pop();
+
+    // Eliminamos el estado actual
+    const currentState = this.navigationHistory.pop();
+    // Obtenemos el estado al que queremos volver
     const previousState = this.navigationHistory[this.navigationHistory.length - 1];
+
+    // **LA CLAVE DE LA SOLUCIÓN:**
+    // Si el estado del que venimos tenía un filtro de búsqueda,
+    // y el estado al que vamos no lo tiene, reseteamos los filtros guardados
+    // para ese módulo para evitar que se reapliquen.
+    const cameFromSearch = currentState.params.hasOwnProperty('search');
+    const goingToGeneric = !previousState.params.hasOwnProperty('search');
+
+    if (cameFromSearch && goingToGeneric) {
+        this.moduleFilters[currentState.mod] = {}; // Limpiamos el filtro guardado
+    }
+
+    // Procedemos con la navegación hacia atrás como antes
     this.irModulo(previousState.mod, previousState.params, true);
 },
             irModulo(mod, params = {}, isBackNavigation = false) {

@@ -21,12 +21,9 @@ renderDashboard() {
     const cxcSaldo = saldosAcumulados.find(c => c.codigo === '120')?.saldo || 0;
     const inventarioSaldo = saldosAcumulados.find(c => c.codigo === '130')?.saldo || 0;
 
-    // --- INICIO DE LA CORRECCIÓN DE SALDO CXP ---
-    // Calculamos el saldo de Cuentas por Pagar basándonos solo en las facturas pendientes.
     const cxpSaldo = this.transacciones
         .filter(t => (t.tipo === 'gasto' || t.tipo === 'compra_inventario') && (t.estado === 'Pendiente' || t.estado === 'Parcial'))
         .reduce((sum, t) => sum + (t.total - (t.montoPagado || 0)), 0);
-    // --- FIN DE LA CORRECCIÓN DE SALDO CXP ---
 
     const currentLayout = this.empresa.dashboardLayout || 'grid';
     document.getElementById('page-actions-header').innerHTML = `
@@ -102,12 +99,12 @@ renderDashboard() {
             </div>
         </div>
     `;
-    // --- FIN DE LA CORRECCIÓN DE ALTURA ---
     
     document.getElementById("dashboard").innerHTML = dashboardHTML;
     
     // Es importante asegurarse de que el div 'dashboard' también pueda crecer.
     document.getElementById("dashboard").style.height = '100%';
+    // --- FIN DE LA CORRECCIÓN DE ALTURA ---
 
     this.empresa.dashboardContentWidgets.order.forEach(widgetId => {
         const settings = this.empresa.dashboardContentWidgets.settings[widgetId];
