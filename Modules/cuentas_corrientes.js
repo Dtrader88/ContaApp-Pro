@@ -2,50 +2,51 @@
 
 Object.assign(ContaApp, {
 getEstadoDeCuenta(contactoId, tipoContacto) {
-        const esCliente = tipoContacto === 'cliente';
-        const transaccionesContacto = this.transacciones.filter(t => t.contactoId === contactoId);
-        
-        let saldo = 0;
-        const estadoDeCuenta = transaccionesContacto
-            .map(t => {
-                let debito = 0, credito = 0, detalle = '';
-                if (esCliente) {
-                    if (t.tipo === 'venta') {
-                        debito = t.total;
-                        detalle = `Factura #${t.numeroFactura || t.id}`;
-                    } else if (t.tipo === 'pago_cliente' || t.tipo === 'anticipo') {
-                        credito = t.monto || t.total;
-                        detalle = t.comentario || `Pago/Anticipo #${t.id}`;
-                    } else if (t.tipo === 'nota_credito') {
-                        credito = t.total;
-                        detalle = `Nota de Crédito #${t.numeroNota || t.id}`;
-                    } else {
-                        return null; // Ignorar otros tipos de transacciones
-                    }
-                } else { // esProveedor
-                    if (t.tipo === 'gasto') {
-                        credito = t.total;
-                        detalle = t.descripcion;
-                    } else if (t.tipo === 'pago_proveedor') {
-                        debito = t.monto;
-                        detalle = t.comentario || `Pago Gasto #${t.gastoId}`;
-                    } else {
-                        return null;
-                    }
+    const esCliente = tipoContacto === 'cliente';
+    const transaccionesContacto = this.transacciones.filter(t => t.contactoId === contactoId);
+    
+    let saldo = 0;
+    const estadoDeCuenta = transaccionesContacto
+        .map(t => {
+            let debito = 0, credito = 0, detalle = '';
+            if (esCliente) {
+                if (t.tipo === 'venta') {
+                    debito = t.total;
+                    detalle = `Factura #${t.numeroFactura || t.id}`;
+                } else if (t.tipo === 'pago_cliente' || t.tipo === 'anticipo') {
+                    credito = t.monto || t.total;
+                    detalle = t.comentario || `Pago/Anticipo #${t.id}`;
+                } else if (t.tipo === 'nota_credito') {
+                    credito = t.total;
+                    detalle = `Nota de Crédito #${t.numeroNota || t.id}`;
+                } else {
+                    return null;
                 }
-                return { fecha: t.fecha, detalle, debito, credito, transaccionOriginal: t };
-            })
-            .filter(Boolean) // Eliminar nulos
-            .sort((a, b) => new Date(a.fecha) - new Date(b.fecha)); // Ordenar por fecha ascendente
+            } else { // esProveedor
+                // --- INICIO DE LA CORRECCIÓN: Incluir 'compra_inventario' ---
+                if (t.tipo === 'gasto' || t.tipo === 'compra_inventario') {
+                // --- FIN DE LA CORRECCIÓN ---
+                    credito = t.total;
+                    detalle = t.descripcion;
+                } else if (t.tipo === 'pago_proveedor') {
+                    debito = t.monto;
+                    detalle = t.comentario || `Pago Gasto #${t.gastoId}`;
+                } else {
+                    return null;
+                }
+            }
+            return { fecha: t.fecha, detalle, debito, credito, transaccionOriginal: t };
+        })
+        .filter(Boolean)
+        .sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
-        // Calcular el saldo corriente
-        estadoDeCuenta.forEach(mov => {
-            saldo += (mov.debito - mov.credito);
-            mov.saldo = saldo;
-        });
+    estadoDeCuenta.forEach(mov => {
+        saldo += (mov.debito - mov.credito);
+        mov.saldo = saldo;
+    });
 
-        return estadoDeCuenta.sort((a, b) => new Date(b.fecha) - new Date(a.fecha)); // Devolver en orden descendente para la vista
-    },
+    return estadoDeCuenta.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+},
     
     renderEstadoDeCuentaDetalle(contactoId, tipoContacto) {
     const contacto = this.findById(this.contactos, contactoId);
@@ -65,14 +66,11 @@ getEstadoDeCuenta(contactoId, tipoContacto) {
 
     const estadoDeCuenta = this.getEstadoDeCuenta(contactoId, tipoContacto);
     
-    // --- INICIO DE LA CORRECCIÓN DE SALDO ---
-    // Calculamos el saldo final basándonos en las transacciones pendientes, no en el historial contable.
     const transaccionesPendientes = this.transacciones.filter(t => 
         t.contactoId === contactoId &&
         (t.estado === 'Pendiente' || t.estado === 'Parcial')
     );
     const saldoFinal = transaccionesPendientes.reduce((sum, t) => sum + (t.total - (t.montoPagado || 0)), 0);
-    // --- FIN DE LA CORRECCIÓN DE SALDO ---
 
     const totalFacturadoOComprado = estadoDeCuenta.filter(m => esCliente ? m.debito > 0 : m.credito > 0).reduce((sum, m) => sum + (esCliente ? m.debito : m.credito), 0);
     const totalCobradoOPagado = estadoDeCuenta.filter(m => esCliente ? m.credito > 0 : m.debito > 0).reduce((sum, m) => sum + (esCliente ? m.credito : m.debito), 0);
@@ -89,42 +87,60 @@ getEstadoDeCuenta(contactoId, tipoContacto) {
             </div>
             <div class="conta-card kpi-dashboard-card w-64 text-center">
                 <div class="text-xs text-[var(--color-text-secondary)]">SALDO ACTUAL</div>
-                <p class="font-bold text-xl mt-1 ${saldoFinal !== 0 ? 'conta-text-danger' : 'conta-text-success'}">${this.formatCurrency(saldoFinal)}</p>
+                <p class="font-bold text-xl mt-1 ${saldoFinal > 0.01 ? 'conta-text-danger' : 'conta-text-success'}">${this.formatCurrency(saldoFinal)}</p>
             </div>
         </div>
     `;
     
+    // --- INICIO DE LA MEJORA: Mostrar TODAS las facturas con su estado ---
     let tablaHTML = `<div class="conta-card overflow-auto" id="estado-de-cuenta-area">
         <h3 class="conta-subtitle !border-0 text-center !mb-4">Movimientos de Cuenta</h3>
         <table class="min-w-full text-sm conta-table-zebra">
             <thead><tr>
                 <th class="conta-table-th">Fecha</th>
                 <th class="conta-table-th">Detalle</th>
-                <th class="conta-table-th text-right">Débito</th>
-                <th class="conta-table-th text-right">Crédito</th>
-                <th class="conta-table-th text-right">Saldo Corriente</th>
+                <th class="conta-table-th">Estado</th>
+                <th class="conta-table-th text-right">Total</th>
+                <th class="conta-table-th text-right">Pagado</th>
+                <th class="conta-table-th text-right">Saldo</th>
             </tr></thead>
             <tbody>`;
     
-    if (estadoDeCuenta.length === 0) {
-        tablaHTML += `<tr><td colspan="5" class="text-center p-8 text-[var(--color-text-secondary)]">Este contacto aún no tiene transacciones registradas.</td></tr>`;
+    // Filtramos solo las transacciones que son facturas de venta o compra/gasto
+    const facturasDelContacto = this.transacciones.filter(t => 
+        t.contactoId === contactoId && 
+        (t.tipo === 'venta' || t.tipo === 'gasto' || t.tipo === 'compra_inventario')
+    ).sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+
+    if (facturasDelContacto.length === 0) {
+        tablaHTML += `<tr><td colspan="6" class="text-center p-8 text-[var(--color-text-secondary)]">Este contacto aún no tiene facturas registradas.</td></tr>`;
     } else {
-        estadoDeCuenta.forEach(mov => {
-            tablaHTML += `<tr>
-                <td class="conta-table-td">${mov.fecha}</td>
-                <td class="conta-table-td">${mov.detalle}</td>
-                <td class="conta-table-td text-right font-mono">${mov.debito > 0 ? this.formatCurrency(mov.debito) : ''}</td>
-                <td class="conta-table-td text-right font-mono conta-text-success">${mov.credito > 0 ? this.formatCurrency(mov.credito) : ''}</td>
-                <td class="conta-table-td text-right font-mono font-bold">${this.formatCurrency(mov.saldo)}</td>
+        facturasDelContacto.forEach(factura => {
+            const saldo = factura.total - (factura.montoPagado || 0);
+            const estado = factura.estado || 'Pendiente';
+            let estadoClass = estado === 'Pagado' ? 'tag-success' : (estado === 'Parcial' ? 'tag-accent' : 'tag-warning');
+            if (factura.estado === 'Anulada') estadoClass = 'tag-anulada';
+            
+            const onclickAction = esCliente ? `ContaApp.abrirModalHistorialFactura(${factura.id})` : `ContaApp.abrirModalHistorialGasto(${factura.id})`;
+
+            tablaHTML += `<tr class="cursor-pointer hover:bg-[var(--color-bg-accent)]" onclick="${onclickAction}">
+                <td class="conta-table-td">${factura.fecha}</td>
+                <td class="conta-table-td">${factura.descripcion || `Factura #${factura.numeroFactura || factura.id}`}</td>
+                <td class="conta-table-td"><span class="tag ${estadoClass}">${estado}</span></td>
+                <td class="conta-table-td text-right font-mono">${this.formatCurrency(factura.total)}</td>
+                <td class="conta-table-td text-right font-mono">${this.formatCurrency(factura.montoPagado)}</td>
+                <td class="conta-table-td text-right font-mono font-bold">${this.formatCurrency(saldo)}</td>
             </tr>`;
         });
     }
     
     tablaHTML += `</tbody></table></div>`;
+    // --- FIN DE LA MEJORA ---
     
-    const containerId = esCliente ? 'cxc' : 'cxp';
+    const containerId = esCliente ? 'cxc-contenido' : 'cxp-contenido';
     document.getElementById(containerId).innerHTML = kpiHTML + tablaHTML;
 },
+
   /**
      * Función genérica para calcular datos de antigüedad de saldos.
      * @param {string} tipoContacto - Puede ser 'cliente' (para CXC) o 'proveedor' (para CXP).
@@ -245,10 +261,8 @@ getAgingData(tipoContacto, fechaReporte) {
         }
     },
         renderCXC(params = {}) {
-    if (params.clienteId) {
-        this.renderCXCDetalleCliente(params.clienteId, params);
-        return;
-    }
+    // --- INICIO DE LA CORRECCIÓN DE NAVEGACIÓN ---
+    // Paso 1: Dibujar SIEMPRE la estructura base de la página (pestañas y contenedor de contenido).
     const submodulo = params.submodulo || 'estado-cuenta';
     let html = `
         <div class="flex gap-2 mb-4 border-b border-[var(--color-border-accent)] flex-wrap">
@@ -258,11 +272,23 @@ getAgingData(tipoContacto, fechaReporte) {
         <div id="cxc-contenido"></div>
     `;
     document.getElementById('cxc').innerHTML = html;
-    if (submodulo === 'estado-cuenta') {
+
+    // Paso 2: Ahora que la estructura existe, decidimos qué contenido mostrar DENTRO de ella.
+    const searchTerm = params.search ? params.search.trim().toLowerCase() : '';
+    const clienteEncontrado = searchTerm ? this.contactos.find(c => c.tipo === 'cliente' && c.nombre.toLowerCase().includes(searchTerm)) : null;
+
+    if (params.clienteId || clienteEncontrado) {
+        // Si hay un clienteId o se encontró un cliente, mostramos el detalle.
+        const clienteId = params.clienteId || clienteEncontrado.id;
+        this.renderCXCDetalleCliente(clienteId, params);
+    } else if (submodulo === 'estado-cuenta') {
+        // Si no, mostramos la pestaña de estado de cuenta general (aging).
         this.renderCXC_TabEstadoCuenta(params);
     } else if (submodulo === 'anticipos') {
+        // O la pestaña de anticipos.
         this.renderAnticipos('cxc-contenido');
     }
+    // --- FIN DE LA CORRECCIÓN DE NAVEGACIÓN ---
 },
 
         renderCXC_TabEstadoCuenta(params = {}) {
@@ -1040,10 +1066,8 @@ renderAnticipos(containerId) {
     
     // Módulo: Cuentas por Pagar (CXP)
         renderCXP(params = {}) {
-    if (params.proveedorId) {
-        this.renderCXPDetalleProveedor(params.proveedorId, params);
-        return;
-    }
+    // --- INICIO DE LA CORRECCIÓN DE NAVEGACIÓN ---
+    // Paso 1: Dibujar SIEMPRE la estructura base de la página.
     const submodulo = params.submodulo || 'estado-cuenta';
     let html = `
         <div class="flex gap-2 mb-4 border-b border-[var(--color-border-accent)] flex-wrap">
@@ -1052,38 +1076,39 @@ renderAnticipos(containerId) {
         <div id="cxp-contenido"></div>
     `;
     document.getElementById('cxp').innerHTML = html;
-    if (submodulo === 'estado-cuenta') {
+
+    // Paso 2: Ahora que la estructura existe, decidimos qué contenido mostrar DENTRO de ella.
+    const searchTerm = params.search ? params.search.trim().toLowerCase() : '';
+    const proveedorEncontrado = searchTerm ? this.contactos.find(c => c.tipo === 'proveedor' && c.nombre.toLowerCase().includes(searchTerm)) : null;
+
+    if (params.proveedorId || proveedorEncontrado) {
+        // Si hay un proveedorId o se encontró un proveedor, mostramos el detalle.
+        const proveedorId = params.proveedorId || proveedorEncontrado.id;
+        this.renderCXPDetalleProveedor(proveedorId, params);
+    } else if (submodulo === 'estado-cuenta') {
+        // Si no, mostramos la pestaña de estado de cuenta general (aging).
         this.renderCXP_TabEstadoCuenta(params);
     }
+    // --- FIN DE LA CORRECCIÓN DE NAVEGACIÓN ---
 },
     renderCXP_TabEstadoCuenta(params = {}) {
     document.getElementById('page-title-header').innerText = `Cuentas por Pagar`;
     document.getElementById('page-actions-header').innerHTML = `
         <div class="flex gap-2 flex-wrap">
-            <button class="conta-btn conta-btn-success" onclick="ContaApp.procesarSeleccionDePago('proveedor')"><i class="fa-solid fa-money-bill-wave me-2"></i>Registrar Pago</button>
+            <button class="conta-btn conta-btn-success" onclick="ContaApp.procesarSeleccionDePago('proveedor')"><i class="fa-solid fa.money-bill-wave me-2"></i>Registrar Pago</button>
             <button class="conta-btn" onclick="ContaApp.abrirModalGasto()">+ Nuevo Gasto</button>
         </div>`;
-
-    const searchTerm = params.search ? params.search.trim().toLowerCase() : '';
-    const proveedorEncontrado = searchTerm ? this.contactos.find(c => c.tipo === 'proveedor' && c.nombre.toLowerCase().includes(searchTerm)) : null;
-
-    // --- INICIO DE LA CORRECCIÓN DE NAVEGACIÓN ---
-    // Si se encuentra un proveedor, navegamos a su vista de detalle a través de irModulo.
-    if (proveedorEncontrado) {
-        this.irModulo('cxp', { proveedorId: proveedorEncontrado.id });
-        return;
-    }
-    // --- FIN DE LA CORRECCIÓN DE NAVEGACIÓN ---
-
+    
+    // La lógica de búsqueda ahora vive en renderCXP, por lo que aquí ya no es necesaria.
+    
     let html = `
         <div class="conta-card p-3 mb-4">
             <form onsubmit="event.preventDefault(); ContaApp.filtrarLista('cxp');" class="flex items-end gap-3">
                 <div>
                     <label class="text-xs font-semibold">Buscar por Proveedor para ver Estado de Cuenta individual</label>
-                    <input type="search" id="cxp-search" class="conta-input w-full md:w-80" value="${searchTerm}" placeholder="Escribe nombre del proveedor...">
+                    <input type="search" id="cxp-search" class="conta-input w-full md:w-80" value="${params.search || ''}" placeholder="Escribe nombre del proveedor...">
                 </div>
                 <button type="submit" class="conta-btn">Buscar</button>
-                ${searchTerm ? `<button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.irModulo('cxp')">Ver Todos</button>` : ''}
             </form>
         </div>`;
 

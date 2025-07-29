@@ -463,20 +463,17 @@ const ContaApp = {
         }
     },
 irAtras() {
-        // No hacer nada si no hay a dónde ir
-        if (this.navigationHistory.length <= 1) {
-            return;
-        }
+    // --- LÍNEA DE DIAGNÓSTICO AÑADIDA ---
+    console.log("Historial de Navegación al hacer clic en 'Atrás':", JSON.stringify(this.navigationHistory));
+    // --- FIN DE LÍNEA DE DIAGNÓSTICO ---
 
-        // 1. Eliminar la página actual del historial
-        this.navigationHistory.pop();
-
-        // 2. Obtener el estado de la página a la que queremos volver
-        const previousState = this.navigationHistory[this.navigationHistory.length - 1];
-
-        // 3. Navegar a ese estado anterior, indicando que es una navegación "hacia atrás"
-        this.irModulo(previousState.mod, previousState.params, true);
-    },
+    if (this.navigationHistory.length <= 1) {
+        return;
+    }
+    this.navigationHistory.pop();
+    const previousState = this.navigationHistory[this.navigationHistory.length - 1];
+    this.irModulo(previousState.mod, previousState.params, true);
+},
             irModulo(mod, params = {}, isBackNavigation = false) {
         if (!this.licencia || !this.licencia.modulosActivos) {
             console.warn(`Intento de navegar al módulo '${mod}' antes de que la licencia esté cargada. Abortando.`);
