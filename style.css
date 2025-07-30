@@ -389,16 +389,26 @@ tfoot tr:hover { background-color: var(--color-bg-accent); }
     background-color: var(--color-bg-accent);
     border: 2px dashed var(--color-primary);
 }
-.pagination-controls {
-    position: sticky;
+#pagination-container {
+    position: fixed;
     bottom: 0;
-    z-index: 10;
+    /* Se alinea con el inicio del área de contenido (después de la barra de navegación) */
+    left: 16rem; /* 256px, el ancho de <nav> */
+    right: 0;
+    z-index: 50; /* Por encima del contenido, debajo de los modales */
+}
+#content-area {
+    /* Añade espacio en la parte inferior para que la última fila no quede oculta */
+    padding-bottom: 80px !important;
+}
+.pagination-controls {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.75rem 1rem;
-    margin-top: 1rem;
-    border-top: 2px solid var(--color-border-accent);
+    padding: 0.75rem 1.5rem; /* Más padding horizontal para que coincida con el contenido */
+    border-top: 1px solid var(--color-border-accent);
+    background-color: var(--color-bg-secondary);
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.05);
 }
 
 .pagination-btn {

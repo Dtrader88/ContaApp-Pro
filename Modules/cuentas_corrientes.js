@@ -322,22 +322,13 @@ getAgingData(tipoContacto, fechaReporte) {
     if (agingData.facturas.length === 0) {
         html += this.generarEstadoVacioHTML('fa-file-invoice-dollar', '¡Todo al día!', 'No tienes cuentas por cobrar pendientes. ¡Excelente trabajo!', '+ Crear Nueva Venta', "ContaApp.irModulo('ventas', {action: 'new'})");
     } else {
-        html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
-            <thead><tr>
-                <th class="conta-table-th w-10"><input type="checkbox" onchange="ContaApp.toggleAllCheckboxes(this, 'cxc-factura-check')"></th>
-                <th class="conta-table-th">Fecha</th>
-                <th class="conta-table-th">Cliente</th>
-                <th class="conta-table-th">Factura #</th>
-                <th class="conta-table-th">Descripción</th>
-                <th class="conta-table-th text-right">No Vencido</th>
-                <th class="conta-table-th text-right">1-30 Días</th>
-                <th class="conta-table-th text-right">31-60 Días</th>
-                <th class="conta-table-th text-right">61-90 Días</th>
-                <th class="conta-table-th text-right">> 90 Días</th>
-                <th class="conta-table-th text-right">Total Pendiente</th>
-            </tr></thead><tbody>`;
+        const { currentPage, perPage } = this.getPaginationState('cxc');
+        const startIndex = (currentPage - 1) * perPage;
+        const endIndex = startIndex + perPage;
+        const itemsParaMostrar = agingData.facturas.slice(startIndex, endIndex);
 
-        agingData.facturas.forEach(factura => {
+        let tableRowsHTML = '';
+        itemsParaMostrar.forEach(factura => {
             const cliente = this.findById(this.contactos, factura.contactoId);
             const saldo = factura.total - (factura.montoPagado || 0);
             
@@ -354,7 +345,7 @@ getAgingData(tipoContacto, fechaReporte) {
                 }
             }
 
-            html += `<tr class="cursor-pointer hover:bg-[var(--color-bg-accent)]" onclick="ContaApp.abrirModalHistorialFactura(${factura.id})">
+            tableRowsHTML += `<tr class="cursor-pointer hover:bg-[var(--color-bg-accent)]" onclick="ContaApp.abrirModalHistorialFactura(${factura.id})">
                 <td class="conta-table-td text-center" onclick="event.stopPropagation();"><input type="checkbox" class="cxc-factura-check" data-factura-id="${factura.id}"></td>
                 <td class="conta-table-td">${factura.fecha}</td>
                 <td class="conta-table-td font-bold">${cliente?.nombre || 'N/A'}</td>
@@ -369,7 +360,22 @@ getAgingData(tipoContacto, fechaReporte) {
             </tr>`;
         });
 
-        html += `</tbody></table></div>`;
+        html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
+            <thead><tr>
+                <th class="conta-table-th w-10"><input type="checkbox" onchange="ContaApp.toggleAllCheckboxes(this, 'cxc-factura-check')"></th>
+                <th class="conta-table-th">Fecha</th>
+                <th class="conta-table-th">Cliente</th>
+                <th class="conta-table-th">Factura #</th>
+                <th class="conta-table-th">Descripción</th>
+                <th class="conta-table-th text-right">No Vencido</th>
+                <th class="conta-table-th text-right">1-30 Días</th>
+                <th class="conta-table-th text-right">31-60 Días</th>
+                <th class="conta-table-th text-right">61-90 Días</th>
+                <th class="conta-table-th text-right">> 90 Días</th>
+                <th class="conta-table-th text-right">Total Pendiente</th>
+            </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
+        
+        this.renderPaginationControls('cxc', agingData.facturas.length);
     }
     document.getElementById('cxc-contenido').innerHTML = html;
 },
@@ -1149,27 +1155,18 @@ renderAnticipos(containerId) {
     if (agingData.facturas.length === 0) {
         html += this.generarEstadoVacioHTML('fa-file-invoice', '¡Sin Deudas!', 'No tienes cuentas por pagar pendientes. ¡Excelente!', '+ Crear Nuevo Gasto', "ContaApp.abrirModalGasto()");
     } else {
-        html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
-            <thead><tr>
-                <th class="conta-table-th w-10"><input type="checkbox" onchange="ContaApp.toggleAllCheckboxes(this, 'cxp-gasto-check')"></th>
-                <th class="conta-table-th">Fecha</th>
-                <th class="conta-table-th">Proveedor</th>
-                <th class="conta-table-th">Referencia #</th>
-                <th class="conta-table-th">Descripción</th>
-                <th class="conta-table-th text-right">No Vencido</th>
-                <th class="conta-table-th text-right">1-30 Días</th>
-                <th class="conta-table-th text-right">31-60 Días</th>
-                <th class="conta-table-th text-right">61-90 Días</th>
-                <th class="conta-table-th text-right">> 90 Días</th>
-                <th class="conta-table-th text-right">Total Pendiente</th>
-            </tr></thead><tbody>`;
+        const { currentPage, perPage } = this.getPaginationState('cxp');
+        const startIndex = (currentPage - 1) * perPage;
+        const endIndex = startIndex + perPage;
+        const itemsParaMostrar = agingData.facturas.slice(startIndex, endIndex);
 
-        agingData.facturas.forEach(factura => {
+        let tableRowsHTML = '';
+        itemsParaMostrar.forEach(factura => {
             const proveedor = this.findById(this.contactos, factura.contactoId);
             const saldo = factura.total - (factura.montoPagado || 0);
             const rowOnclick = factura.tipo === 'compra_inventario' ? `ContaApp.abrirModalDetalleCompra(${factura.id})` : `ContaApp.abrirModalHistorialGasto(${factura.id})`;
 
-            html += `<tr class="cursor-pointer hover:bg-[var(--color-bg-accent)]" onclick="${rowOnclick}">
+            tableRowsHTML += `<tr class="cursor-pointer hover:bg-[var(--color-bg-accent)]" onclick="${rowOnclick}">
                 <td class="conta-table-td text-center" onclick="event.stopPropagation();"><input type="checkbox" class="cxp-gasto-check" data-factura-id="${factura.id}"></td>
                 <td class="conta-table-td">${factura.fecha}</td>
                 <td class="conta-table-td font-bold">${proveedor?.nombre || 'N/A'}</td>
@@ -1184,7 +1181,22 @@ renderAnticipos(containerId) {
             </tr>`;
         });
 
-        html += `</tbody></table></div>`;
+        html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
+            <thead><tr>
+                <th class="conta-table-th w-10"><input type="checkbox" onchange="ContaApp.toggleAllCheckboxes(this, 'cxp-gasto-check')"></th>
+                <th class="conta-table-th">Fecha</th>
+                <th class="conta-table-th">Proveedor</th>
+                <th class="conta-table-th">Referencia #</th>
+                <th class="conta-table-th">Descripción</th>
+                <th class="conta-table-th text-right">No Vencido</th>
+                <th class="conta-table-th text-right">1-30 Días</th>
+                <th class="conta-table-th text-right">31-60 Días</th>
+                <th class="conta-table-th text-right">61-90 Días</th>
+                <th class="conta-table-th text-right">> 90 Días</th>
+                <th class="conta-table-th text-right">Total Pendiente</th>
+            </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
+        
+        this.renderPaginationControls('cxp', agingData.facturas.length);
     }
     document.getElementById('cxp-contenido').innerHTML = html;
 },

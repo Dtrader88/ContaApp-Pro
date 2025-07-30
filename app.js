@@ -470,7 +470,14 @@ irAtras() {
     // Procedemos con la navegación hacia atrás como antes
     this.irModulo(previousState.mod, previousState.params, true);
 },
-                async irModulo(mod, params = {}, isBackNavigation = false) {
+        async irModulo(mod, params = {}, isBackNavigation = false) {
+        // --- INICIO DE LA MEJORA: Limpiar la paginación al cambiar de módulo ---
+        const paginationContainer = document.getElementById('pagination-container');
+        if (paginationContainer) {
+            paginationContainer.innerHTML = '';
+        }
+        // --- FIN DE LA MEJORA ---
+
         if (!this.licencia || !this.licencia.modulosActivos) {
             console.warn(`Intento de navegar al módulo '${mod}' antes de que la licencia esté cargada. Abortando.`);
             return;
@@ -1552,31 +1559,33 @@ getPeriodoContableActual() {
     },
 
     renderPaginationControls(module, totalItems) {
-        // Corrección: La barra ahora se muestra incluso si solo hay una página.
-        // No se muestra únicamente si no hay absolutamente ningún resultado.
-        if (totalItems === 0) return '';
+        const container = document.getElementById('pagination-container');
+        if (!container) return;
 
         const { currentPage, perPage } = this.getPaginationState(module);
         const totalPages = Math.ceil(totalItems / perPage);
 
-        let pageButtonsHTML = '';
-        if (totalPages > 1) {
-            const maxButtons = 5;
-            let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
-            let endPage = Math.min(totalPages, startPage + maxButtons - 1);
-
-            if (endPage - startPage + 1 < maxButtons) {
-                startPage = Math.max(1, endPage - maxButtons + 1);
-            }
-
-            for (let i = startPage; i <= endPage; i++) {
-                const isActive = i === currentPage;
-                pageButtonsHTML += `<button class="pagination-btn ${isActive ? 'active' : ''}" onclick="ContaApp.goToPage('${module}', ${i})">${i}</button>`;
-            }
+        if (totalPages <= 1) {
+            container.innerHTML = ''; // Limpia el contenedor si no se necesita paginación
+            return;
         }
 
-        return `
-            <div class="pagination-controls conta-card">
+        let pageButtonsHTML = '';
+        const maxButtons = 5;
+        let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+        let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+
+        if (endPage - startPage + 1 < maxButtons) {
+            startPage = Math.max(1, endPage - maxButtons + 1);
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            const isActive = i === currentPage;
+            pageButtonsHTML += `<button class="pagination-btn ${isActive ? 'active' : ''}" onclick="ContaApp.goToPage('${module}', ${i})">${i}</button>`;
+        }
+
+        container.innerHTML = `
+            <div class="pagination-controls">
                 <div class="text-sm font-semibold">
                     Página ${currentPage} de ${totalPages} (${totalItems} en total)
                 </div>
@@ -1587,5 +1596,5 @@ getPeriodoContableActual() {
                 </div>
             </div>
         `;
-    }
+    },
 };

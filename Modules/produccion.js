@@ -34,22 +34,15 @@ Object.assign(ContaApp, {
                 '+ Crear Primera Orden', "ContaApp.abrirModalOrdenProduccion()"
             );
         } else {
-            html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
-                <thead>
-                    <tr>
-                        <th class="conta-table-th">Fecha</th>
-                        <th class="conta-table-th">Orden #</th>
-                        <th class="conta-table-th">Descripción</th>
-                        <th class="conta-table-th">Producto Final</th>
-                        <th class="conta-table-th text-right">Cantidad</th>
-                        <th class="conta-table-th text-right">Costo Proyectado</th>
-                        <th class="conta-table-th">Estado</th>
-                        <th class="conta-table-th text-center">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>`;
+            const { currentPage, perPage } = this.getPaginationState('produccion');
+            const startIndex = (currentPage - 1) * perPage;
+            const endIndex = startIndex + perPage;
+
+            const ordenesOrdenadas = ordenes.sort((a,b) => new Date(b.fecha) - new Date(a.fecha) || b.id - a.id);
+            const itemsParaMostrar = ordenesOrdenadas.slice(startIndex, endIndex);
             
-            ordenes.sort((a,b) => new Date(b.fecha) - new Date(a.fecha) || b.id - a.id).forEach(orden => {
+            let tableRows = '';
+            itemsParaMostrar.forEach(orden => {
                 const productoFinal = this.findById(this.productos, orden.productoTerminadoId);
                 let estadoTag;
                 let accionesHTML;
@@ -69,7 +62,7 @@ Object.assign(ContaApp, {
                     `;
                 }
 
-                html += `
+                tableRows += `
                     <tr>
                         <td class="conta-table-td">${orden.fecha}</td>
                         <td class="conta-table-td font-mono">${orden.numero}</td>
@@ -83,7 +76,22 @@ Object.assign(ContaApp, {
                 `;
             });
 
-            html += `</tbody></table></div>`;
+            html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
+                <thead>
+                    <tr>
+                        <th class="conta-table-th">Fecha</th>
+                        <th class="conta-table-th">Orden #</th>
+                        <th class="conta-table-th">Descripción</th>
+                        <th class="conta-table-th">Producto Final</th>
+                        <th class="conta-table-th text-right">Cantidad</th>
+                        <th class="conta-table-th text-right">Costo Proyectado</th>
+                        <th class="conta-table-th">Estado</th>
+                        <th class="conta-table-th text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>${tableRows}</tbody></table></div>`;
+            
+            this.renderPaginationControls('produccion', ordenes.length);
         }
         
         document.getElementById('produccion-contenido').innerHTML = html;
