@@ -42,7 +42,7 @@ const ContaApp = {
 
             // Inicialización de la aplicación
     // Inicialización de la aplicación
-        async init(repository, userProfile) { 
+            async init(repository, userProfile) { 
     this.repository = repository;
     this.currentUser = userProfile;
 
@@ -78,7 +78,9 @@ const ContaApp = {
     } else {
         this.actualizarSaldosGlobales();
         this.actualizarPerfilEmpresa();
-        this.irModulo('dashboard');
+        // --- CAMBIO CLAVE AQUÍ ---
+        // Le decimos a la función init que "espere" a que el módulo del dashboard se cargue.
+        await this.irModulo('dashboard');
     }
 },
 
@@ -205,130 +207,154 @@ const ContaApp = {
         if(paso === totalPasos) this.generarResumenApertura();
     },
     agregarFilaApertura(tipo) {
-        const timestamp = Date.now();
-        let html = '';
-        if (tipo === 'banco') {
-            const container = document.getElementById('apertura-bancos-container');
-            html = `<div id="row-${timestamp}" class="dynamic-row grid grid-cols-12 gap-2 items-center">
-    <div class="col-span-6 input-with-icon-container">
-        <i class="fa-solid fa-building-columns input-icon"></i>
-        <input type="text" placeholder="Nombre del Banco" class="w-full p-2 apertura-banco-nombre">
-    </div>
-    <div class="col-span-5 input-with-icon-container">
-        <i class="fa-solid fa-dollar-sign input-icon"></i>
-        <input type="number" step="0.01" placeholder="0.00" class="w-full p-2 text-right apertura-banco-saldo">
-    </div>
-    <button class="col-span-1 conta-btn-icon delete" onclick="document.getElementById('row-${timestamp}').remove()">🗑️</button>
-</div>`;
-            container.insertAdjacentHTML('beforeend', html);
-        } else if (tipo === 'inventario') {
-            const container = document.getElementById('apertura-inventario-container');
-            html = `<div id="row-${timestamp}" class="dynamic-row grid grid-cols-12 gap-2 items-center">
-    <div class="col-span-4 input-with-icon-container">
-        <i class="fa-solid fa-box input-icon"></i>
-        <input type="text" placeholder="Nombre Producto/Servicio" class="w-full p-2 apertura-inv-nombre">
-    </div>
-    <div class="col-span-2 input-with-icon-container">
-        <i class="fa-solid fa-boxes-stacked input-icon"></i>
-        <input type="number" step="1" placeholder="Stock" class="w-full p-2 text-right apertura-inv-stock">
-    </div>
-    <div class="col-span-2 input-with-icon-container">
-        <i class="fa-solid fa-dollar-sign input-icon"></i>
-        <input type="number" step="0.01" placeholder="Costo Unit." class="w-full p-2 text-right apertura-inv-costo">
-    </div>
-    <div class="col-span-3 input-with-icon-container">
-        <i class="fa-solid fa-tag input-icon"></i>
-        <input type="number" step="0.01" placeholder="Precio Venta" class="w-full p-2 text-right apertura-inv-precio">
-    </div>
-    <button class="col-span-1 conta-btn-icon delete" onclick="document.getElementById('row-${timestamp}').remove()">🗑️</button>
-</div>`;
-            container.insertAdjacentHTML('beforeend', html);
-        } else if (tipo === 'cxc' || tipo === 'cxp') {
-            const container = document.getElementById(`apertura-${tipo}-container`);
-            const contactoTipo = tipo === 'cxc' ? 'Cliente' : 'Proveedor';
-            html = `<div id="row-${timestamp}" class="dynamic-row grid grid-cols-12 gap-2 items-center">
-                <input type="text" placeholder="Nombre ${contactoTipo}" class="col-span-4 p-2 apertura-${tipo}-contacto">
-                <input type="text" placeholder="# Factura" class="col-span-3 p-2 apertura-${tipo}-ref">
-                <input type="date" value="${this.getTodayDate()}" class="col-span-3 p-2 apertura-${tipo}-fecha">
-                <input type="number" step="0.01" placeholder="Monto" class="col-span-1 p-2 text-right apertura-${tipo}-monto">
-                <button class="col-span-1 conta-btn-icon delete" onclick="document.getElementById('row-${timestamp}').remove()">🗑️</button>
-            </div>`;
-             container.insertAdjacentHTML('beforeend', html);
-        } else if (tipo === 'tarjeta') {
-            const container = document.getElementById('apertura-tarjetas-container');
-            html = `<div id="row-${timestamp}" class="dynamic-row grid grid-cols-12 gap-2 items-center">
-                <input type="text" placeholder="Nombre de la Tarjeta (ej: Visa Banco X)" class="col-span-6 p-2 apertura-tarjeta-nombre">
-                <input type="number" step="0.01" placeholder="Saldo Deudor" class="col-span-5 p-2 text-right apertura-tarjeta-saldo">
-                <button class="col-span-1 conta-btn-icon delete" onclick="document.getElementById('row-${timestamp}').remove()">🗑️</button>
-            </div>`;
-            container.insertAdjacentHTML('beforeend', html);
-        } else if (tipo === 'anticipo') {
-            const container = document.getElementById('apertura-anticipos-container');
-            html = `<div id="row-${timestamp}" class="dynamic-row grid grid-cols-12 gap-2 items-center">
-                <input type="text" placeholder="Nombre del Cliente" class="col-span-6 p-2 apertura-anticipo-contacto">
-                <input type="number" step="0.01" placeholder="Monto del Anticipo" class="col-span-5 p-2 text-right apertura-anticipo-monto">
-                <button class="col-span-1 conta-btn-icon delete" onclick="document.getElementById('row-${timestamp}').remove()">🗑️</button>
-            </div>`;
-            container.insertAdjacentHTML('beforeend', html);
-        }
-    },
+    const timestamp = Date.now();
+    let html = '';
+    if (tipo === 'banco') {
+        const container = document.getElementById('apertura-bancos-container');
+        html = `<div id="row-${timestamp}" class="dynamic-row grid grid-cols-12 gap-2 items-center">
+            <div class="col-span-6 input-with-icon-container">
+                <i class="fa-solid fa-building-columns input-icon"></i>
+                <input type="text" placeholder="Nombre del Banco" class="w-full p-2 apertura-banco-nombre">
+            </div>
+            <div class="col-span-5 input-with-icon-container">
+                <i class="fa-solid fa-dollar-sign input-icon"></i>
+                <input type="number" step="0.01" placeholder="0.00" class="w-full p-2 text-right apertura-banco-saldo">
+            </div>
+            <button class="col-span-1 conta-btn-icon delete" onclick="document.getElementById('row-${timestamp}').remove()">🗑️</button>
+        </div>`;
+        container.insertAdjacentHTML('beforeend', html);
+    } else if (tipo === 'inventario') {
+        const container = document.getElementById('apertura-inventario-container');
+        const categoriasInventarioOptions = this.planDeCuentas
+            .filter(c => c.parentId === 130)
+            .map(c => `<option value="${c.id}">${c.nombre}</option>`)
+            .join('');
+        
+        // --- INICIO DE LA MEJORA: Opciones para el selector de Unidad de Medida ---
+        const unidadesOptions = this.unidadesMedida
+            .map(u => `<option value="${u.id}">${u.nombre}</option>`)
+            .join('');
+        // --- FIN DE LA MEJORA ---
+
+        // CORRECCIÓN: Se reajustó la grilla para incluir el nuevo campo "Unidad".
+        html = `<div id="row-${timestamp}" class="dynamic-row grid grid-cols-12 gap-2 items-center">
+            <div class="col-span-2">
+                <input type="text" placeholder="Nombre Producto" class="w-full p-2 apertura-inv-nombre">
+            </div>
+            <div class="col-span-2">
+                <select class="w-full p-2 apertura-inv-categoria">${categoriasInventarioOptions}</select>
+            </div>
+            <div class="col-span-1">
+                <input type="number" step="1" placeholder="Stock" class="w-full p-2 text-right apertura-inv-stock">
+            </div>
+            <div class="col-span-2">
+                <select class="w-full p-2 apertura-inv-unidad">${unidadesOptions}</select>
+            </div>
+            <div class="col-span-2">
+                <input type="number" step="0.01" placeholder="Costo Unit." class="w-full p-2 text-right apertura-inv-costo">
+            </div>
+            <div class="col-span-2">
+                <input type="number" step="0.01" placeholder="Precio Venta" class="w-full p-2 text-right apertura-inv-precio">
+            </div>
+            <button class="col-span-1 conta-btn-icon delete" onclick="document.getElementById('row-${timestamp}').remove()">🗑️</button>
+        </div>`;
+        container.insertAdjacentHTML('beforeend', html);
+    } else if (tipo === 'cxc' || tipo === 'cxp') {
+        const container = document.getElementById(`apertura-${tipo}-container`);
+        const contactoTipo = tipo === 'cxc' ? 'Cliente' : 'Proveedor';
+        html = `<div id="row-${timestamp}" class="dynamic-row grid grid-cols-12 gap-2 items-center">
+            <input type="text" placeholder="Nombre ${contactoTipo}" class="col-span-4 p-2 apertura-${tipo}-contacto">
+            <input type="text" placeholder="# Factura" class="col-span-3 p-2 apertura-${tipo}-ref">
+            <input type="date" value="${this.getTodayDate()}" class="col-span-3 p-2 apertura-${tipo}-fecha">
+            <input type="number" step="0.01" placeholder="Monto" class="col-span-1 p-2 text-right apertura-${tipo}-monto">
+            <button class="col-span-1 conta-btn-icon delete" onclick="document.getElementById('row-${timestamp}').remove()">🗑️</button>
+        </div>`;
+         container.insertAdjacentHTML('beforeend', html);
+    } else if (tipo === 'tarjeta') {
+        const container = document.getElementById('apertura-tarjetas-container');
+        html = `<div id="row-${timestamp}" class="dynamic-row grid grid-cols-12 gap-2 items-center">
+            <input type="text" placeholder="Nombre de la Tarjeta (ej: Visa Banco X)" class="col-span-6 p-2 apertura-tarjeta-nombre">
+            <input type="number" step="0.01" placeholder="Saldo Deudor" class="col-span-5 p-2 text-right apertura-tarjeta-saldo">
+            <button class="col-span-1 conta-btn-icon delete" onclick="document.getElementById('row-${timestamp}').remove()">🗑️</button>
+        </div>`;
+        container.insertAdjacentHTML('beforeend', html);
+    } else if (tipo === 'anticipo') {
+        const container = document.getElementById('apertura-anticipos-container');
+        html = `<div id="row-${timestamp}" class="dynamic-row grid grid-cols-12 gap-2 items-center">
+            <input type="text" placeholder="Nombre del Cliente" class="col-span-6 p-2 apertura-anticipo-contacto">
+            <input type="number" step="0.01" placeholder="Monto del Anticipo" class="col-span-5 p-2 text-right apertura-anticipo-monto">
+            <button class="col-span-1 conta-btn-icon delete" onclick="document.getElementById('row-${timestamp}').remove()">🗑️</button>
+        </div>`;
+        container.insertAdjacentHTML('beforeend', html);
+    }
+},
     recolectarDatosPaso(paso) {
-        if(paso === 1) {
-            const nombre = document.getElementById('apertura-nombre-empresa').value;
-            if(!nombre) { this.showToast('El nombre de la empresa es obligatorio.', 'error'); return false; }
-            this.aperturaData.empresa.nombre = nombre;
-            this.aperturaData.fechaApertura = document.getElementById('apertura-fecha').value;
-        } else if (paso === 2) {
-            this.aperturaData.bancos = [];
-            document.querySelectorAll('#apertura-bancos-container .dynamic-row').forEach(row => {
-                const nombre = row.querySelector('.apertura-banco-nombre').value;
-                const saldo = parseFloat(row.querySelector('.apertura-banco-saldo').value);
-                if(nombre && saldo > 0) this.aperturaData.bancos.push({ nombre, saldo });
-            });
-        } else if (paso === 3) {
-            this.aperturaData.inventario = [];
-            document.querySelectorAll('#apertura-inventario-container .dynamic-row').forEach(row => {
-                const nombre = row.querySelector('.apertura-inv-nombre').value;
-                const stock = parseFloat(row.querySelector('.apertura-inv-stock').value) || 0;
-                const costo = parseFloat(row.querySelector('.apertura-inv-costo').value) || 0;
-                const precio = parseFloat(row.querySelector('.apertura-inv-precio').value) || 0;
-                if(nombre && precio > 0) this.aperturaData.inventario.push({ nombre, stock, costo, precio });
-            });
-        } else if (paso === 4) {
-            this.aperturaData.cxc = [];
-            document.querySelectorAll('#apertura-cxc-container .dynamic-row').forEach(row => {
-                const contacto = row.querySelector('.apertura-cxc-contacto').value;
-                const ref = row.querySelector('.apertura-cxc-ref').value;
-                const fecha = row.querySelector('.apertura-cxc-fecha').value;
-                const monto = parseFloat(row.querySelector('.apertura-cxc-monto').value);
-                if(contacto && monto > 0) this.aperturaData.cxc.push({ contacto, ref, fecha, monto });
-            });
-        } else if (paso === 5) {
-            this.aperturaData.tarjetas = [];
-            document.querySelectorAll('#apertura-tarjetas-container .dynamic-row').forEach(row => {
-                const nombre = row.querySelector('.apertura-tarjeta-nombre').value;
-                const saldo = parseFloat(row.querySelector('.apertura-tarjeta-saldo').value);
-                if(nombre && saldo > 0) this.aperturaData.tarjetas.push({ nombre, saldo });
-            });
-        } else if (paso === 6) {
-            this.aperturaData.anticipos = [];
-            document.querySelectorAll('#apertura-anticipos-container .dynamic-row').forEach(row => {
-                const contacto = row.querySelector('.apertura-anticipo-contacto').value;
-                const monto = parseFloat(row.querySelector('.apertura-anticipo-monto').value);
-                if(contacto && monto > 0) this.aperturaData.anticipos.push({ contacto, monto });
-            });
-        } else if (paso === 7) {
-            this.aperturaData.cxp = [];
-            document.querySelectorAll('#apertura-cxp-container .dynamic-row').forEach(row => {
-                const contacto = row.querySelector('.apertura-cxp-contacto').value;
-                const ref = row.querySelector('.apertura-cxp-ref').value;
-                const fecha = row.querySelector('.apertura-cxp-fecha').value;
-                const monto = parseFloat(row.querySelector('.apertura-cxp-monto').value);
-                if(contacto && monto > 0) this.aperturaData.cxp.push({ contacto, ref, fecha, monto });
-            });
-        }
-        return true;
-    },
+    if(paso === 1) {
+        const nombre = document.getElementById('apertura-nombre-empresa').value;
+        if(!nombre) { this.showToast('El nombre de la empresa es obligatorio.', 'error'); return false; }
+        this.aperturaData.empresa.nombre = nombre;
+        this.aperturaData.fechaApertura = document.getElementById('apertura-fecha').value;
+    } else if (paso === 2) {
+        this.aperturaData.bancos = [];
+        document.querySelectorAll('#apertura-bancos-container .dynamic-row').forEach(row => {
+            const nombre = row.querySelector('.apertura-banco-nombre').value;
+            const saldo = parseFloat(row.querySelector('.apertura-banco-saldo').value);
+            if(nombre && saldo > 0) this.aperturaData.bancos.push({ nombre, saldo });
+        });
+    } else if (paso === 3) {
+        // --- INICIO DE LA CORRECCIÓN ---
+        this.aperturaData.inventario = []; // Limpiamos el array antes de recolectar
+        document.querySelectorAll('#apertura-inventario-container .dynamic-row').forEach(row => {
+            const nombre = row.querySelector('.apertura-inv-nombre')?.value;
+            const categoriaId = parseInt(row.querySelector('.apertura-inv-categoria')?.value);
+            const stock = parseFloat(row.querySelector('.apertura-inv-stock')?.value) || 0;
+            const unidadMedidaId = parseInt(row.querySelector('.apertura-inv-unidad')?.value);
+            const costo = parseFloat(row.querySelector('.apertura-inv-costo')?.value) || 0;
+            const precio = parseFloat(row.querySelector('.apertura-inv-precio')?.value) || 0;
+            
+            // CORRECCIÓN: Se eliminó 'precio > 0' de la condición para ser más flexible.
+            // Ahora solo se necesita un nombre, una categoría y una unidad para guardar el producto.
+            if (nombre && categoriaId && unidadMedidaId) {
+                this.aperturaData.inventario.push({ nombre, categoriaId, stock, unidadMedidaId, costo, precio });
+            }
+        });
+        console.log("Datos de inventario recolectados:", this.aperturaData.inventario);
+        // --- FIN DE LA CORRECCIÓN ---
+    } else if (paso === 4) {
+        this.aperturaData.cxc = [];
+        document.querySelectorAll('#apertura-cxc-container .dynamic-row').forEach(row => {
+            const contacto = row.querySelector('.apertura-cxc-contacto').value;
+            const ref = row.querySelector('.apertura-cxc-ref').value;
+            const fecha = row.querySelector('.apertura-cxc-fecha').value;
+            const monto = parseFloat(row.querySelector('.apertura-cxc-monto').value);
+            if(contacto && monto > 0) this.aperturaData.cxc.push({ contacto, ref, fecha, monto });
+        });
+    } else if (paso === 5) {
+        this.aperturaData.tarjetas = [];
+        document.querySelectorAll('#apertura-tarjetas-container .dynamic-row').forEach(row => {
+            const nombre = row.querySelector('.apertura-tarjeta-nombre').value;
+            const saldo = parseFloat(row.querySelector('.apertura-tarjeta-saldo').value);
+            if(nombre && saldo > 0) this.aperturaData.tarjetas.push({ nombre, saldo });
+        });
+    } else if (paso === 6) {
+        this.aperturaData.anticipos = [];
+        document.querySelectorAll('#apertura-anticipos-container .dynamic-row').forEach(row => {
+            const contacto = row.querySelector('.apertura-anticipo-contacto').value;
+            const monto = parseFloat(row.querySelector('.apertura-anticipo-monto').value);
+            if(contacto && monto > 0) this.aperturaData.anticipos.push({ contacto, monto });
+        });
+    } else if (paso === 7) {
+        this.aperturaData.cxp = [];
+        document.querySelectorAll('#apertura-cxp-container .dynamic-row').forEach(row => {
+            const contacto = row.querySelector('.apertura-cxp-contacto').value;
+            const ref = row.querySelector('.apertura-cxp-ref').value;
+            const fecha = row.querySelector('.apertura-cxp-fecha').value;
+            const monto = parseFloat(row.querySelector('.apertura-cxp-monto').value);
+            if(contacto && monto > 0) this.aperturaData.cxp.push({ contacto, ref, fecha, monto });
+        });
+    }
+    return true;
+},
     generarResumenApertura() {
         const { empresa, fechaApertura, bancos, inventario, cxc, cxp, tarjetas, anticipos } = this.aperturaData;
         let html = `<p><strong>Empresa:</strong> ${empresa.nombre}</p><p><strong>Fecha de Apertura:</strong> ${fechaApertura}</p>`;
@@ -343,125 +369,82 @@ const ContaApp = {
         document.getElementById('apertura-resumen-container').innerHTML = html;
     },
         guardarAperturaCompleta() {
-        console.log("Iniciando guardado de apertura completa...");
+    console.log("Iniciando guardado de apertura...");
+    try {
+        const { fechaApertura, bancos, inventario, cxc, cxp, tarjetas, anticipos } = this.aperturaData;
+        
+        // --- SECCIÓN DE BANCOS ---
         try {
-            const { fechaApertura, bancos, inventario, cxc, cxp, tarjetas, anticipos } = this.aperturaData;
-            const cuentaAperturaId = 330;
-            const cuentaCxcId = 120;
-            const cuentaCxpId = 210;
-            const cuentaInventarioId = 130;
-            const cuentaAnticiposId = 220;
-
-            // 1. Guardar info de empresa
-            this.empresa.nombre = this.aperturaData.empresa.nombre;
-            this.actualizarPerfilEmpresa();
-            console.log("Paso 1: Información de empresa guardada.");
-
-            // 2. Procesar Bancos (Activo)
+            console.log("Procesando Bancos...", bancos);
             const cuentaBancoPadre = this.planDeCuentas.find(c => c.id === 110);
-            if (!cuentaBancoPadre) throw new Error("No se encontró la cuenta padre de Bancos (ID 110).");
-
+            if (!cuentaBancoPadre) throw new Error("Cuenta padre de Bancos (110) no encontrada.");
             bancos.forEach(banco => {
                 const newAccount = { id: this.idCounter++, codigo: `${cuentaBancoPadre.codigo}.${this.planDeCuentas.filter(c=>c.parentId === 110).length + 1}`, nombre: banco.nombre, tipo: 'DETALLE', parentId: 110 };
                 this.planDeCuentas.push(newAccount);
-                this.crearAsiento(fechaApertura, `Saldo inicial ${banco.nombre}`, [
-                    { cuentaId: newAccount.id, debe: banco.saldo, haber: 0 },
-                    { cuentaId: cuentaAperturaId, debe: 0, haber: banco.saldo }
-                ]);
+                this.crearAsiento(fechaApertura, `Saldo inicial ${banco.nombre}`, [{ cuentaId: newAccount.id, debe: banco.saldo, haber: 0 }, { cuentaId: 330, debe: 0, haber: banco.saldo }]);
             });
-            console.log(`Paso 2: ${bancos.length} cuentas de banco procesadas.`);
-            
-            // 3. Procesar Inventario (Activo)
-            const cuentaIngresosProd = this.planDeCuentas.find(c => c.codigo === '401.1');
-            if (!cuentaIngresosProd) throw new Error("No se encontró la cuenta de Ingresos por Venta de Mercancía (401.1).");
-
-            inventario.forEach(item => {
-                const nuevoProducto = { ...item, id: this.idCounter++, tipo: item.stock > 0 ? 'producto' : 'servicio', cuentaIngresoId: cuentaIngresosProd.id };
-                this.productos.push(nuevoProducto);
-                const valorInventario = item.costo * item.stock;
-                if (valorInventario > 0) {
-                     this.crearAsiento(fechaApertura, `Inventario inicial ${item.nombre}`, [
-                        { cuentaId: cuentaInventarioId, debe: valorInventario, haber: 0 },
-                        { cuentaId: cuentaAperturaId, debe: 0, haber: valorInventario }
-                    ]);
-                }
-            });
-            console.log(`Paso 3: ${inventario.length} productos de inventario procesados.`);
-            
-            // 4. Procesar CxC (Activo)
-            cxc.forEach(factura => {
-                let cliente = this.contactos.find(c => c.nombre.toLowerCase() === factura.contacto.toLowerCase() && c.tipo === 'cliente');
-                if(!cliente) {
-                    cliente = { id: this.idCounter++, nombre: factura.contacto, tipo: 'cliente' };
-                    this.contactos.push(cliente);
-                }
-                const nuevaVenta = { id: this.idCounter++, tipo: 'venta', fecha: factura.fecha, contactoId: cliente.id, items: [], subtotal: factura.monto, impuesto: 0, total: factura.monto, estado: 'Pendiente', refOriginal: factura.ref, montoPagado: 0 };
-                this.transacciones.push(nuevaVenta);
-                this.crearAsiento(factura.fecha, `Saldo inicial CxC ${cliente.nombre} #${factura.ref}`, [
-                    { cuentaId: cuentaCxcId, debe: factura.monto, haber: 0 },
-                    { cuentaId: cuentaAperturaId, debe: 0, haber: factura.monto }
-                ], nuevaVenta.id);
-            });
-            console.log(`Paso 4: ${cxc.length} cuentas por cobrar procesadas.`);
-            
-            // 5. Procesar Tarjetas de Crédito (Pasivo)
-            const cuentaTarjetaPadre = this.planDeCuentas.find(c => c.id === 230);
-            if (!cuentaTarjetaPadre) throw new Error("No se encontró la cuenta padre de Tarjetas (ID 230).");
-
-            tarjetas.forEach(tarjeta => {
-                const newAccount = { id: this.idCounter++, codigo: `${cuentaTarjetaPadre.codigo}.${this.planDeCuentas.filter(c=>c.parentId === 230).length + 1}`, nombre: tarjeta.nombre, tipo: 'DETALLE', parentId: 230 };
-                this.planDeCuentas.push(newAccount);
-                this.crearAsiento(fechaApertura, `Saldo inicial ${tarjeta.nombre}`, [
-                    { cuentaId: cuentaAperturaId, debe: tarjeta.saldo, haber: 0 },
-                    { cuentaId: newAccount.id, debe: 0, haber: tarjeta.saldo }
-                ]);
-            });
-            console.log(`Paso 5: ${tarjetas.length} tarjetas de crédito procesadas.`);
-
-            // 6. Procesar Anticipos de Clientes (Pasivo)
-            anticipos.forEach(anticipo => {
-                let cliente = this.contactos.find(c => c.nombre.toLowerCase() === anticipo.contacto.toLowerCase() && c.tipo === 'cliente');
-                if(!cliente) {
-                    cliente = { id: this.idCounter++, nombre: anticipo.contacto, tipo: 'cliente' };
-                    this.contactos.push(cliente);
-                }
-                const nuevaTransaccion = { id: this.idCounter++, tipo: 'anticipo', fecha: fechaApertura, contactoId: cliente.id, total: anticipo.monto, refOriginal: 'Saldo Inicial', saldoAplicado: 0 };
-                this.transacciones.push(nuevaTransaccion);
-                this.crearAsiento(fechaApertura, `Anticipo inicial de ${cliente.nombre}`, [
-                    { cuentaId: cuentaAperturaId, debe: anticipo.monto, haber: 0 },
-                    { cuentaId: cuentaAnticiposId, debe: 0, haber: anticipo.monto }
-                ], nuevaTransaccion.id);
-            });
-            console.log(`Paso 6: ${anticipos.length} anticipos de clientes procesados.`);
-
-            // 7. Procesar CxP (Pasivo)
-            cxp.forEach(factura => {
-                let proveedor = this.contactos.find(c => c.nombre.toLowerCase() === factura.contacto.toLowerCase() && c.tipo === 'proveedor');
-                if(!proveedor) {
-                    proveedor = { id: this.idCounter++, nombre: factura.contacto, tipo: 'proveedor' };
-                    this.contactos.push(proveedor);
-                }
-                const nuevoGasto = { id: this.idCounter++, tipo: 'gasto', fecha: factura.fecha, contactoId: proveedor.id, descripcion: `Saldo inicial Factura #${factura.ref}`, subtotal: factura.monto, impuesto: 0, total: factura.monto, estado: 'Pendiente', montoPagado: 0 };
-                this.transacciones.push(nuevoGasto);
-                this.crearAsiento(factura.fecha, `Saldo inicial CxP ${proveedor.nombre} #${factura.ref}`, [
-                    { cuentaId: cuentaAperturaId, debe: factura.monto, haber: 0 },
-                    { cuentaId: cuentaCxpId, debe: 0, haber: factura.monto }
-                ], nuevoGasto.id);
-            });
-            console.log(`Paso 7: ${cxp.length} cuentas por pagar procesadas.`);
-
-            // Finalizar
-            console.log("Todos los pasos completados. Llamando a saveAll()...");
-            this.saveAll();
-            this.showToast('¡Configuración completada! Bienvenido.', 'success');
-            document.getElementById('modal-bg').onclick = () => ContaApp.closeModal();
-            this.closeModal();
-            this.irModulo('dashboard');
-        } catch (error) {
-            console.error("Error crítico durante guardarAperturaCompleta:", error);
-            this.showToast(`Error de configuración: ${error.message}`, 'error');
+            console.log("Bancos procesados con éxito.");
+        } catch(e) {
+            console.error("ERROR EN LA SECCIÓN DE BANCOS:", e);
+            this.showToast(`Error procesando bancos: ${e.message}`, 'error');
+            return; // Detener ejecución si falla
         }
-    },
+
+        // --- SECCIÓN DE INVENTARIO (PUNTO CRÍTICO) ---
+        try {
+            console.log("Procesando Inventario...", inventario);
+            if (inventario && inventario.length > 0) {
+                inventario.forEach(item => {
+                    console.log("Procesando item:", item.nombre);
+                    let cuentaIngresoIdAsociada;
+                    if (item.categoriaId === 13004) {
+                        cuentaIngresoIdAsociada = 41002;
+                    } else {
+                        cuentaIngresoIdAsociada = 41001;
+                    }
+
+                    const nuevoProducto = {
+                        ...item,
+                        id: this.idCounter++,
+                        tipo: 'producto',
+                        cuentaIngresoId: cuentaIngresoIdAsociada,
+                        cuentaInventarioId: item.categoriaId
+                    };
+                    
+                    this.productos.push(nuevoProducto);
+                    console.log("Producto pusheado:", nuevoProducto.nombre);
+
+                    const valorInventario = item.costo * item.stock;
+                    if (valorInventario > 0) {
+                        this.crearAsiento(fechaApertura, `Inventario inicial ${item.nombre}`, [
+                            { cuentaId: item.categoriaId, debe: valorInventario, haber: 0 },
+                            { cuentaId: 330, debe: 0, haber: valorInventario }
+                        ]);
+                    }
+                });
+            }
+            console.log("Inventario procesado con éxito.");
+        } catch(e) {
+            console.error("ERROR EN LA SECCIÓN DE INVENTARIO:", e);
+            this.showToast(`Error procesando inventario: ${e.message}`, 'error');
+            return;
+        }
+
+        // --- Guardado Final ---
+        console.log("Todos los pasos previos completados. Llamando a saveAll()...");
+        console.log("Estado final de this.productos antes de guardar:", JSON.stringify(this.productos));
+        
+        this.saveAll();
+        
+        this.showToast('¡Configuración completada! Bienvenido.', 'success');
+        this.closeModal();
+        this.irModulo('dashboard');
+
+    } catch (error) {
+        console.error("Error crítico durante guardarAperturaCompleta:", error);
+        this.showToast(`Error de configuración: ${error.message}`, 'error');
+    }
+},
 irAtras() {
     if (this.navigationHistory.length <= 1) {
         return;
@@ -486,7 +469,7 @@ irAtras() {
     // Procedemos con la navegación hacia atrás como antes
     this.irModulo(previousState.mod, previousState.params, true);
 },
-            irModulo(mod, params = {}, isBackNavigation = false) {
+                async irModulo(mod, params = {}, isBackNavigation = false) {
         if (!this.licencia || !this.licencia.modulosActivos) {
             console.warn(`Intento de navegar al módulo '${mod}' antes de que la licencia esté cargada. Abortando.`);
             return;
@@ -502,29 +485,21 @@ irAtras() {
 
         const licenciaRequerida = mapaLicencias[mod];
         
-        if (licenciaRequerida) {
-            const tieneLicencia = this.licencia.modulosActivos.includes(licenciaRequerida);
-            
-            if (!tieneLicencia) {
-                const contentArea = document.getElementById('content-area');
-                document.querySelectorAll('#content-area > div').forEach(el => el.style.display = 'none');
-                
-                const elToShow = document.getElementById(mod);
-                if (elToShow) {
-                    elToShow.innerHTML = this.generarEstadoVacioHTML(
-                        'fa-lock', 'Módulo Bloqueado',
-                        `Esta funcionalidad no está incluida en tu paquete "${this.licencia.paquete}".`,
-                        'Volver al Dashboard', "ContaApp.irModulo('dashboard')"
-                    );
-                    elToShow.style.display = "block";
-                }
-                
-                this.showToast(`El módulo '${mod}' requiere un paquete superior.`, 'error');
-                return;
+        if (licenciaRequerida && !this.licencia.modulosActivos.includes(licenciaRequerida)) {
+            const elToShow = document.getElementById(mod);
+            if (elToShow) {
+                elToShow.innerHTML = this.generarEstadoVacioHTML(
+                    'fa-lock', 'Módulo Bloqueado',
+                    `Esta funcionalidad no está incluida en tu paquete "${this.licencia.paquete}".`,
+                    'Volver al Dashboard', "ContaApp.irModulo('dashboard')"
+                );
+                elToShow.style.display = "block";
             }
+            this.showToast(`El módulo '${mod}' requiere un paquete superior.`, 'error');
+            return;
         }
 
-        const hasNewFilterParams = params.hasOwnProperty('search') || params.hasOwnProperty('startDate') || params.hasOwnProperty('endDate') || params.hasOwnProperty('estado');
+        const hasNewFilterParams = Object.keys(params).some(k => ['search', 'startDate', 'endDate', 'estado'].includes(k));
         if (!hasNewFilterParams && this.moduleFilters[mod]) {
             params = { ...this.moduleFilters[mod], ...params };
         } else {
@@ -532,9 +507,10 @@ irAtras() {
         }
 
         if (this.isFormDirty) {
-            this.showConfirm( "Tienes cambios sin guardar. ¿Estás seguro de que quieres salir?",
-                () => { this.isFormDirty = false; this.irModulo(mod, params); }
-            );
+            this.showConfirm("Tienes cambios sin guardar. ¿Estás seguro de que quieres salir?", () => {
+                this.isFormDirty = false;
+                this.irModulo(mod, params);
+            });
             return;
         }
 
@@ -551,68 +527,61 @@ irAtras() {
         const loader = document.getElementById('module-loader');
         const contentArea = document.getElementById('content-area');
         loader.classList.remove('hidden');
-        contentArea.style.opacity = '0';
-        
-        setTimeout(() => {
-            let elToShow;
-            try {
-                document.querySelectorAll('#content-area > div').forEach(el => el.style.display = 'none');
-                document.querySelectorAll('.conta-nav-link').forEach(el => el.classList.remove('active'));
-                
-                elToShow = document.getElementById(mod);
-                if (elToShow) {
-                    elToShow.style.display = "block";
-                    elToShow.classList.remove('animate-fadeInUp');
-                    void elToShow.offsetWidth;
-                    elToShow.classList.add('animate-fadeInUp');
-                }
-                
-                const navLink = document.getElementById("nav-" + mod);
-                if (navLink) navLink.classList.add("active");
+        contentArea.style.opacity = '0.5';
 
-                const moduleTitle = navLink ? navLink.innerText.trim() : mod.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                
-                if (!params.clienteId && !params.proveedorId && !params.activoId) {
-                    document.getElementById('page-title-header').innerText = moduleTitle;
-                }
-                document.title = `${this.empresa.nombre} - ${moduleTitle}`;
-                
-                document.getElementById('page-actions-header').innerHTML = '';
-                
-                const moduleRenderers = {
-                    'dashboard': this.renderDashboard,
-                    'ventas': this.renderVentas,
-                    'gastos': this.renderGastos,
-                    'compras': this.renderCompras,
-                    'cxc': (p) => p.clienteId ? this.renderCXCDetalleCliente(p.clienteId, p) : this.renderCXC(p),
-                    'cxp': (p) => p.proveedorId ? this.renderCXPDetalleProveedor(p.proveedorId, p) : this.renderCXP(p),
-                    'inventario': this.renderInventario,
-                    'plan-de-cuentas': this.renderPlanDeCuentas,
-                    'diario-general': this.renderDiarioGeneral,
-                    'cierre-periodo': this.renderCierrePeriodo,
-                    'bancos': this.renderBancosYTarjetas,
-                    'reportes': this.renderReportes,
-                    'activos-fijos': this.renderActivosFijos,
-                    'produccion': this.renderProduccion, // <-- ESTA ES LA LÍNEA QUE FALTABA
-                    'config': this.renderConfig
-                };
-                
-                if (moduleRenderers[mod]) {
-                    moduleRenderers[mod].call(this, params);
-                }
-
-                if (params.action === 'new' && mod === 'ventas' && params.anticipoId) {
-                    setTimeout(() => { this.abrirModalVenta(params.clienteId, params.anticipoId); }, 100);
-                }
-            } catch(e) {
-                console.error(`Error al renderizar el módulo ${mod}:`, e);
-                this.showToast(`Error al cargar el módulo ${mod}`, 'error');
-                if(elToShow) elToShow.innerHTML = `<div class="conta-card conta-text-danger"><h3>Error Crítico</h3><p>Error al cargar el módulo <strong>${mod}</strong>. Revisa la consola para más detalles técnicos.</p><pre class="mt-4 p-2 bg-[var(--color-bg-accent)] rounded text-xs">${e.stack}</pre></div>`;
-            } finally {
-                loader.classList.add('hidden');
-                contentArea.style.opacity = '1';
+        try {
+            document.querySelectorAll('#content-area > div').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.conta-nav-link').forEach(el => el.classList.remove('active'));
+            
+            const elToShow = document.getElementById(mod);
+            if (elToShow) {
+                elToShow.style.display = "block";
             }
-        }, 50);
+            
+            const navLink = document.getElementById("nav-" + mod);
+            if (navLink) navLink.classList.add("active");
+
+            const moduleTitle = navLink ? navLink.innerText.trim() : mod.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            
+            if (!params.clienteId && !params.proveedorId && !params.activoId) {
+                document.getElementById('page-title-header').innerText = moduleTitle;
+            }
+            document.title = `${this.empresa.nombre} - ${moduleTitle}`;
+            document.getElementById('page-actions-header').innerHTML = '';
+            
+            const moduleRenderers = {
+                'dashboard': this.renderDashboard,
+                'ventas': this.renderVentas,
+                'gastos': this.renderGastos,
+                'compras': this.renderCompras,
+                'cxc': (p) => p.clienteId ? this.renderCXCDetalleCliente(p.clienteId, p) : this.renderCXC(p),
+                'cxp': (p) => p.proveedorId ? this.renderCXPDetalleProveedor(p.proveedorId, p) : this.renderCXP(p),
+                'inventario': this.renderInventario,
+                'plan-de-cuentas': this.renderPlanDeCuentas,
+                'diario-general': this.renderDiarioGeneral,
+                'cierre-periodo': this.renderCierrePeriodo,
+                'bancos': this.renderBancosYTarjetas,
+                'reportes': this.renderReportes,
+                'activos-fijos': this.renderActivosFijos,
+                'produccion': this.renderProduccion,
+                'config': this.renderConfig
+            };
+            
+            if (moduleRenderers[mod]) {
+                await moduleRenderers[mod].call(this, params); // Espera a que el renderizado termine
+            }
+
+            if (params.action === 'new' && mod === 'ventas') {
+                setTimeout(() => this.abrirModalVenta(params.clienteId, params.anticipoId), 100);
+            }
+
+        } catch (e) {
+            console.error(`Error al renderizar el módulo ${mod}:`, e);
+            this.showToast(`Error al cargar el módulo ${mod}`, 'error');
+        } finally {
+            loader.classList.add('hidden');
+            contentArea.style.opacity = '1';
+        }
     },
 
     // Utilidades (Modales, Toast, Formato)
@@ -831,7 +800,8 @@ irAtras() {
             },
             dashboardLayout: 'grid',
             pdfTemplate: 'clasica',
-            pdfColor: '#1877f2'
+            pdfColor: '#1877f2',
+            periodosContables: {} // <-- AÑADIDO
         },
         licencia: {
             cliente: "Usuario Principal",
@@ -870,8 +840,6 @@ irAtras() {
         this.licencia = data.licencia || defaultData.licencia;
         this.idCounter = data.idCounter || defaultData.idCounter;
         
-        // --- INICIO DE LA CORRECCIÓN ---
-        // Se simplifican las validaciones para evitar el error con `null.length`
         this.planDeCuentas = data.planDeCuentas || defaultData.planDeCuentas;
         this.asientos = data.asientos || defaultData.asientos;
         this.transacciones = data.transacciones || defaultData.transacciones;
@@ -883,7 +851,6 @@ irAtras() {
         this.ordenesProduccion = data.ordenesProduccion || [];
         this.unidadesMedida = data.unidadesMedida || defaultData.unidadesMedida;
         this.bancoImportado = data.bancoImportado || defaultData.bancoImportado;
-        // --- FIN DE LA CORRECCIÓN ---
 
         this.verificarYActualizarPlanDeCuentas();
 
@@ -893,6 +860,8 @@ irAtras() {
             this.empresa.dashboardContentWidgets = defaultData.empresa.dashboardContentWidgets;
         }
         if (!this.empresa.dashboardLayout) this.empresa.dashboardLayout = defaultData.empresa.dashboardLayout;
+        // <-- AÑADIDO
+        if (!this.empresa.periodosContables) this.empresa.periodosContables = {};
     } else {
         Object.assign(this, defaultData);
     }
@@ -950,70 +919,146 @@ verificarYActualizarPlanDeCuentas() {
     
     // Lógica Contable Principal
             getPlanDeCuentasDefault() {
-        return [
-            { id: 100, codigo: '100', nombre: 'ACTIVOS', tipo: 'TITULO', parentId: null },
-            { id: 110, codigo: '110', nombre: 'Efectivo y Equivalentes', tipo: 'CONTROL', parentId: 100 },
-            { id: 11001, codigo: '110.1', nombre: 'Caja General', tipo: 'DETALLE', parentId: 110 },
-            { id: 120, codigo: '120', nombre: 'Cuentas por Cobrar', tipo: 'DETALLE', parentId: 100 },
-            // ===== INICIO DE CAMBIOS EN INVENTARIO =====
-            { id: 130, codigo: '130', nombre: 'Inventarios', tipo: 'CONTROL', parentId: 100 },
-            { id: 13001, codigo: '130.1', nombre: 'Inventario de Mercancía para Reventa', tipo: 'DETALLE', parentId: 130 },
-            { id: 13002, codigo: '130.2', nombre: 'Inventario de Materias Primas', tipo: 'DETALLE', parentId: 130 },
-            { id: 13003, codigo: '130.3', nombre: 'Inventario de Productos en Proceso', tipo: 'DETALLE', parentId: 130 },
-            { id: 13004, codigo: '130.4', nombre: 'Inventario de Productos Terminados', tipo: 'DETALLE', parentId: 130 },
-            // ===== FIN DE CAMBIOS EN INVENTARIO =====
-            { id: 140, codigo: '140', nombre: 'IVA Crédito Fiscal', tipo: 'DETALLE', parentId: 100 },
-            { id: 150, codigo: '150', nombre: 'Propiedad, Planta y Equipo', tipo: 'CONTROL', parentId: 100 },
-            { id: 15001, codigo: '150.1', nombre: 'Mobiliario y Equipo de Oficina', tipo: 'DETALLE', parentId: 150 },
-            { id: 159, codigo: '159', nombre: 'Depreciación Acumulada', tipo: 'CONTROL', parentId: 100 },
-            { id: 15901, codigo: '159.1', nombre: 'Dep. Acum. Mobiliario y Equipo', tipo: 'DETALLE', parentId: 159 },
-            { id: 200, codigo: '200', nombre: 'PASIVOS', tipo: 'TITULO', parentId: null },
-            { id: 210, codigo: '210', nombre: 'Cuentas por Pagar', tipo: 'DETALLE', parentId: 200 },
-            { id: 220, codigo: '220', nombre: 'Anticipos de Clientes', tipo: 'DETALLE', parentId: 200 },
-            { id: 230, codigo: '230', nombre: 'Tarjetas de Crédito', tipo: 'CONTROL', parentId: 200 },
-            { id: 23001, codigo: '230.1', nombre: 'Tarjeta de Crédito Principal', tipo: 'DETALLE', parentId: 230 },
-            { id: 240, codigo: '240', nombre: 'IVA Débito Fiscal', tipo: 'DETALLE', parentId: 200 },
-            { id: 300, codigo: '300', nombre: 'PATRIMONIO', tipo: 'TITULO', parentId: null },
-            { id: 310, codigo: '310', nombre: 'Capital Social', tipo: 'DETALLE', parentId: 300 },
-            { id: 320, codigo: '320', nombre: 'Resultados Acumulados', tipo: 'DETALLE', parentId: 300 },
-            { id: 330, codigo: '330', nombre: 'Utilidades de Apertura', tipo: 'DETALLE', parentId: 300 },
-            { id: 400, codigo: '400', nombre: 'INGRESOS', tipo: 'TITULO', parentId: null },
-            { id: 401, codigo: '401', nombre: 'Ingresos por Venta de Productos', tipo: 'CONTROL', parentId: 400 },
-            { id: 40101, codigo: '401.1', nombre: 'Venta de Mercancía', tipo: 'DETALLE', parentId: 401 },
-            { id: 410, codigo: '410', nombre: 'Ingresos por Venta de Servicios', tipo: 'CONTROL', parentId: 400 },
-            { id: 41001, codigo: '410.1', nombre: 'Servicios Generales', tipo: 'DETALLE', parentId: 410 },
-            { id: 420, codigo: '420', nombre: 'Descuentos y Devoluciones en Venta', tipo: 'DETALLE', parentId: 400 },
-            { id: 430, codigo: '430', nombre: 'Ganancia en Venta de Activos', tipo: 'DETALLE', parentId: 400 },
-            { id: 500, codigo: '500', nombre: 'GASTOS', tipo: 'TITULO', parentId: null },
-            { id: 501, codigo: '501', nombre: 'Costo de Ventas', tipo: 'DETALLE', parentId: 500 },
-            { id: 510, codigo: '510', nombre: 'Gastos Operativos', tipo: 'CONTROL', parentId: 500 },
-            { id: 51001, codigo: '510.1', nombre: 'Sueldos y Salarios', tipo: 'DETALLE', parentId: 510 },
-            { id: 51002, codigo: '510.2', nombre: 'Alquiler', tipo: 'DETALLE', parentId: 510 },
-            { id: 51003, codigo: '510.3', nombre: 'Merma de Inventario', tipo: 'DETALLE', parentId: 510 },
-            { id: 51004, codigo: '510.4', nombre: 'Gasto por Depreciación', tipo: 'DETALLE', parentId: 510 },
-            { id: 520, codigo: '520', nombre: 'Pérdida en Venta/Baja de Activos', tipo: 'DETALLE', parentId: 500 },
-        ];
-    },
-    crearAsiento(fecha, descripcion, movimientos, transaccionId) {
-        // INICIO DE MEJORA: Bloqueo de períodos cerrados
-        if (this.empresa.ultimoCierre && fecha <= this.empresa.ultimoCierre) {
-            this.showToast(`Error: El período hasta ${this.empresa.ultimoCierre} está cerrado. No se pueden registrar transacciones en o antes de esta fecha.`, 'error');
-            return null;
-        }
-        // FIN DE MEJORA
+    return [
+        // 100: ACTIVOS (Sin cambios)
+        { id: 100, codigo: '100', nombre: 'ACTIVOS', tipo: 'TITULO', parentId: null },
+        { id: 110, codigo: '110', nombre: 'Efectivo y Equivalentes', tipo: 'CONTROL', parentId: 100 },
+        { id: 11001, codigo: '110.1', nombre: 'Caja General', tipo: 'DETALLE', parentId: 110 },
+        { id: 120, codigo: '120', nombre: 'Cuentas por Cobrar', tipo: 'DETALLE', parentId: 100 },
+        { id: 130, codigo: '130', nombre: 'Inventarios', tipo: 'CONTROL', parentId: 100 },
+        { id: 13001, codigo: '130.1', nombre: 'Inventario de Mercancía para Reventa', tipo: 'DETALLE', parentId: 130 },
+        { id: 13002, codigo: '130.2', nombre: 'Inventario de Materias Primas', tipo: 'DETALLE', parentId: 130 },
+        { id: 13003, codigo: '130.3', nombre: 'Inventario de Productos en Proceso', tipo: 'DETALLE', parentId: 130 },
+        { id: 13004, codigo: '130.4', nombre: 'Inventario de Productos Terminados', tipo: 'DETALLE', parentId: 130 },
+        { id: 140, codigo: '140', nombre: 'IVA Crédito Fiscal', tipo: 'DETALLE', parentId: 100 },
+        { id: 150, codigo: '150', nombre: 'Propiedad, Planta y Equipo', tipo: 'CONTROL', parentId: 100 },
+        { id: 15001, codigo: '150.1', nombre: 'Mobiliario y Equipo de Oficina', tipo: 'DETALLE', parentId: 150 },
+        { id: 159, codigo: '159', nombre: 'Depreciación Acumulada', tipo: 'CONTROL', parentId: 100 },
+        { id: 15901, codigo: '159.1', nombre: 'Dep. Acum. Mobiliario y Equipo', tipo: 'DETALLE', parentId: 159 },
 
-        const totalDebe = movimientos.reduce((sum, t) => sum + t.debe, 0);
-        const totalHaber = movimientos.reduce((sum, t) => sum + t.haber, 0);
-        if (Math.abs(totalDebe - totalHaber) > 0.01) {
-            console.error("Asiento descuadrado:", { totalDebe, totalHaber, movimientos });
-            this.showToast(`Error: Asiento descuadrado. Debe=${this.formatCurrency(totalDebe)}, Haber=${this.formatCurrency(totalHaber)}`, 'error');
-            return null;
-        }
-        const asiento = { id: this.idCounter++, fecha, descripcion, movimientos, transaccionId };
-        this.asientos.push(asiento);
-        this.actualizarSaldosGlobales();
-        return asiento;
-    },
+        // 200: PASIVOS (Sin cambios)
+        { id: 200, codigo: '200', nombre: 'PASIVOS', tipo: 'TITULO', parentId: null },
+        { id: 210, codigo: '210', nombre: 'Cuentas por Pagar', tipo: 'DETALLE', parentId: 200 },
+        { id: 220, codigo: '220', nombre: 'Anticipos de Clientes', tipo: 'DETALLE', parentId: 200 },
+        { id: 230, codigo: '230', nombre: 'Tarjetas de Crédito', tipo: 'CONTROL', parentId: 200 },
+        { id: 23001, codigo: '230.1', nombre: 'Tarjeta de Crédito Principal', tipo: 'DETALLE', parentId: 230 },
+        { id: 240, codigo: '240', nombre: 'IVA Débito Fiscal', tipo: 'DETALLE', parentId: 200 },
+
+        // 300: PATRIMONIO (Sin cambios)
+        { id: 300, codigo: '300', nombre: 'PATRIMONIO', tipo: 'TITULO', parentId: null },
+        { id: 310, codigo: '310', nombre: 'Capital Social', tipo: 'DETALLE', parentId: 300 },
+        { id: 320, codigo: '320', nombre: 'Resultados Acumulados', tipo: 'DETALLE', parentId: 300 },
+        { id: 330, codigo: '330', nombre: 'Utilidades de Apertura', tipo: 'DETALLE', parentId: 300 },
+        
+        // 400: INGRESOS (Reestructurado)
+        { id: 400, codigo: '400', nombre: 'INGRESOS', tipo: 'TITULO', parentId: null },
+        { id: 410, codigo: '410', nombre: 'Ingresos por Venta de Productos', tipo: 'CONTROL', parentId: 400 },
+        { id: 41001, codigo: '410.1', nombre: 'Venta de Mercancía para Reventa', tipo: 'DETALLE', parentId: 410 },
+        { id: 41002, codigo: '410.2', nombre: 'Venta de Productos Terminados', tipo: 'DETALLE', parentId: 410 },
+        { id: 420, codigo: '420', nombre: 'Ingresos por Venta de Servicios', tipo: 'CONTROL', parentId: 400 },
+        { id: 42001, codigo: '420.1', nombre: 'Servicios Generales', tipo: 'DETALLE', parentId: 420 },
+        { id: 430, codigo: '430', nombre: 'Otros Ingresos', tipo: 'CONTROL', parentId: 400 },
+        { id: 43001, codigo: '430.1', nombre: 'Ganancia en Venta de Activos', tipo: 'DETALLE', parentId: 430 },
+        { id: 490, codigo: '490', nombre: 'Descuentos y Devoluciones en Venta', tipo: 'DETALLE', parentId: 400 },
+
+        // 500: COSTOS (Nuevo grupo principal)
+        { id: 500, codigo: '500', nombre: 'COSTOS', tipo: 'TITULO', parentId: null },
+        { id: 510, codigo: '510', nombre: 'Costo de Ventas', tipo: 'DETALLE', parentId: 500 },
+
+        // 600: GASTOS (Nuevo grupo principal, antes era parte del 500)
+        { id: 600, codigo: '600', nombre: 'GASTOS', tipo: 'TITULO', parentId: null },
+        { id: 610, codigo: '610', nombre: 'Gastos Administrativos y Operativos', tipo: 'CONTROL', parentId: 600 },
+        { id: 61001, codigo: '610.1', nombre: 'Sueldos y Salarios', tipo: 'DETALLE', parentId: 610 },
+        { id: 61002, codigo: '610.2', nombre: 'Alquiler', tipo: 'DETALLE', parentId: 610 },
+        { id: 61003, codigo: '610.3', nombre: 'Merma de Inventario', tipo: 'DETALLE', parentId: 610 },
+        { id: 61004, codigo: '610.4', nombre: 'Gasto por Depreciación', tipo: 'DETALLE', parentId: 610 },
+        { id: 620, codigo: '620', nombre: 'Pérdida en Venta/Baja de Activos', tipo: 'DETALLE', parentId: 600 }
+    ];
+},
+    getFechaContable(fechaTransaccion) {
+    const periodosCerrados = this.empresa.periodosContables || {};
+    const periodoTransaccion = fechaTransaccion.substring(0, 7); // "YYYY-MM"
+
+    if (periodosCerrados[periodoTransaccion] !== 'cerrado') {
+        // El período está abierto, usamos la fecha original
+        return fechaTransaccion;
+    }
+
+    // El período está cerrado, debemos encontrar el siguiente mes abierto
+    const ultimoPeriodoCerrado = Object.keys(periodosCerrados)
+        .filter(p => periodosCerrados[p] === 'cerrado')
+        .sort()
+        .pop();
+    
+    if (!ultimoPeriodoCerrado) {
+         return fechaTransaccion; // No debería ocurrir si el chequeo inicial pasó, pero es una salvaguarda
+    }
+    
+    const [anio, mes] = ultimoPeriodoCerrado.split('-').map(Number);
+    // Creamos la fecha del primer día del mes SIGUIENTE al último cerrado
+    const primerDiaMesAbierto = new Date(anio, mes, 1); // El mes en JS es 0-11, así que mes '01' se vuelve Feb, etc.
+    
+    return primerDiaMesAbierto.toISOString().slice(0, 10);
+},
+getPeriodoContableActual() {
+    const periodosCerrados = this.empresa.periodosContables || {};
+    const anioActual = new Date().getFullYear();
+
+    const ultimoPeriodoCerrado = Object.keys(periodosCerrados)
+        .filter(p => periodosCerrados[p] === 'cerrado')
+        .sort()
+        .pop(); // Obtiene el último período cerrado, ej: "2025-07"
+
+    if (!ultimoPeriodoCerrado) {
+        // Si no hay ningún período cerrado, el período actual es Enero del año en curso.
+        return {
+            actual: `${anioActual}-01`,
+            anterior: null // No hay período anterior para reabrir
+        };
+    }
+
+    const [anio, mes] = ultimoPeriodoCerrado.split('-').map(Number);
+    // El nuevo período actual es el mes siguiente al último cerrado.
+    const fechaSiguiente = new Date(anio, mes, 1); // JS Date: mes 11 es Dic. mes 12 pasa al siguiente año.
+    
+    return {
+        actual: `${fechaSiguiente.getFullYear()}-${String(fechaSiguiente.getMonth() + 1).padStart(2, '0')}`,
+        anterior: ultimoPeriodoCerrado
+    };
+},
+    crearAsiento(fecha, descripcion, movimientos, transaccionId) {
+    // El parámetro 'fecha' ahora siempre es la FECHA DE LA TRANSACCIÓN ORIGINAL
+
+    // Comprobación de cierre ANUAL (irreversible)
+    if (this.empresa.ultimoCierre && fecha <= this.empresa.ultimoCierre) {
+        this.showToast(`Error: El período hasta ${this.empresa.ultimoCierre} está cerrado. No se pueden registrar transacciones en o antes de esta fecha.`, 'error');
+        return null;
+    }
+    
+    // Nueva lógica para obtener la fecha contable correcta respetando cierres MENSUALES
+    const fechaContable = this.getFechaContable(fecha);
+    let descripcionFinal = descripcion;
+    
+    // Si la fecha contable es diferente a la de la transacción, lo indicamos en la descripción
+    if (fechaContable !== fecha) {
+        descripcionFinal = `(Fecha Orig: ${fecha}) ${descripcion}`;
+        this.showToast(`El asiento se registrará el ${fechaContable} porque el período original está cerrado.`, 'info');
+    }
+
+    const totalDebe = movimientos.reduce((sum, t) => sum + t.debe, 0);
+    const totalHaber = movimientos.reduce((sum, t) => sum + t.haber, 0);
+    if (Math.abs(totalDebe - totalHaber) > 0.01) {
+        console.error("Asiento descuadrado:", { totalDebe, totalHaber, movimientos });
+        this.showToast(`Error: Asiento descuadrado. Debe=${this.formatCurrency(totalDebe)}, Haber=${this.formatCurrency(totalHaber)}`, 'error');
+        return null;
+    }
+
+    // Usamos la fechaContable para crear el asiento
+    const asiento = { id: this.idCounter++, fecha: fechaContable, descripcion: descripcionFinal, movimientos, transaccionId };
+    this.asientos.push(asiento);
+    this.actualizarSaldosGlobales();
+    return asiento;
+},
     actualizarSaldosGlobales() {
         const planConSaldos = this.getSaldosPorPeriodo();
         this.planDeCuentas.forEach(cuenta => {
@@ -1022,43 +1067,46 @@ verificarYActualizarPlanDeCuentas() {
         });
     },
     getSaldosPorPeriodo(fechaFin = null, fechaInicio = null) {
-        const planCopia = JSON.parse(JSON.stringify(this.planDeCuentas));
-        planCopia.forEach(c => c.saldo = 0);
-        
-        const asientosFiltrados = this.asientos.filter(a => {
-            if (fechaFin && a.fecha > fechaFin) return false;
-            if (fechaInicio && a.fecha < fechaInicio) return false;
-            return true;
-        });
+    const planCopia = JSON.parse(JSON.stringify(this.planDeCuentas));
+    planCopia.forEach(c => c.saldo = 0);
+    
+    const asientosFiltrados = this.asientos.filter(a => {
+        if (fechaFin && a.fecha > fechaFin) return false;
+        if (fechaInicio && a.fecha < fechaInicio) return false;
+        return true;
+    });
 
-        asientosFiltrados.forEach(asiento => {
-            asiento.movimientos.forEach(mov => {
-                const cuenta = planCopia.find(c => c.id === mov.cuentaId);
-                if (cuenta) {
-                    const esDeudora = ['1', '5'].includes(cuenta.codigo[0]);
-                    cuenta.saldo += esDeudora ? (mov.debe - mov.haber) : (mov.haber - mov.debe);
-                }
-            });
-        });
-
-        const cuentasPorProcesar = planCopia.filter(c => c.tipo !== 'DETALLE').sort((a,b) => b.codigo.length - a.codigo.length);
-        cuentasPorProcesar.forEach(c => c.saldo = 0); 
-        
-        planCopia.filter(c => c.tipo === 'DETALLE').forEach(cuentaHija => {
-            let parentId = cuentaHija.parentId;
-            while(parentId !== null) {
-                const cuentaPadre = planCopia.find(p => p.id === parentId);
-                if(cuentaPadre) {
-                    cuentaPadre.saldo += cuentaHija.saldo;
-                    parentId = cuentaPadre.parentId;
-                } else {
-                    parentId = null;
-                }
+    asientosFiltrados.forEach(asiento => {
+        asiento.movimientos.forEach(mov => {
+            const cuenta = planCopia.find(c => c.id === mov.cuentaId);
+            if (cuenta) {
+                // --- INICIO DE LA CORRECCIÓN ---
+                // Se añade el grupo '6' (Gastos) a la lista de cuentas de naturaleza deudora.
+                const esDeudora = ['1', '5', '6'].includes(cuenta.codigo[0]);
+                // --- FIN DE LA CORRECCIÓN ---
+                cuenta.saldo += esDeudora ? (mov.debe - mov.haber) : (mov.haber - mov.debe);
             }
         });
+    });
 
-        return planCopia;
-    },
+    const cuentasPorProcesar = planCopia.filter(c => c.tipo !== 'DETALLE').sort((a,b) => b.codigo.length - a.codigo.length);
+    cuentasPorProcesar.forEach(c => c.saldo = 0); 
+    
+    planCopia.filter(c => c.tipo === 'DETALLE').forEach(cuentaHija => {
+        let parentId = cuentaHija.parentId;
+        while(parentId !== null) {
+            const cuentaPadre = planCopia.find(p => p.id === parentId);
+            if(cuentaPadre) {
+                cuentaPadre.saldo += cuentaHija.saldo;
+                parentId = cuentaPadre.parentId;
+            } else {
+                parentId = null;
+            }
+        }
+    });
+
+    return planCopia;
+},
     filtrarLista(modulo) {
         const searchInput = document.getElementById(`${modulo}-search`);
         const startDateInput = document.getElementById(`${modulo}-start-date`);
@@ -1294,88 +1342,97 @@ verificarYActualizarPlanDeCuentas() {
     },
 
     displayGlobalSearchResults(results) {
-        const container = document.getElementById('global-search-results');
-        let html = '';
+    const container = document.getElementById('global-search-results');
+    const term = document.getElementById('global-search-input').value.trim();
+    let html = '';
 
-        if (results.cuentas.length > 0) {
-            html += `<div class="search-result-group"><h4>Cuentas Contables</h4>`;
-            results.cuentas.slice(0, 5).forEach(c => {
-                html += `<div class="search-result-item" onclick="ContaApp.irACuentaDesdeBusqueda(${c.id})">
-                    <div class="result-icon"><i class="fa-solid fa-book"></i></div>
-                    <div class="result-text">
-                        <div class="main">${c.nombre}</div>
-                        <div class="sub">Código: ${c.codigo}</div>
-                    </div>
-                </div>`;
-            });
-            html += `</div>`;
-        }
+    // --- INICIO DE LA MEJORA: Función auxiliar para resaltar ---
+    const highlightMatch = (text) => {
+        if (!term || !text) return text;
+        const regex = new RegExp(`(${term})`, 'gi');
+        return text.replace(regex, '<strong>$1</strong>');
+    };
+    // --- FIN DE LA MEJORA ---
 
-        if (results.ventas.length > 0) {
-            html += `<div class="search-result-group"><h4>Ventas</h4>`;
-            results.ventas.slice(0, 5).forEach(v => {
-                const cliente = this.findById(this.contactos, v.contactoId);
-                html += `<div class="search-result-item" onclick="ContaApp.irAVentaDesdeBusqueda(${v.id})">
-                    <div class="result-icon"><i class="fa-solid fa-file-invoice-dollar"></i></div>
-                    <div class="result-text">
-                        <div class="main">Factura #${v.numeroFactura || v.id}</div>
-                        <div class="sub">${cliente?.nombre || 'N/A'} - ${this.formatCurrency(v.total)}</div>
-                    </div>
-                </div>`;
-            });
-            html += `</div>`;
-        }
+    if (results.cuentas.length > 0) {
+        html += `<div class="search-result-group"><h4>Cuentas Contables</h4>`;
+        results.cuentas.slice(0, 5).forEach(c => {
+            html += `<div class="search-result-item" onclick="ContaApp.irACuentaDesdeBusqueda(${c.id})">
+                <div class="result-icon"><i class="fa-solid fa-book"></i></div>
+                <div class="result-text">
+                    <div class="main">${highlightMatch(c.nombre)}</div>
+                    <div class="sub">Código: ${highlightMatch(c.codigo)}</div>
+                </div>
+            </div>`;
+        });
+        html += `</div>`;
+    }
 
-        if (results.gastos.length > 0) {
-            html += `<div class="search-result-group"><h4>Gastos</h4>`;
-            results.gastos.slice(0, 5).forEach(g => {
-                const proveedor = this.findById(this.contactos, g.contactoId);
-                html += `<div class="search-result-item" onclick="ContaApp.irAGastoDesdeBusqueda(${g.id})">
-                    <div class="result-icon"><i class="fa-solid fa-receipt"></i></div>
-                    <div class="result-text">
-                        <div class="main">${g.descripcion}</div>
-                        <div class="sub">${proveedor?.nombre || 'N/A'} - ${this.formatCurrency(g.total)}</div>
-                    </div>
-                </div>`;
-            });
-            html += `</div>`;
-        }
-        
-        if (results.clientes.length > 0) {
-            html += `<div class="search-result-group"><h4>Clientes</h4>`;
-            results.clientes.slice(0, 5).forEach(c => {
-                html += `<div class="search-result-item" onclick="ContaApp.irAContactoDesdeBusqueda(${c.id})">
-                    <div class="result-icon"><i class="fa-solid fa-user-tie"></i></div>
-                    <div class="result-text">
-                        <div class="main">${c.nombre}</div>
-                        <div class="sub">${c.email || 'Cliente'}</div>
-                    </div>
-                </div>`;
-            });
-            html += `</div>`;
-        }
+    if (results.ventas.length > 0) {
+        html += `<div class="search-result-group"><h4>Ventas</h4>`;
+        results.ventas.slice(0, 5).forEach(v => {
+            const cliente = this.findById(this.contactos, v.contactoId);
+            html += `<div class="search-result-item" onclick="ContaApp.irAVentaDesdeBusqueda(${v.id})">
+                <div class="result-icon"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+                <div class="result-text">
+                    <div class="main">Factura #${highlightMatch(v.numeroFactura || v.id.toString())}</div>
+                    <div class="sub">${highlightMatch(cliente?.nombre || 'N/A')} - ${this.formatCurrency(v.total)}</div>
+                </div>
+            </div>`;
+        });
+        html += `</div>`;
+    }
 
-        if (results.productos.length > 0) {
-            html += `<div class="search-result-group"><h4>Productos y Servicios</h4>`;
-            results.productos.slice(0, 5).forEach(p => {
-                html += `<div class="search-result-item" onclick="ContaApp.irAProductoDesdeBusqueda(${p.id})">
-                    <div class="result-icon"><i class="fa-solid fa-box"></i></div>
-                    <div class="result-text">
-                        <div class="main">${p.nombre}</div>
-                        <div class="sub">Stock: ${p.stock !== undefined ? p.stock : 'N/A'} - Precio: ${this.formatCurrency(p.precio)}</div>
-                    </div>
-                </div>`;
-            });
-            html += `</div>`;
-        }
+    if (results.gastos.length > 0) {
+        html += `<div class="search-result-group"><h4>Gastos</h4>`;
+        results.gastos.slice(0, 5).forEach(g => {
+            const proveedor = this.findById(this.contactos, g.contactoId);
+            html += `<div class="search-result-item" onclick="ContaApp.irAGastoDesdeBusqueda(${g.id})">
+                <div class="result-icon"><i class="fa-solid fa-receipt"></i></div>
+                <div class="result-text">
+                    <div class="main">${highlightMatch(g.descripcion)}</div>
+                    <div class="sub">${highlightMatch(proveedor?.nombre || 'N/A')} - ${this.formatCurrency(g.total)}</div>
+                </div>
+            </div>`;
+        });
+        html += `</div>`;
+    }
+    
+    if (results.clientes.length > 0) {
+        html += `<div class="search-result-group"><h4>Clientes</h4>`;
+        results.clientes.slice(0, 5).forEach(c => {
+            html += `<div class="search-result-item" onclick="ContaApp.irAContactoDesdeBusqueda(${c.id})">
+                <div class="result-icon"><i class="fa-solid fa-user-tie"></i></div>
+                <div class="result-text">
+                    <div class="main">${highlightMatch(c.nombre)}</div>
+                    <div class="sub">${highlightMatch(c.email || 'Cliente')}</div>
+                </div>
+            </div>`;
+        });
+        html += `</div>`;
+    }
 
-        if (html === '') {
-            html = `<p class="text-center text-[var(--color-text-secondary)] p-4">No se encontraron resultados.</p>`;
-        }
+    if (results.productos.length > 0) {
+        html += `<div class="search-result-group"><h4>Productos y Servicios</h4>`;
+        results.productos.slice(0, 5).forEach(p => {
+            html += `<div class="search-result-item" onclick="ContaApp.irAProductoDesdeBusqueda(${p.id})">
+                <div class="result-icon"><i class="fa-solid fa-box"></i></div>
+                <div class="result-text">
+                    <div class="main">${highlightMatch(p.nombre)}</div>
+                    <div class="sub">Stock: ${p.stock !== undefined ? p.stock : 'N/A'} - Precio: ${this.formatCurrency(p.precio)}</div>
+                </div>
+            </div>`;
+        });
+        html += `</div>`;
+    }
 
-        container.innerHTML = html;
-        container.classList.remove('hidden');
-    },
+    if (html === '') {
+        html = `<p class="text-center text-[var(--color-text-secondary)] p-4">No se encontraron resultados.</p>`;
+    }
+
+    container.innerHTML = html;
+    container.classList.remove('hidden');
+},
 
     hideGlobalSearchResults() {
         const container = document.getElementById('global-search-results');

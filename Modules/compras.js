@@ -299,7 +299,7 @@ Object.assign(ContaApp, {
         this.showToast('Unidad de medida creada y seleccionada.', 'success');
         document.body.removeChild(document.getElementById('sub-modal-bg'));
     },
-    async guardarCompra(e) {
+        async guardarCompra(e) {
     e.preventDefault();
     const tipoSeleccionado = document.querySelector('input[name="compra-tipo"]:checked').value;
     const submitButton = document.getElementById('guardar-compra-btn');
@@ -313,7 +313,6 @@ Object.assign(ContaApp, {
             }
 
             const fecha = document.getElementById('compra-fecha').value;
-            // ... (el resto de las variables se mantienen igual)
             const referencia = document.getElementById('compra-referencia').value;
             const descripcion = document.getElementById('compra-descripcion').value;
             const cuentaInventarioId = parseInt(document.getElementById('compra-cuenta-inventario-id').value);
@@ -340,9 +339,7 @@ Object.assign(ContaApp, {
                 const productoNombre = row.querySelector('.compra-item-producto-input').value.trim();
                 const cantidad = parseFloat(row.querySelector('.compra-item-cantidad').value);
                 const costoUnitario = parseFloat(row.querySelector('.compra-item-costo').value);
-                // --- INICIO DE LA MEJORA: Leer la unidad de medida de la fila ---
                 const unidadMedidaId = parseInt(row.querySelector('.compra-item-unidad-select').value);
-                // --- FIN DE LA MEJORA ---
 
                 if (!productoNombre || !(cantidad > 0) || !(costoUnitario >= 0)) continue;
 
@@ -358,9 +355,9 @@ Object.assign(ContaApp, {
                             stock: 0,
                             costo: 0,
                             precio: 0,
-                            // --- INICIO DE LA MEJORA: Guardar la unidad seleccionada ---
-                            unidadMedidaId: unidadMedidaId
-                            // --- FIN DE LA MEJORA ---
+                            unidadMedidaId: unidadMedidaId,
+                            cuentaInventarioId: cuentaInventarioId,
+                            cuentaIngresoId: 41001
                         };
                         this.productos.push(nuevoProducto);
                         productoId = nuevoProducto.id;
@@ -373,6 +370,7 @@ Object.assign(ContaApp, {
 
             if (items.length === 0) { throw new Error('Debe añadir al menos un ítem a la compra.'); }
 
+            // NOTA: La lógica de actualización de stock y costo se mantiene localmente primero.
             items.forEach(item => {
                 const producto = this.findById(this.productos, item.productoId);
                 if (producto) {
@@ -399,12 +397,24 @@ Object.assign(ContaApp, {
                 nuevaCompra.id
             );
             
+            // --- INICIO DE LA REFACTORIZACIÓN ---
             if (asiento) {
-                this.saveAll();
+                // En lugar de saveAll(), usamos el método específico para persistir todos los cambios.
+                await this.repository.actualizarMultiplesDatos({
+                    transacciones: this.transacciones,
+                    productos: this.productos, // Incluimos el array de productos actualizado
+                    asientos: this.asientos,
+                    idCounter: this.idCounter
+                });
+                
                 this.closeModal();
-                this.irModulo('compras');
+                const submoduloDestino = cuentaInventarioId === 13001 ? 'reventa' : 'materia-prima';
+                this.irModulo('inventario', { submodulo: submoduloDestino });
                 this.showToast('Compra de inventario registrada con éxito.', 'success');
+            } else {
+                throw new Error("No se pudo generar el asiento contable para la compra.");
             }
+            // --- FIN DE LA REFACTORIZACIÓN ---
 
         } else if (tipoSeleccionado === 'activo_fijo') {
             this.closeModal();
@@ -465,46 +475,59 @@ Object.assign(ContaApp, {
         this.showModal(modalHTML, '3xl');
     },
 
-    anularCompra(compraId) {
+        anularCompra(compraId) {
         this.showConfirm(
             '¿Seguro que deseas anular esta compra? Esta acción revertirá el asiento contable y ajustará el stock del inventario. No se puede deshacer.',
-            () => {
-                const compra = this.findById(this.transacciones, compraId);
-                if (!compra || compra.estado === 'Anulada') {
-                    this.showToast('Esta compra ya ha sido anulada o no se encontró.', 'error');
-                    return;
-                }
-
-                compra.items.forEach(itemCompra => {
-                    const producto = this.findById(this.productos, itemCompra.productoId);
-                    if (producto) {
-                        const valorCompraARevertir = itemCompra.cantidad * itemCompra.costoUnitario;
-                        const valorTotalStockActual = producto.stock * producto.costo;
-                        const nuevoStock = producto.stock - itemCompra.cantidad;
-
-                        if (nuevoStock < 0) {
-                            console.error(`Error de anulación: el stock de '${producto.nombre}' sería negativo.`);
-                        }
-                        
-                        producto.costo = nuevoStock > 0 ? (valorTotalStockActual - valorCompraARevertir) / nuevoStock : 0;
-                        producto.stock = nuevoStock;
+            async () => { // <-- Se convierte la función callback en async
+                try {
+                    const compra = this.findById(this.transacciones, compraId);
+                    if (!compra || compra.estado === 'Anulada') {
+                        throw new Error('Esta compra ya ha sido anulada o no se encontró.');
                     }
-                });
 
-                const asientoOriginal = this.asientos.find(a => a.transaccionId === compra.id);
-                if (asientoOriginal) {
-                    const movimientosReversos = asientoOriginal.movimientos.map(mov => ({
-                        cuentaId: mov.cuentaId,
-                        debe: mov.haber,
-                        haber: mov.debe
-                    }));
-                    this.crearAsiento(this.getTodayDate(), `Anulación de Compra s/f #${compra.referencia || compra.id}`, movimientosReversos);
+                    compra.items.forEach(itemCompra => {
+                        const producto = this.findById(this.productos, itemCompra.productoId);
+                        if (producto) {
+                            const valorCompraARevertir = itemCompra.cantidad * itemCompra.costoUnitario;
+                            const valorTotalStockActual = producto.stock * producto.costo;
+                            const nuevoStock = producto.stock - itemCompra.cantidad;
+
+                            if (nuevoStock < 0) {
+                                // NOTA PARA EL BACKEND: Esta validación es crítica en el servidor.
+                                throw new Error(`La anulación dejaría el stock de '${producto.nombre}' en negativo.`);
+                            }
+                            
+                            producto.costo = nuevoStock > 0 ? (valorTotalStockActual - valorCompraARevertir) / nuevoStock : 0;
+                            producto.stock = nuevoStock;
+                        }
+                    });
+
+                    const asientoOriginal = this.asientos.find(a => a.transaccionId === compra.id);
+                    if (asientoOriginal) {
+                        const movimientosReversos = asientoOriginal.movimientos.map(mov => ({
+                            cuentaId: mov.cuentaId,
+                            debe: mov.haber,
+                            haber: mov.debe
+                        }));
+                        this.crearAsiento(this.getTodayDate(), `Anulación de Compra s/f #${compra.referencia || compra.id}`, movimientosReversos);
+                    }
+                    
+                    compra.estado = 'Anulada';
+
+                    // --- INICIO DE LA REFACTORIZACIÓN ---
+                    await this.repository.actualizarMultiplesDatos({
+                        productos: this.productos,
+                        transacciones: this.transacciones,
+                        asientos: this.asientos
+                    });
+                    // --- FIN DE LA REFACTORIZACIÓN ---
+
+                    this.irModulo('compras');
+                    this.showToast('La compra ha sido anulada con éxito.', 'success');
+                } catch (error) {
+                    console.error("Error al anular la compra:", error);
+                    this.showToast(error.message, 'error');
                 }
-                
-                compra.estado = 'Anulada';
-                this.saveAll();
-                this.irModulo('compras');
-                this.showToast('La compra ha sido anulada con éxito.', 'success');
             }
         );
     },

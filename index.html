@@ -113,21 +113,21 @@
     
     <script>
       // Tu configuración personal de Firebase
-  const firebaseConfig = {
-  apiKey: "AIzaSyC3aa2x_lB-NwXrwmO7ook5lY5saJ6_9ew",
-  authDomain: "contapp-pro-23d00.firebaseapp.com",
-  projectId: "contapp-pro-23d00",
-  storageBucket: "contapp-pro-23d00.firebasestorage.app",
-  messagingSenderId: "115018410304",
-  appId: "1:115018410304:web:e3fd1511e1edfdf898f2a5"
-};
+      const firebaseConfig = {
+          apiKey: "AIzaSyC3aa2x_lB-NwXrwmO7ook5lY5saJ6_9ew",
+          authDomain: "contapp-pro-23d00.firebaseapp.com",
+          projectId: "contapp-pro-23d00",
+          storageBucket: "contapp-pro-23d00.firebasestorage.app",
+          messagingSenderId: "115018410304",
+          appId: "1:115018410304:web:e3fd1511e1edfdf898f2a5"
+      };
     
       // Inicializar Firebase
       firebase.initializeApp(firebaseConfig);
     </script>
 
     <!-- ===== ORDEN DE CARGA DE SCRIPTS ===== -->
-    <script src="repository.js"></script>
+    <script type="module" src="repository.js"></script>
     <script src="app.js"></script>
     <script src="modules/dashboard.js"></script>
     <script src="modules/ventas.js"></script>
@@ -143,6 +143,6 @@
     <script src="modules/config.js"></script>
     
     <!-- Este script SIEMPRE debe ser el último -->
-    <script src="init.js"></script>
+    <script type="module" src="init.js"></script>
 </body>
 </html>

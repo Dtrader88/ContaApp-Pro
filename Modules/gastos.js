@@ -324,7 +324,7 @@ Object.assign(ContaApp, {
         `;
         container.insertAdjacentHTML('beforeend', itemHTML);
     },
-    async guardarGasto(e) {
+        async guardarGasto(e) {
         e.preventDefault();
         const submitButton = e.target.querySelector('button[type="submit"]');
         this.toggleButtonLoading(submitButton, true);
@@ -332,11 +332,9 @@ Object.assign(ContaApp, {
         try {
             const contactoId = parseInt(document.getElementById('gasto-proveedor-id').value);
             
-            // --- INICIO DE LA VALIDACIÓN MEJORADA ---
             if (!contactoId || isNaN(contactoId)) {
                 throw new Error('Debe seleccionar un proveedor válido de la lista.');
             }
-            // --- FIN DE LA VALIDACIÓN MEJORADA ---
 
             const fecha = document.getElementById('gasto-fecha').value;
             const descripcion = document.getElementById('gasto-descripcion').value;
@@ -371,43 +369,58 @@ Object.assign(ContaApp, {
             if (lineas.length === 0) { throw new Error('Debes agregar al menos una línea de gasto válida.'); }
             
             if (esRecurrente) {
+                // Las plantillas recurrentes no son transacciones críticas, pueden usar saveAll()
                 const nuevaPlantilla = { id: this.idCounter++, tipo: 'gasto', contactoId, descripcion, total, items: lineas, frecuencia: 'mensual', ultimoGenerado: null };
                 this.recurrentes.push(nuevaPlantilla);
-            }
-            
-            const estado = pagoTipo === 'credito' ? 'Pendiente' : 'Pagado';
-            const transaccion = { id: this.idCounter++, tipo: 'gasto', fecha, contactoId, descripcion, total, estado, items: lineas, montoPagado: 0, comprobanteDataUrl };
-            this.transacciones.push(transaccion);
-
-            const cuentaCxpId = 210;
-            const movimientos = [];
-            lineas.forEach(linea => {
-                movimientos.push({ cuentaId: linea.cuentaId, debe: linea.monto, haber: 0 });
-            });
-            
-            if (pagoTipo === 'credito') {
-                movimientos.push({ cuentaId: cuentaCxpId, debe: 0, haber: total });
-            } else {
-                const cuentaBancoId = parseInt(document.getElementById('gasto-pago-cuenta-banco').value);
-                movimientos.push({ cuentaId: cuentaBancoId, debe: 0, haber: total });
-                transaccion.montoPagado = total;
-                const pagoContado = {
-                    id: this.idCounter++, tipo: 'pago_proveedor', fecha: fecha, contactoId: contactoId,
-                    monto: total, cuentaOrigenId: cuentaBancoId, gastoId: transaccion.id,
-                    comentario: 'Pago de contado al crear el gasto'
-                };
-                this.transacciones.push(pagoContado);
-            }
-            
-            const asiento = this.crearAsiento(fecha, descripcion, movimientos, transaccion.id);
-
-            if (asiento) {
-                this.isFormDirty = false;
                 this.saveAll();
-                this.closeModal();
-                this.irModulo('gastos');
-                this.showToast('Gasto guardado con éxito.', 'success');
+            } else {
+                const estado = pagoTipo === 'credito' ? 'Pendiente' : 'Pagado';
+                const transaccion = { id: this.idCounter++, tipo: 'gasto', fecha, contactoId, descripcion, total, estado, items: lineas, montoPagado: 0, comprobanteDataUrl };
+                this.transacciones.push(transaccion);
+
+                const cuentaCxpId = 210;
+                const movimientos = [];
+                lineas.forEach(linea => {
+                    movimientos.push({ cuentaId: linea.cuentaId, debe: linea.monto, haber: 0 });
+                });
+                
+                if (pagoTipo === 'credito') {
+                    movimientos.push({ cuentaId: cuentaCxpId, debe: 0, haber: total });
+                } else {
+                    const cuentaBancoId = parseInt(document.getElementById('gasto-pago-cuenta-banco').value);
+                    movimientos.push({ cuentaId: cuentaBancoId, debe: 0, haber: total });
+                    transaccion.montoPagado = total;
+                    
+                    const pagoContado = {
+                        id: this.idCounter++, tipo: 'pago_proveedor', fecha: fecha, contactoId: contactoId,
+                        monto: total, cuentaOrigenId: cuentaBancoId, gastoId: transaccion.id,
+                        comentario: 'Pago de contado al crear el gasto'
+                    };
+                    this.transacciones.push(pagoContado);
+                }
+                
+                const asiento = this.crearAsiento(fecha, descripcion, movimientos, transaccion.id);
+
+                if (asiento) {
+                    // --- INICIO DE LA REFACTORIZACIÓN ---
+                    // En lugar de saveAll(), usamos el método específico.
+                    await this.repository.actualizarMultiplesDatos({
+                        transacciones: this.transacciones,
+                        asientos: this.asientos,
+                        idCounter: this.idCounter
+                    });
+                    // --- FIN DE LA REFACTORIZACIÓN ---
+                } else {
+                    // Si el asiento no se pudo crear, lanzamos un error para detener la operación.
+                    throw new Error("No se pudo generar el asiento contable para el gasto.");
+                }
             }
+            
+            this.isFormDirty = false;
+            this.closeModal();
+            this.irModulo('gastos');
+            this.showToast('Gasto guardado con éxito.', 'success');
+
         } catch (error) {
             this.showToast(error.message, 'error');
         } finally {

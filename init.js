@@ -1,7 +1,8 @@
+import { FirebaseRepository } from './repository.js';
+
 window.onload = () => {
     firebase.auth().onAuthStateChanged(async (user) => {
         if (user) {
-            // Usuario ha iniciado sesión.
             console.log("Usuario autenticado:", user.email);
             
             try {
@@ -9,10 +10,9 @@ window.onload = () => {
                 const userProfileRef = db.collection("usuarios").doc(user.uid);
                 let userProfileDoc = await userProfileRef.get();
 
-                // Si el perfil no existe (primer login después del registro), lo creamos.
                 if (!userProfileDoc.exists) {
                     console.log("Perfil no encontrado, creando uno nuevo...");
-                    const workspaceId = user.uid; // Usaremos el UID como ID del workspace.
+                    const workspaceId = user.uid;
                     const newProfileData = {
                         email: user.email,
                         rol: "administrador",
@@ -23,10 +23,10 @@ window.onload = () => {
                     
                     const batch = db.batch();
                     batch.set(userProfileRef, newProfileData);
-                    batch.set(workspaceRef, {}); // Creamos el documento del workspace vacío.
+                    batch.set(workspaceRef, {});
                     await batch.commit();
                     
-                    userProfileDoc = await userProfileRef.get(); // Re-leemos el perfil recién creado.
+                    userProfileDoc = await userProfileRef.get();
                 }
 
                 const userProfileData = userProfileDoc.data();
@@ -46,7 +46,6 @@ window.onload = () => {
             }
 
         } else {
-            // No hay usuario. Redirigir a la página de login.
             console.log("Usuario no autenticado. Redirigiendo a login...");
             if (window.location.pathname.indexOf('login.html') === -1) {
                 window.location.href = 'login.html';

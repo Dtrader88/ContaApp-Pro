@@ -30,7 +30,6 @@ Object.assign(ContaApp, {
     if (todasLasCuentas.length > 0) {
         tarjetasHTML = todasLasCuentas.map(c => {
             const transaccionesPendientes = (this.bancoImportado[c.id] || []).filter(t => t.status === 'pending').length;
-            // --- MEJORA VISUAL: Se añaden clases de color dinámicas ---
             const esTarjeta = c.parentId === 230;
             const saldoColor = esTarjeta ? 'conta-text-danger' : (c.saldo >= 0 ? 'conta-text-success' : 'conta-text-danger');
             
@@ -47,30 +46,39 @@ Object.assign(ContaApp, {
 
     let tablaHTML = '';
     if (cuentaIdSeleccionada) {
-        // ... (El resto de la función (lógica de la tabla) se mantiene igual)
         const transaccionesCuenta = (this.bancoImportado[cuentaIdSeleccionada] || []).filter(t => t.status === tabActiva).sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
-        const groupedAccounts = { 'Activos': [], 'Pasivos': [], 'Patrimonio': [], 'Ingresos': [], 'Gastos': [] };
-        this.planDeCuentas.filter(c => c.tipo === 'DETALLE').forEach(c => {
-            const code = c.codigo[0];
-            if (code === '1') groupedAccounts.Activos.push(c); else if (code === '2') groupedAccounts.Pasivos.push(c); else if (code === '3') groupedAccounts.Patrimonio.push(c); else if (code === '4') groupedAccounts.Ingresos.push(c); else if (code === '5') groupedAccounts.Gastos.push(c);
-        });
-        const categoriaOptions = Object.entries(groupedAccounts).map(([groupName, accounts]) => {
-            if (accounts.length === 0) return '';
-            const options = accounts.sort((a,b) => a.codigo.localeCompare(b.codigo)).map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`).join('');
-            return `<optgroup label="${groupName}">${options}</optgroup>`;
-        }).join('');
-
+        
         let filasHTML = '';
         if (transaccionesCuenta.length === 0) {
             filasHTML = `<tr><td colspan="6" class="text-center p-8 text-[var(--color-text-secondary)]">No hay transacciones en esta vista.</td></tr>`;
         } else {
             transaccionesCuenta.forEach(t => {
                 const montoClass = t.monto >= 0 ? 'conta-text-success' : 'conta-text-danger';
+                
+                // --- INICIO DE LA MEJORA: Botones de Acción Condicionales ---
+                let accionesHTML = '';
+                if (tabActiva === 'pending') {
+                    // Si el monto es negativo, es un Gasto. Si es positivo, es un Ingreso.
+                    const botonPrincipal = t.monto < 0
+                        ? `<button class="conta-btn conta-btn-small conta-btn-danger" onclick="ContaApp.abrirModalCrearDesdeBanco('${t.id}', ${cuentaIdSeleccionada}, 'gasto')">Crear Gasto</button>`
+                        : `<button class="conta-btn conta-btn-small conta-btn-success" onclick="ContaApp.abrirModalCrearDesdeBanco('${t.id}', ${cuentaIdSeleccionada}, 'ingreso')">Crear Ingreso</button>`;
+
+                    accionesHTML = `<div class="flex gap-2 justify-center">
+                        ${botonPrincipal}
+                        <button class="conta-btn conta-btn-small conta-btn-accent" onclick="ContaApp.abrirModalMatch('${t.id}', ${cuentaIdSeleccionada})">Match</button>
+                        <button class="conta-btn conta-btn-small" onclick="ContaApp.excluirTransaccionBanco('${t.id}', ${cuentaIdSeleccionada})">Excluir</button>
+                    </div>`;
+                } else {
+                    accionesHTML = t.status === 'posted' ? `Conciliada (Asiento #${t.asientoId})` : 'Excluida';
+                }
+                // --- FIN DE LA MEJORA ---
+
                 filasHTML += `<tr id="banco-trans-${t.id}">
-                    <td class="conta-table-td"><input type="checkbox"></td> <td class="conta-table-td">${t.fecha}</td> <td class="conta-table-td">${t.descripcion}</td>
+                    <td class="conta-table-td"><input type="checkbox"></td> 
+                    <td class="conta-table-td">${t.fecha}</td> 
+                    <td class="conta-table-td">${t.descripcion}</td>
                     <td class="conta-table-td text-right font-mono ${montoClass}">${this.formatCurrency(t.monto)}</td>
-                    <td class="conta-table-td">${tabActiva === 'pending' ? `<select class="w-full conta-input conta-input-small"><option value="">Seleccionar categoría...</option>${categoriaOptions}</select>` : (t.categoriaNombre || 'N/A')}</td>
-                    <td class="conta-table-td text-center">${tabActiva === 'pending' ? `<div class="flex gap-2 justify-center"> <button class="conta-btn conta-btn-small" onclick="ContaApp.guardarTransaccionCategorizada('${t.id}', ${cuentaIdSeleccionada})">Crear Asiento</button> <button class="conta-btn conta-btn-small conta-btn-accent" onclick="ContaApp.abrirModalMatch('${t.id}', ${cuentaIdSeleccionada})">Match</button> <button class="conta-btn conta-btn-small conta-btn-neutral" onclick="ContaApp.excluirTransaccionBanco('${t.id}', ${cuentaIdSeleccionada})">Excluir</button> </div>` : (t.status === 'posted' ? `Conciliada (Asiento #${t.asientoId})` : 'Excluida')}</td>
+                    <td class="conta-table-td text-center">${accionesHTML}</td>
                 </tr>`;
             });
         }
@@ -81,13 +89,23 @@ Object.assign(ContaApp, {
                 <button class="py-2 px-4 text-sm font-semibold ${tabActiva === 'posted' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('bancos', { cuentaIdFiltrada: ${cuentaIdSeleccionada}, tab: 'posted'})">Conciliadas</button>
                 <button class="py-2 px-4 text-sm font-semibold ${tabActiva === 'excluded' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('bancos', { cuentaIdFiltrada: ${cuentaIdSeleccionada}, tab: 'excluded'})">Excluidas</button>
             </div>
-            <div class="conta-card rounded-t-none border-t-0 overflow-auto"> <table class="min-w-full text-sm conta-table-zebra"> <thead><tr> <th class="conta-table-th"><input type="checkbox"></th> <th class="conta-table-th">Fecha</th> <th class="conta-table-th">Descripción Banco</th> <th class="conta-table-th text-right">Monto</th> <th class="conta-table-th">Categoría ContaApp</th> <th class="conta-table-th text-center">Acción</th> </tr></thead> <tbody>${filasHTML}</tbody> </table> </div>
+            <div class="conta-card rounded-t-none border-t-0 overflow-auto">
+                <table class="min-w-full text-sm conta-table-zebra">
+                    <thead><tr>
+                        <th class="conta-table-th"><input type="checkbox"></th>
+                        <th class="conta-table-th">Fecha</th>
+                        <th class="conta-table-th">Descripción Banco</th>
+                        <th class="conta-table-th text-right">Monto</th>
+                        <th class="conta-table-th text-center">Acción</th>
+                    </tr></thead>
+                    <tbody>${filasHTML}</tbody>
+                </table>
+            </div>
         </div>`;
     } else {
          tablaHTML = this.generarEstadoVacioHTML('fa-university', 'Sin Cuentas Bancarias', 'Crea tu primera cuenta de banco desde el Plan de Cuentas para empezar.', 'Ir a Plan de Cuentas', "ContaApp.irModulo('plan-de-cuentas')");
     }
 
-    // --- MEJORA VISUAL: Se añade justify-center al contenedor ---
     const layoutHTML = `<h3 class="conta-subtitle">Cuentas</h3><div class="flex justify-center gap-4 overflow-x-auto pb-4">${tarjetasHTML}</div>${tablaHTML}`;
     document.getElementById('bancos').innerHTML = layoutHTML;
 },
@@ -353,7 +371,7 @@ abrirModalIniciarConciliacion() {
         };
         reader.readAsText(file);
     },
-        guardarTransferencia(e) {
+                async guardarTransferencia(e) {
         e.preventDefault();
         const origenId = parseInt(document.getElementById('transfer-origen').value);
         const destinoId = parseInt(document.getElementById('transfer-destino').value);
@@ -368,17 +386,38 @@ abrirModalIniciarConciliacion() {
         const origenCuenta = this.findById(this.planDeCuentas, origenId);
         const destinoCuenta = this.findById(this.planDeCuentas, destinoId);
 
-        const asiento = this.crearAsiento(fecha, `Transferencia de ${origenCuenta.nombre} a ${destinoCuenta.nombre}`, [
-            { cuentaId: destinoId, debe: monto, haber: 0 },
-            { cuentaId: origenId, debe: 0, haber: monto }
-        ]);
+        // --- INICIO DE LA REFACTORIZACIÓN ---
+        // 1. Preparamos el nuevo asiento.
+        const nuevoAsiento = { 
+            id: this.idCounter, fecha: fecha, 
+            descripcion: `Transferencia de ${origenCuenta.nombre} a ${destinoCuenta.nombre}`,
+            movimientos: [
+                { cuentaId: destinoId, debe: monto, haber: 0 },
+                { cuentaId: origenId, debe: 0, haber: monto }
+            ]
+        };
+        const asientosCopia = [...this.asientos, nuevoAsiento];
 
-        if (asiento) {
-            this.saveAll();
+        try {
+            // 2. Intentamos guardar en el repositorio PRIMERO.
+            await this.repository.actualizarMultiplesDatos({
+                asientos: asientosCopia,
+                idCounter: this.idCounter + 1
+            });
+            
+            // 3. SOLO SI tiene éxito, actualizamos el estado local.
+            this.asientos.push(nuevoAsiento);
+            this.idCounter++;
+            this.actualizarSaldosGlobales();
+
             this.closeModal();
             this.irModulo('bancos');
             this.showToast('Transferencia realizada con éxito.', 'success');
+        } catch (error) {
+            console.error("Error al guardar transferencia:", error);
+            this.showToast(`Error al guardar: ${error.message}`, 'error');
         }
+        // --- FIN DE LA REFACTORIZACIÓN ---
     },
     abrirModalImportarBanco(cuentaId) {
     if (!cuentaId) {
@@ -644,26 +683,43 @@ finalizarImportacionConMapeo(event) {
         this.showModal(modalHTML, 'xl');
     },
 
-    guardarPagoTarjeta(e) {
+            async guardarPagoTarjeta(e) {
         e.preventDefault();
         const origenId = parseInt(document.getElementById('pago-tarjeta-origen').value);
         const destinoId = parseInt(document.getElementById('pago-tarjeta-destino').value);
         const monto = parseFloat(document.getElementById('pago-tarjeta-monto').value);
         const fecha = document.getElementById('pago-tarjeta-fecha').value;
-        
         const tarjetaCuenta = this.findById(this.planDeCuentas, destinoId);
 
-        const asiento = this.crearAsiento(fecha, `Pago a Tarjeta de Crédito ${tarjetaCuenta.nombre}`, [
-            { cuentaId: destinoId, debe: monto, haber: 0 },
-            { cuentaId: origenId, debe: 0, haber: monto }
-        ]);
+        // --- INICIO DE LA REFACTORIZACIÓN ---
+        const nuevoAsiento = {
+            id: this.idCounter, fecha: fecha,
+            descripcion: `Pago a Tarjeta de Crédito ${tarjetaCuenta.nombre}`,
+            movimientos: [
+                { cuentaId: destinoId, debe: monto, haber: 0 },
+                { cuentaId: origenId, debe: 0, haber: monto }
+            ]
+        };
+        const asientosCopia = [...this.asientos, nuevoAsiento];
 
-        if (asiento) {
-            this.saveAll();
+        try {
+            await this.repository.actualizarMultiplesDatos({
+                asientos: asientosCopia,
+                idCounter: this.idCounter + 1
+            });
+
+            this.asientos.push(nuevoAsiento);
+            this.idCounter++;
+            this.actualizarSaldosGlobales();
+
             this.closeModal();
             this.irModulo('bancos');
             this.showToast('Pago de tarjeta registrado con éxito.', 'success');
+        } catch (error) {
+            console.error("Error al guardar pago de tarjeta:", error);
+            this.showToast(`Error al guardar: ${error.message}`, 'error');
         }
+        // --- FIN DE LA REFACTORIZACIÓN ---
     },
     exportarVistaBancoCSV(cuentaId, tabActiva) {
         if (!cuentaId) {
@@ -918,5 +974,99 @@ limpiarPendientesDeCuenta(cuentaId) {
             }
         }
     );
+},
+abrirModalCrearDesdeBanco(transaccionId, cuentaId, tipo) {
+    const transaccionBanco = this.bancoImportado[cuentaId].find(t => t.id === transaccionId);
+    if (!transaccionBanco) return;
+
+    const esGasto = tipo === 'gasto';
+    const titulo = esGasto ? 'Crear Gasto desde Movimiento Bancario' : 'Crear Ingreso desde Movimiento Bancario';
+    const codigoFiltro = esGasto ? '5' : '4'; // 5 para Gastos, 4 para Ingresos
+    
+    const cuentasOptions = this.planDeCuentas
+        .filter(c => c.tipo === 'DETALLE' && c.codigo.startsWith(codigoFiltro))
+        .sort((a, b) => a.codigo.localeCompare(b.codigo))
+        .map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`)
+        .join('');
+
+    const modalHTML = `
+        <h3 class="conta-title mb-4">${titulo}</h3>
+        <div class="conta-card-accent mb-4">
+            <div class="flex justify-between text-sm">
+                <span>${transaccionBanco.fecha} - ${transaccionBanco.descripcion}</span>
+                <span class="font-bold font-mono">${this.formatCurrency(transaccionBanco.monto)}</span>
+            </div>
+        </div>
+        <form onsubmit="ContaApp.guardarTransaccionDesdeBanco(event, '${transaccionId}', ${cuentaId}, '${tipo}')" class="space-y-4 modal-form">
+            <div>
+                <label for="banco-contrapartida">Seleccionar Cuenta de ${esGasto ? 'Gasto' : 'Ingreso'}</label>
+                <select id="banco-contrapartida" class="w-full conta-input mt-1" required>
+                    <option value="">-- Elige una categoría --</option>
+                    ${cuentasOptions}
+                </select>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+                <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button>
+                <button type="submit" class="conta-btn">Confirmar y Conciliar</button>
+            </div>
+        </form>
+    `;
+    this.showModal(modalHTML, '2xl');
+},
+
+guardarTransaccionDesdeBanco(event, transaccionId, cuentaId, tipo) {
+    event.preventDefault();
+    const transaccionBanco = this.bancoImportado[cuentaId].find(t => t.id === transaccionId);
+    const cuentaContrapartidaId = parseInt(document.getElementById('banco-contrapartida').value);
+
+    if (!transaccionBanco || !cuentaContrapartidaId) {
+        this.showToast('Faltan datos para procesar la transacción.', 'error');
+        return;
+    }
+
+    const esGasto = tipo === 'gasto';
+    const montoAbsoluto = Math.abs(transaccionBanco.monto);
+    const cuentaContrapartida = this.findById(this.planDeCuentas, cuentaContrapartidaId);
+
+    // Creamos el asiento contable
+    const movimientos = esGasto
+        ? [ // Gasto: DEBE a Gasto, HABER a Banco
+            { cuentaId: cuentaContrapartidaId, debe: montoAbsoluto, haber: 0 },
+            { cuentaId: cuentaId, debe: 0, haber: montoAbsoluto }
+        ]
+        : [ // Ingreso: DEBE a Banco, HABER a Ingreso
+            { cuentaId: cuentaId, debe: montoAbsoluto, haber: 0 },
+            { cuentaId: cuentaContrapartidaId, debe: 0, haber: montoAbsoluto }
+        ];
+
+    const asiento = this.crearAsiento(transaccionBanco.fecha, `Conciliado: ${transaccionBanco.descripcion}`, movimientos);
+    
+    if (asiento) {
+        // Si es un gasto, también creamos una transacción de 'gasto' para consistencia en los reportes de gastos
+        if (esGasto) {
+            const nuevoGasto = {
+                id: this.idCounter++,
+                tipo: 'gasto',
+                fecha: transaccionBanco.fecha,
+                descripcion: transaccionBanco.descripcion,
+                total: montoAbsoluto,
+                estado: 'Pagado',
+                items: [{ cuentaId: cuentaContrapartidaId, monto: montoAbsoluto }],
+                montoPagado: montoAbsoluto
+            };
+            this.transacciones.push(nuevoGasto);
+            asiento.transaccionId = nuevoGasto.id; // Vinculamos el asiento al nuevo gasto
+        }
+        
+        // Actualizamos el estado de la transacción importada
+        transaccionBanco.status = 'posted';
+        transaccionBanco.asientoId = asiento.id;
+        transaccionBanco.categoriaNombre = cuentaContrapartida.nombre;
+        
+        this.saveAll();
+        this.closeModal();
+        this.irModulo('bancos', { cuentaIdFiltrada: cuentaId });
+        this.showToast('Transacción registrada y conciliada con éxito.', 'success');
+    }
 },
     });

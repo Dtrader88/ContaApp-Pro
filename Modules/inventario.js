@@ -1,9 +1,19 @@
 Object.assign(ContaApp, {
 
-    filtrarInventario() {
-        const search = document.getElementById('inventario-search').value;
-        this.irModulo('inventario', { search });
-    },
+    filtrarInventario(cuentaInventarioId) {
+    // --- INICIO DE LA MEJORA: Lógica de renderizado directo ---
+    // En lugar de recargar todo el módulo con irModulo,
+    // llamamos directamente a la función que renderiza solo la lista.
+    const search = document.getElementById('inventario-search').value;
+    const params = { search };
+
+    // Guardamos el filtro para mantener el estado si el usuario navega y vuelve
+    this.moduleFilters['inventario'] = { ...this.moduleFilters['inventario'], ...params };
+
+    // Obtenemos la cuentaId de la pestaña activa que pasamos como argumento
+    this.renderInventarioLista(params, cuentaInventarioId);
+    // --- FIN DE LA MEJORA ---
+},
     renderInventario(params = {}) {
     // Si se pasa un ID de producto, renderizamos la vista de Kardex
     if (params.productoId) {
@@ -37,14 +47,13 @@ Object.assign(ContaApp, {
     const cuentaIdActiva = tabs.find(tab => tab.id === submodulo).cuentaId;
     this.renderInventarioLista(params, cuentaIdActiva);
 },
-    renderInventarioLista(params = {}, cuentaInventarioId) {
+      renderInventarioLista(params = {}, cuentaInventarioId) {
     document.getElementById('page-actions-header').innerHTML = `
         <div class="flex gap-2 flex-wrap">
             <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarInventarioCSV()"><i class="fa-solid fa-file-csv me-2"></i>Exportar CSV</button>
             <button class="conta-btn" onclick="ContaApp.abrirModalProducto()">+ Nuevo Producto/Servicio</button>
         </div>`;
     
-    // Filtramos los productos por la cuenta de inventario de la pestaña activa
     let productosFiltrados = this.productos.filter(p => p.cuentaInventarioId === cuentaInventarioId);
     
     if (params.search) {
@@ -54,7 +63,7 @@ Object.assign(ContaApp, {
 
     let html = `
         <div class="conta-card p-3 mb-4">
-            <form onsubmit="event.preventDefault(); ContaApp.filtrarInventario();" class="flex items-end gap-3">
+            <form onsubmit="event.preventDefault(); ContaApp.filtrarInventario(${cuentaInventarioId});" class="flex items-end gap-3">
                 <div>
                     <label class="text-xs font-semibold">Buscar por Nombre</label>
                     <input type="search" id="inventario-search" class="conta-input w-full md:w-80" value="${params.search || ''}" placeholder="Escribe para filtrar...">
@@ -75,7 +84,7 @@ Object.assign(ContaApp, {
             const unidad = this.findById(this.unidadesMedida, p.unidadMedidaId);
             const unidadDisplay = p.tipo === 'producto' ? (unidad ? unidad.nombre : 'N/A') : 'N/A';
 
-            // --- MEJORA: La fila <tr> ahora es un enlace al Kardex ---
+            // --- INICIO DE LA MEJORA: Añadir botón de Vender ---
             tableRowsHTML += `
                 <tr class="cursor-pointer hover:bg-[var(--color-bg-accent)] ${rowClass}" onclick="ContaApp.irModulo('inventario', { productoId: ${p.id} })">
                     <td class="conta-table-td font-bold">${p.nombre} ${lowStockIcon}</td>
@@ -85,9 +94,11 @@ Object.assign(ContaApp, {
                     <td class="conta-table-td text-right font-mono">${this.formatCurrency(p.costo)}</td>
                     <td class="conta-table-td text-center" onclick="event.stopPropagation()">
                         <button class="conta-btn-icon edit" title="Editar" onclick="ContaApp.abrirModalProducto(${p.id})"><i class="fa-solid fa-pencil"></i></button>
-                        ${p.tipo === 'producto' ? `<button class="conta-btn conta-btn-small conta-btn-accent ml-2" title="Ajustar Stock" onclick="ContaApp.abrirModalAjusteInventario(${p.id})">Ajustar</button>` : ''}
+                        ${p.tipo === 'producto' ? `<button class="conta-btn-icon" title="Ajustar Stock" onclick="ContaApp.abrirModalAjusteInventario(${p.id})"><i class="fa-solid fa-wrench"></i></button>` : ''}
+                        ${p.tipo === 'producto' ? `<button class="conta-btn conta-btn-small conta-btn-success ml-2" title="Vender este Producto" onclick="ContaApp.venderDesdeInventario(${p.id})">Vender</button>` : ''}
                     </td>
                 </tr>`;
+            // --- FIN DE LA MEJORA ---
         });
         
         html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
@@ -439,35 +450,67 @@ Object.assign(ContaApp, {
         document.getElementById('prod-cuenta-inventario').value = 13001;
     }
 },
-    guardarProducto(e, id) {
-    e.preventDefault();
-    const data = {
-        nombre: document.getElementById('prod-nombre').value,
-        tipo: document.getElementById('prod-tipo').value,
-        // --- MEJORA: Guardamos la categoría seleccionada ---
-        cuentaInventarioId: parseInt(document.getElementById('prod-cuenta-inventario').value),
-        unidadMedidaId: parseInt(document.getElementById('prod-unidad').value) || null,
-        stock: parseFloat(document.getElementById('prod-stock').value) || 0,
-        stockMinimo: 0, // Simplificado por ahora
-        costo: parseFloat(document.getElementById('prod-costo').value) || 0,
-        precio: parseFloat(document.getElementById('prod-precio').value) || 0
-    };
+            async guardarProducto(e, id) {
+        e.preventDefault();
+        const data = {
+            nombre: document.getElementById('prod-nombre').value,
+            tipo: document.getElementById('prod-tipo').value,
+            cuentaInventarioId: parseInt(document.getElementById('prod-cuenta-inventario').value),
+            unidadMedidaId: parseInt(document.getElementById('prod-unidad').value) || null,
+            stock: parseFloat(document.getElementById('prod-stock').value) || 0,
+            stockMinimo: 0,
+            costo: parseFloat(document.getElementById('prod-costo').value) || 0,
+            precio: parseFloat(document.getElementById('prod-precio').value) || 0,
+            cuentaIngresoId: 41001
+        };
 
-    if(id) {
-        const producto = this.findById(this.productos, id);
-        Object.assign(producto, data); // Asignamos todos los nuevos datos
-        // El stock no se toca al editar, solo se permite por ajuste.
-        producto.stock = parseFloat(document.getElementById('prod-stock').value) || 0;
-    } else {
-        const nuevoProducto = { id: this.idCounter++, ...data, cuentaIngresoId: 40101 };
-        this.productos.push(nuevoProducto);
-        // ... (lógica de asiento de apertura se mantiene)
-    }
-    this.saveAll();
-    this.closeModal();
-    this.irModulo('inventario');
-    this.showToast(`Producto/Servicio ${id ? 'actualizado' : 'creado'} con éxito.`, 'success');
-},
+        try {
+            if (id) {
+                const productoOriginal = this.findById(this.productos, id);
+                data.stock = productoOriginal.stock; // El stock no se modifica al editar
+                const productoActualizado = { ...productoOriginal, ...data };
+                
+                await this.repository.actualizarProducto(productoActualizado);
+                Object.assign(productoOriginal, data);
+
+            } else {
+                const nuevoProducto = { id: this.idCounter++, ...data };
+                
+                if (nuevoProducto.stock > 0 && nuevoProducto.costo > 0) {
+                    const valorInventario = nuevoProducto.stock * nuevoProducto.costo;
+                    this.crearAsiento(
+                        this.getTodayDate(), `Stock inicial para ${nuevoProducto.nombre}`,
+                        [
+                            { cuentaId: nuevoProducto.cuentaInventarioId, debe: valorInventario, haber: 0 },
+                            { cuentaId: 330, debe: 0, haber: valorInventario }
+                        ]
+                    );
+                    
+                    // Operación compleja: guardar producto y asiento juntos
+                    this.productos.push(nuevoProducto);
+                    await this.repository.actualizarMultiplesDatos({
+                        productos: this.productos,
+                        asientos: this.asientos,
+                        idCounter: this.idCounter
+                    });
+
+                } else {
+                    // Operación simple: solo guardar el nuevo producto
+                    await this.repository.guardarProducto(nuevoProducto);
+                    this.productos.push(nuevoProducto);
+                }
+            }
+
+            this.closeModal();
+            this.irModulo('inventario');
+            this.showToast(`Producto/Servicio ${id ? 'actualizado' : 'creado'} con éxito.`, 'success');
+
+        } catch (error) {
+            console.error("Error al guardar producto:", error);
+            this.showToast(`Error al guardar: ${error.message}`, 'error');
+            // NOTA: Si falla, el estado local no se ha modificado o se recargará, manteniendo la consistencia.
+        }
+    },
     abrirModalAjusteInventario(productoId) {
         const producto = this.findById(this.productos, productoId);
         if(!producto || producto.tipo !== 'producto') {
@@ -510,7 +553,7 @@ Object.assign(ContaApp, {
         </form>`;
         this.showModal(modalHTML, 'xl');
     },
-    guardarAjusteInventario(e, productoId) {
+            async guardarAjusteInventario(e, productoId) {
         e.preventDefault();
         const producto = this.findById(this.productos, productoId);
         const tipoAjuste = document.getElementById('ajuste-tipo').value;
@@ -528,46 +571,68 @@ Object.assign(ContaApp, {
             return;
         }
 
-        const valorAjuste = cantidad * producto.costo;
+        // --- INICIO DE LA REFACTORIZACIÓN ---
+        // 1. Preparamos los cambios en copias temporales
+        const productosCopia = JSON.parse(JSON.stringify(this.productos));
+        const transaccionesCopia = JSON.parse(JSON.stringify(this.transacciones));
+        const asientosCopia = JSON.parse(JSON.stringify(this.asientos));
+        const idCounterCopia = this.idCounter + 1;
+
+        const productoCopia = productosCopia.find(p => p.id === productoId);
+        const valorAjuste = cantidad * productoCopia.costo;
         let descripcionAsiento, movimientos;
 
         if (tipoAjuste === 'entrada') {
-            producto.stock += cantidad;
-            descripcionAsiento = `Ajuste de entrada de inventario: ${cantidad} x ${producto.nombre}`;
+            productoCopia.stock += cantidad;
+            descripcionAsiento = `Ajuste de entrada de inventario: ${cantidad} x ${productoCopia.nombre}`;
             movimientos = [
-                { cuentaId: 130, debe: valorAjuste, haber: 0 }, // DEBE a Inventario
-                { cuentaId: cuentaContrapartidaId, debe: 0, haber: valorAjuste } // HABER a la contrapartida (ej. Compras, Capital)
+                { cuentaId: productoCopia.cuentaInventarioId, debe: valorAjuste, haber: 0 },
+                { cuentaId: cuentaContrapartidaId, debe: 0, haber: valorAjuste }
             ];
         } else { // Salida
-            producto.stock -= cantidad;
-            descripcionAsiento = `Ajuste de salida (merma) de inventario: ${cantidad} x ${producto.nombre}`;
+            productoCopia.stock -= cantidad;
+            descripcionAsiento = `Ajuste de salida (merma) de inventario: ${cantidad} x ${productoCopia.nombre}`;
             movimientos = [
-                { cuentaId: cuentaContrapartidaId, debe: valorAjuste, haber: 0 }, // DEBE a la contrapartida (ej. Gasto por Merma)
-                { cuentaId: 130, debe: 0, haber: valorAjuste } // HABER a Inventario
+                { cuentaId: cuentaContrapartidaId, debe: valorAjuste, haber: 0 },
+                { cuentaId: productoCopia.cuentaInventarioId, debe: 0, haber: valorAjuste }
             ];
         }
         
-        // Crear la transacción para el historial (Kardex)
         const transaccionAjuste = {
-            id: this.idCounter++,
-            tipo: 'ajuste_inventario',
-            fecha,
-            productoId,
-            cantidad,
-            costo: producto.costo,
-            tipoAjuste, // 'entrada' o 'salida'
-            descripcion: descripcionAsiento
+            id: this.idCounter, tipo: 'ajuste_inventario', fecha, productoId,
+            cantidad, costo: productoCopia.costo, tipoAjuste, descripcion: descripcionAsiento
         };
-        this.transacciones.push(transaccionAjuste);
+        transaccionesCopia.push(transaccionAjuste);
+        
+        const asiento = { 
+            id: idCounterCopia, fecha: fecha, descripcion: descripcionAsiento, 
+            movimientos: movimientos, transaccionId: transaccionAjuste.id 
+        };
+        asientosCopia.push(asiento);
 
-        const asiento = this.crearAsiento(fecha, descripcionAsiento, movimientos, transaccionAjuste.id);
+        try {
+            // 2. Intentamos guardar todo en el repositorio PRIMERO.
+            await this.repository.actualizarMultiplesDatos({
+                productos: productosCopia,
+                transacciones: transaccionesCopia,
+                asientos: asientosCopia,
+                idCounter: idCounterCopia + 1
+            });
 
-        if (asiento) {
-            this.saveAll();
+            // 3. SOLO SI tiene éxito, actualizamos el estado local.
+            this.productos = productosCopia;
+            this.transacciones = transaccionesCopia;
+            this.asientos = asientosCopia;
+            this.idCounter = idCounterCopia + 1;
+            
             this.closeModal();
             this.irModulo('inventario');
             this.showToast('Ajuste de inventario registrado con éxito.', 'success');
+        } catch (error) {
+            console.error("Error al guardar ajuste de inventario:", error);
+            this.showToast(`Error al guardar: ${error.message}`, 'error');
         }
+        // --- FIN DE LA REFACTORIZACIÓN ---
     },
     exportarInventarioCSV() {
         const dataParaExportar = this.productos.map(p => ({
@@ -652,49 +717,80 @@ Object.assign(ContaApp, {
     },
 
     guardarNuevoProductoDesdeSubModal(e, elementIdToUpdate) {
-        const data = {
-            nombre: document.getElementById('sub-prod-nombre').value,
-            precio: parseFloat(document.getElementById('sub-prod-precio').value),
-            costo: parseFloat(document.getElementById('sub-prod-costo').value) || 0,
-        };
+    const data = {
+        nombre: document.getElementById('sub-prod-nombre').value,
+        precio: parseFloat(document.getElementById('sub-prod-precio').value),
+        costo: parseFloat(document.getElementById('sub-prod-costo').value) || 0,
+    };
 
-        const nuevoProducto = {
-            id: this.idCounter++, nombre: data.nombre, tipo: 'producto',
-            stock: 0, stockMinimo: 0, costo: data.costo, precio: data.precio,
-            cuentaIngresoId: 40101
-        };
-        this.productos.push(nuevoProducto);
-        this.saveAll();
+    const nuevoProducto = {
+        id: this.idCounter++,
+        nombre: data.nombre,
+        tipo: 'producto',
+        stock: 0,
+        stockMinimo: 0,
+        costo: data.costo,
+        precio: data.precio,
+        // --- INICIO DE LA CORRECCIÓN ---
+        // Se asegura de que la cuenta de ingresos sea una cuenta de detalle válida.
+        cuentaIngresoId: 41001, 
+        // Se añade la categoría de inventario por defecto para consistencia.
+        cuentaInventarioId: 13001 
+        // --- FIN DE LA CORRECCIÓN ---
+    };
+    this.productos.push(nuevoProducto);
+    this.saveAll();
 
-        const todosLosSelectores = document.querySelectorAll('.gasto-item-producto-id, .venta-item-id, .compra-item-producto-id, #productos-terminados-datalist');
-        
-        todosLosSelectores.forEach(el => {
-            const option = document.createElement('option');
-            if (el.tagName === 'DATALIST') {
-                option.value = nuevoProducto.nombre;
-                option.dataset.id = nuevoProducto.id;
-            } else {
-                option.value = nuevoProducto.id;
-                option.text = nuevoProducto.nombre;
-                option.dataset.precio = nuevoProducto.precio;
-            }
-            el.appendChild(option);
-        });
+    const todosLosSelectores = document.querySelectorAll('.gasto-item-producto-id, .venta-item-id, .compra-item-producto-id, #productos-terminados-datalist');
+    
+    todosLosSelectores.forEach(el => {
+        const option = document.createElement('option');
+        if (el.tagName === 'DATALIST') {
+            option.value = nuevoProducto.nombre;
+            option.dataset.id = nuevoProducto.id;
+        } else {
+            option.value = nuevoProducto.id;
+            option.text = nuevoProducto.nombre;
+            option.dataset.precio = nuevoProducto.precio;
+        }
+        el.appendChild(option);
+    });
 
-        const elementActivo = document.getElementById(elementIdToUpdate);
-        if (elementActivo) {
-            if (elementActivo.tagName === 'INPUT') {
-                elementActivo.value = nuevoProducto.nombre;
-                const hiddenInputId = elementActivo.id.replace('-input', '-id');
-                const hiddenInput = document.getElementById(hiddenInputId);
-                if(hiddenInput) hiddenInput.value = nuevoProducto.id;
-            } else {
-                elementActivo.value = nuevoProducto.id;
-            }
-            elementActivo.dispatchEvent(new Event('change', { bubbles: true }));
+    const elementActivo = document.getElementById(elementIdToUpdate);
+    if (elementActivo) {
+        if (elementActivo.tagName === 'INPUT') {
+            elementActivo.value = nuevoProducto.nombre;
+            const hiddenInputId = elementActivo.id.replace('-input', '-id');
+            const hiddenInput = document.getElementById(hiddenInputId);
+            if(hiddenInput) hiddenInput.value = nuevoProducto.id;
+        } else {
+            elementActivo.value = nuevoProducto.id;
+        }
+        elementActivo.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    this.showToast('Producto creado y seleccionado.', 'success');
+    document.body.removeChild(document.getElementById('sub-modal-bg'));
+},
+        venderDesdeInventario(productoId) {
+        const producto = this.findById(this.productos, productoId);
+        if (!producto) {
+            this.showToast('Error: Producto no encontrado.', 'error');
+            return;
         }
 
-        this.showToast('Producto creado y seleccionado.', 'success');
-        document.body.removeChild(document.getElementById('sub-modal-bg'));
+        // Pre-cargamos el producto en la variable temporal
+        this.tempItemsParaVenta = [{
+            itemType: 'producto',
+            productoId: producto.id,
+            cantidad: 1,
+            precio: producto.precio,
+            costo: producto.costo
+        }];
+
+        // --- INICIO DE LA MEJORA ---
+        // Navegamos al módulo de ventas y le pasamos la instrucción de crear un nuevo documento.
+        this.irModulo('ventas', { action: 'new' });
+        // --- FIN DE LA MEJORA ---
     },
 });

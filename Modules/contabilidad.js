@@ -4,27 +4,75 @@ Object.assign(ContaApp, {
 
 // Módulo: Cierre del Período
         renderCierrePeriodo() {
-        const lastYear = new Date().getFullYear() - 1;
-        const html = `
+    const { actual: periodoActual, anterior: periodoAnterior } = this.getPeriodoContableActual();
+    const [anio, mes] = periodoActual.split('-');
+    const nombreMesActual = new Date(anio, mes - 1, 1).toLocaleString('es-ES', { month: 'long' });
+
+    // --- INICIO DE LA MEJORA: Lógica de validación basada en fecha real ---
+    let puedeReabrir = false;
+    if (periodoAnterior) {
+        const hoy = new Date();
+        const anioReal = hoy.getFullYear();
+        const mesReal = hoy.getMonth() + 1; // 1-12
+
+        const [anioAnterior, mesAnterior] = periodoAnterior.split('-').map(Number);
+
+        // Comprobamos si el período anterior es exactamente el mes anterior al mes real actual.
+        const fechaPeriodoAnterior = new Date(anioAnterior, mesAnterior -1);
+        const unMesAntesDeHoy = new Date();
+        unMesAntesDeHoy.setMonth(unMesAntesDeHoy.getMonth() - 1);
+
+        if (fechaPeriodoAnterior.getFullYear() === unMesAntesDeHoy.getFullYear() && fechaPeriodoAnterior.getMonth() === unMesAntesDeHoy.getMonth()) {
+            puedeReabrir = true;
+        }
+    }
+    // --- FIN DE LA MEJORA ---
+
+    let accionesAdminHTML = '';
+    if (this.currentUser && this.currentUser.rol === 'administrador') {
+        accionesAdminHTML = `
+            <div class="border-t border-[var(--color-border-accent)] mt-4 pt-4 flex flex-col sm:flex-row gap-4">
+                <button class="conta-btn conta-btn-danger flex-1" onclick="ContaApp.cerrarPeriodoActual()">
+                    <i class="fa-solid fa-lock me-2"></i> Cerrar ${nombreMesActual}
+                </button>
+                <button class="conta-btn conta-btn-accent flex-1" onclick="ContaApp.reabrirPeriodoAnterior()" ${!puedeReabrir ? 'disabled' : ''}>
+                    <i class="fa-solid fa-unlock me-2"></i> Reabrir Mes Anterior
+                </button>
+            </div>
+        `;
+    }
+
+    const lastYear = new Date().getFullYear() - 1;
+    const html = `
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="conta-card flex flex-col">
+                <h3 class="conta-subtitle">Control de Períodos Mensuales</h3>
+                <div class="flex-grow flex flex-col items-center justify-center text-center py-8">
+                    <p class="text-sm text-[var(--color-text-secondary)]">PERÍODO CONTABLE ACTUAL</p>
+                    <p class="text-4xl font-bold my-2 text-[var(--color-primary)] capitalize">${nombreMesActual} ${anio}</p>
+                    <p class="text-xs text-[var(--color-text-secondary)]">Las nuevas transacciones con fechas de períodos cerrados se registrarán en este período.</p>
+                </div>
+                ${accionesAdminHTML}
+            </div>
+
             <div class="conta-card">
-                <h3 class="conta-subtitle">Proceso de Cierre Contable</h3>
-                <p class="text-[var(--color-text-secondary)] mb-4">
-                    Este proceso saldará (pondrá en cero) todas las cuentas de Ingresos y Gastos para el período especificado.
-                    La ganancia o pérdida neta resultante se transferirá a la cuenta "Resultados Acumulados" en el Patrimonio.
-                    Esta acción es irreversible y solo debe realizarse una vez por período fiscal.
+                <h3 class="conta-subtitle">Proceso de Cierre Anual</h3>
+                <p class="text-[var(--color-text-secondary)] text-sm mb-4">
+                    Realiza este proceso solo al final del ejercicio fiscal para saldar las cuentas de resultados y transferir la utilidad al patrimonio.
                 </p>
                 <div class="flex flex-wrap items-end gap-4 mt-6">
                     <div>
                         <label for="cierre-fecha-fin" class="text-sm font-medium">Fecha de Cierre del Período</label>
                         <input type="date" id="cierre-fecha-fin" class="p-2 border rounded w-full conta-input" value="${lastYear}-12-31">
                     </div>
-                    <button class="conta-btn" onclick="ContaApp.iniciarProcesoCierre()">Calcular Resultados del Período</button>
+                    <button class="conta-btn" onclick="ContaApp.iniciarProcesoCierre()">Calcular Resultados</button>
                 </div>
                 <div id="cierre-resultado" class="mt-6"></div>
             </div>
-        `;
-        document.getElementById('cierre-periodo').innerHTML = html;
-    },
+        </div>
+    `;
+    document.getElementById('cierre-periodo').innerHTML = html;
+},
     iniciarProcesoCierre() {
         const fechaFin = document.getElementById('cierre-fecha-fin').value;
         if (!fechaFin) {
@@ -99,53 +147,58 @@ Object.assign(ContaApp, {
     
     // Módulo: Plan de Cuentas
     renderPlanDeCuentas() {
-        document.getElementById('page-actions-header').innerHTML = `
-            <div class="flex gap-2 flex-wrap">
-                <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarPlanDeCuentasCSV()"><i class="fa-solid fa-file-csv me-2"></i>Exportar CSV</button>
-                <button class="conta-btn" onclick="ContaApp.abrirModalNuevaCuenta()">+ Crear Cuenta</button>
-            </div>`;
-        this.actualizarSaldosGlobales();
-        let html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
-    <th class="conta-table-th">Código</th><th class="conta-table-th">Nombre</th><th class="conta-table-th">Tipo</th>
-    <th class="conta-table-th text-right">Saldo</th><th class="conta-table-th text-center">Acciones</th>
-    </tr></thead><tbody>`;
-        const renderRows = (parentId, level = 0) => {
-            this.planDeCuentas.filter(c => c.parentId === parentId).sort((a,b) => a.codigo.localeCompare(b.codigo, undefined, {numeric: true}))
-                .forEach(c => {
-                    const isControlOrTitle = c.tipo === 'CONTROL' || c.tipo === 'TITULO';
-                    
-                    let iconHTML = '';
-                    switch (c.tipo) {
-                        case 'TITULO':
-                            iconHTML = '<i class="fa-solid fa-folder-open fa-fw cuenta-icon-titulo"></i>';
-                            break;
-                        case 'CONTROL':
-                            iconHTML = '<i class="fa-solid fa-folder fa-fw cuenta-icon-control"></i>';
-                            break;
-                        case 'DETALLE':
-                            iconHTML = '<i class="fa-solid fa-file-lines fa-fw cuenta-icon-detalle"></i>';
-                            break;
-                    }
+    document.getElementById('page-actions-header').innerHTML = `
+        <div class="flex gap-2 flex-wrap">
+            <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarPlanDeCuentasCSV()"><i class="fa-solid fa-file-csv me-2"></i>Exportar CSV</button>
+            <button class="conta-btn" onclick="ContaApp.abrirModalNuevaCuenta()">+ Crear Cuenta</button>
+        </div>`;
+    this.actualizarSaldosGlobales();
+    let html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
+<th class="conta-table-th">Código</th><th class="conta-table-th">Nombre</th><th class="conta-table-th">Tipo</th>
+<th class="conta-table-th text-right">Saldo</th><th class="conta-table-th text-center">Acciones</th>
+</tr></thead><tbody>`;
+    const renderRows = (parentId, level = 0) => {
+        this.planDeCuentas.filter(c => c.parentId === parentId).sort((a,b) => a.codigo.localeCompare(b.codigo, undefined, {numeric: true}))
+            .forEach(c => {
+                const isControlOrTitle = c.tipo === 'CONTROL' || c.tipo === 'TITULO';
+                
+                // --- INICIO DE LA MEJORA VISUAL ---
+                let iconHTML = '';
+                // Aplicamos el padding-left directamente en la celda del nombre para crear la indentación
+                const nombreStyle = `padding-left: ${1 + level * 1.5}rem;`;
+                // --- FIN DE LA MEJORA VISUAL ---
 
-                    html += `<tr class="${c.tipo === 'TITULO' ? 'bg-[var(--color-bg-accent)]' : ''}">
-                        <td class="conta-table-td ${isControlOrTitle ? 'font-bold' : ''}" style="padding-left: ${1 + level * 1.5}rem;">${c.codigo}</td>
-                        <td class="conta-table-td ${isControlOrTitle ? 'font-bold' : ''}">${iconHTML} ${c.nombre}</td>
-                        <td class="conta-table-td text-xs text-[var(--color-text-secondary)]">${c.tipo}</td>
-                        <td class="conta-table-td text-right font-mono ${isControlOrTitle ? 'font-bold' : ''}">${this.formatCurrency(c.saldo)}</td>
-                        <td class="conta-table-td text-center">
-                            <div class="flex justify-center items-center gap-3">
-                                <button title="Editar" class="conta-btn-icon edit" onclick="ContaApp.abrirModalEditarCuenta(${c.id})">✏️</button>
-                                <button title="Eliminar" class="conta-btn-icon delete" onclick="ContaApp.eliminarCuenta(${c.id})">🗑️</button>
-                            </div>
-                        </td>
-                    </tr>`;
-                    if (isControlOrTitle) renderRows(c.id, level + 1);
-                });
-        };
-        renderRows(null);
-        html += `</tbody></table></div>`;
-        document.getElementById('plan-de-cuentas').innerHTML = html;
-    },
+                switch (c.tipo) {
+                    case 'TITULO':
+                        iconHTML = '<i class="fa-solid fa-folder-open fa-fw cuenta-icon-titulo"></i>';
+                        break;
+                    case 'CONTROL':
+                        iconHTML = '<i class="fa-solid fa-folder fa-fw cuenta-icon-control"></i>';
+                        break;
+                    case 'DETALLE':
+                        iconHTML = '<i class="fa-solid fa-file-lines fa-fw cuenta-icon-detalle"></i>';
+                        break;
+                }
+
+                html += `<tr class="${c.tipo === 'TITULO' ? 'bg-[var(--color-bg-accent)]' : ''}">
+                    <td class="conta-table-td ${isControlOrTitle ? 'font-bold' : ''}">${c.codigo}</td>
+                    <td class="conta-table-td ${isControlOrTitle ? 'font-bold' : ''}" style="${nombreStyle}">${iconHTML} ${c.nombre}</td>
+                    <td class="conta-table-td text-xs text-[var(--color-text-secondary)]">${c.tipo}</td>
+                    <td class="conta-table-td text-right font-mono ${isControlOrTitle ? 'font-bold' : ''}">${this.formatCurrency(c.saldo)}</td>
+                    <td class="conta-table-td text-center">
+                        <div class="flex justify-center items-center gap-3">
+                            <button title="Editar" class="conta-btn-icon edit" onclick="ContaApp.abrirModalEditarCuenta(${c.id})"><i class="fa-solid fa-pencil"></i></button>
+                            <button title="Eliminar" class="conta-btn-icon delete" onclick="ContaApp.eliminarCuenta(${c.id})">🗑️</button>
+                        </div>
+                    </td>
+                </tr>`;
+                if (isControlOrTitle) renderRows(c.id, level + 1);
+            });
+    };
+    renderRows(null);
+    html += `</tbody></table></div>`;
+    document.getElementById('plan-de-cuentas').innerHTML = html;
+},
     abrirModalNuevaCuenta(parentId = null) {
         let parentOptions = this.planDeCuentas.filter(c => c.tipo === 'CONTROL' || c.tipo === 'TITULO').map(p => `<option value="${p.id}" ${parentId === p.id ? 'selected':''}>${p.codigo} - ${p.nombre}</option>`).join('');
         const modalHTML = `<h3 class="conta-title mb-4">Crear Nueva Cuenta</h3>
@@ -260,7 +313,7 @@ Object.assign(ContaApp, {
     },
 
     // Módulo: Diario General
-                    renderDiarioGeneral(filters = {}) {
+            renderDiarioGeneral(filters = {}) {
         document.getElementById('page-actions-header').innerHTML = `<div class="flex flex-wrap gap-2">
             <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarDiarioCSV()"><i class="fa-solid fa-file-csv me-2"></i>Exportar CSV</button>
             <button class="conta-btn conta-btn-accent" onclick="ContaApp.abrirModalReclasificarApertura()">Reclasificar Saldo</button>
@@ -332,40 +385,12 @@ Object.assign(ContaApp, {
         if(filters.startDate) document.getElementById('diario-general-start-date').value = filters.startDate;
         if(filters.endDate) document.getElementById('diario-general-end-date').value = filters.endDate;
     },
-    abrirModalAsientoManual() {
-        const cuentasOptions = this.planDeCuentas.filter(c => c.tipo === 'DETALLE')
-            .sort((a,b) => a.codigo.localeCompare(b.codigo, undefined, {numeric: true}))
-            .map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`).join('');
-
-        const modalHTML = `<h3 class="conta-title mb-4">Asiento Contable Manual</h3>
-        <form onsubmit="ContaApp.guardarAsientoManual(event)" class="space-y-4 modal-form">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div><label for="asiento-fecha">Fecha</label><input type="date" id="asiento-fecha" value="${this.getTodayDate()}" class="w-full p-2 mt-1" required></div>
-                <div><label for="asiento-descripcion">Descripción</label><input type="text" id="asiento-descripcion" class="w-full p-2 mt-1" required></div>
-            </div>
-            <div class="conta-card !p-4 mt-4">
-                <h4 class="font-bold mb-2">Movimientos</h4>
-                <div id="asiento-movimientos-container"></div>
-                <button type="button" class="conta-btn conta-btn-small mt-2" onclick="ContaApp.agregarMovimientoAsiento()">+ Agregar Movimiento</button>
-            </div>
-            <div class="flex justify-end gap-4 font-bold text-lg">
-                <div id="asiento-total-debe">Debe: ${this.formatCurrency(0)}</div>
-                <div id="asiento-total-haber">Haber: ${this.formatCurrency(0)}</div>
-            </div>
-            <div id="asiento-error" class="text-center font-bold conta-text-danger"></div>
-            <div class="flex justify-end gap-2 mt-6"><button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button><button type="submit" class="conta-btn">Guardar Asiento</button></div>
-        </form>`;
-        this.showModal(modalHTML, '4xl');
-        this.agregarMovimientoAsiento();
-        this.agregarMovimientoAsiento();
-    },
-        abrirModalEditarAsiento(asientoId) {
+    abrirModalEditarAsiento(asientoId) {
         const asiento = this.findById(this.asientos, asientoId);
-        if (!asiento) return;
-
-        const cuentasOptions = this.planDeCuentas.filter(c => c.tipo === 'DETALLE')
-            .sort((a,b) => a.codigo.localeCompare(b.codigo, undefined, {numeric: true}))
-            .map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`).join('');
+        if (!asiento || asiento.transaccionId) {
+            this.showToast('Este asiento no se puede editar.', 'error');
+            return;
+        }
 
         let movimientosHTML = '';
         asiento.movimientos.forEach(mov => {
@@ -397,7 +422,34 @@ Object.assign(ContaApp, {
             <div class="flex justify-end gap-2 mt-6"><button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button><button type="submit" class="conta-btn">Guardar Cambios</button></div>
         </form>`;
         this.showModal(modalHTML, '4xl');
-        this.actualizarTotalesAsiento(); // Para calcular los totales iniciales
+        this.actualizarTotalesAsiento();
+    },
+    abrirModalAsientoManual() {
+        const cuentasOptions = this.planDeCuentas.filter(c => c.tipo === 'DETALLE')
+            .sort((a,b) => a.codigo.localeCompare(b.codigo, undefined, {numeric: true}))
+            .map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`).join('');
+
+        const modalHTML = `<h3 class="conta-title mb-4">Asiento Contable Manual</h3>
+        <form onsubmit="ContaApp.guardarAsientoManual(event)" class="space-y-4 modal-form">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div><label for="asiento-fecha">Fecha</label><input type="date" id="asiento-fecha" value="${this.getTodayDate()}" class="w-full p-2 mt-1" required></div>
+                <div><label for="asiento-descripcion">Descripción</label><input type="text" id="asiento-descripcion" class="w-full p-2 mt-1" required></div>
+            </div>
+            <div class="conta-card !p-4 mt-4">
+                <h4 class="font-bold mb-2">Movimientos</h4>
+                <div id="asiento-movimientos-container"></div>
+                <button type="button" class="conta-btn conta-btn-small mt-2" onclick="ContaApp.agregarMovimientoAsiento()">+ Agregar Movimiento</button>
+            </div>
+            <div class="flex justify-end gap-4 font-bold text-lg">
+                <div id="asiento-total-debe">Debe: ${this.formatCurrency(0)}</div>
+                <div id="asiento-total-haber">Haber: ${this.formatCurrency(0)}</div>
+            </div>
+            <div id="asiento-error" class="text-center font-bold conta-text-danger"></div>
+            <div class="flex justify-end gap-2 mt-6"><button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button><button type="submit" class="conta-btn">Guardar Asiento</button></div>
+        </form>`;
+        this.showModal(modalHTML, '4xl');
+        this.agregarMovimientoAsiento();
+        this.agregarMovimientoAsiento();
     },
     agregarMovimientoAsiento() {
         const container = document.getElementById('asiento-movimientos-container');
@@ -464,17 +516,15 @@ Object.assign(ContaApp, {
             errorDiv.innerText = "";
         }
     },
-    guardarAsientoManual(e, asientoId = null) {
+        guardarAsientoManual(e, asientoId = null) {
         e.preventDefault();
         const fecha = document.getElementById('asiento-fecha').value;
         const descripcion = document.getElementById('asiento-descripcion').value;
         
-        // INICIO DE MEJORA: Validar fecha también al editar
         if (this.empresa.ultimoCierre && fecha <= this.empresa.ultimoCierre) {
-            this.showToast(`Error: El período hasta ${this.empresa.ultimoCierre} está cerrado. No se puede editar la transacción a esta fecha.`, 'error');
+            this.showToast(`Error: El período hasta ${this.empresa.ultimoCierre} está cerrado. No se puede crear o editar un asiento en esta fecha.`, 'error');
             return;
         }
-        // FIN DE MEJORA
 
         const movimientos = [];
         let totalDebe = 0;
@@ -502,8 +552,9 @@ Object.assign(ContaApp, {
         }
         
         if (asientoId) {
+            // --- INICIO DE LA LÓGICA DE EDICIÓN ---
             const asientoExistente = this.findById(this.asientos, asientoId);
-            if (asientoExistente) {
+            if (asientoExistente && !asientoExistente.transaccionId) {
                 asientoExistente.fecha = fecha;
                 asientoExistente.descripcion = descripcion;
                 asientoExistente.movimientos = movimientos;
@@ -513,8 +564,12 @@ Object.assign(ContaApp, {
                 this.closeModal();
                 this.irModulo('diario-general');
                 this.showToast(`Asiento #${asientoId} actualizado con éxito.`, 'success');
+            } else {
+                this.showToast('Error: El asiento a editar no es válido o no se puede modificar.', 'error');
             }
+            // --- FIN DE LA LÓGICA DE EDICIÓN ---
         } else {
+            // Lógica de creación (existente)
             if (this.crearAsiento(fecha, descripcion, movimientos, null)) {
                 this.saveAll();
                 this.closeModal();
@@ -636,4 +691,48 @@ exportarDiarioCSV() {
             });
         this.exportarA_CSV(`plan_de_cuentas_${this.getTodayDate()}.csv`, dataParaExportar);
     },
+    cerrarPeriodoActual() {
+    const { actual: periodoActual } = this.getPeriodoContableActual();
+    
+    this.showConfirm(`¿Estás seguro de cerrar el período de ${periodoActual}? Una vez cerrado, no podrás registrar asientos contables en esta fecha.`, () => {
+        if (!this.empresa.periodosContables) this.empresa.periodosContables = {};
+        
+        this.empresa.periodosContables[periodoActual] = 'cerrado';
+        this.saveAll();
+        this.irModulo('cierre-periodo'); // Recargar el módulo para refrescar la vista
+        this.showToast(`Período ${periodoActual} cerrado con éxito.`, 'success');
+    });
+},
+
+reabrirPeriodoAnterior() {
+    const { anterior: periodoAnterior } = this.getPeriodoContableActual();
+
+    if (!periodoAnterior) {
+        this.showToast('No hay un período anterior cerrado para reabrir.', 'error');
+        return;
+    }
+    
+    // --- INICIO DE LA MEJORA: Doble validación en la lógica ---
+    const hoy = new Date();
+    const anioReal = hoy.getFullYear();
+    const mesReal = hoy.getMonth() + 1;
+    const [anioAnterior, mesAnterior] = periodoAnterior.split('-').map(Number);
+    const unMesAntesDeHoy = new Date();
+    unMesAntesDeHoy.setMonth(unMesAntesDeHoy.getMonth() - 1);
+
+    if (!(anioAnterior === unMesAntesDeHoy.getFullYear() && mesAnterior === unMesAntesDeHoy.getMonth() + 1)) {
+        this.showToast('Solo se permite reabrir el mes calendario inmediatamente anterior.', 'error');
+        return;
+    }
+    // --- FIN DE LA MEJORA ---
+
+    this.showConfirm(`¿Estás seguro de reabrir el período ${periodoAnterior}? Esto te permitirá volver a registrar transacciones en ese mes.`, () => {
+        if (this.empresa.periodosContables && this.empresa.periodosContables[periodoAnterior]) {
+            delete this.empresa.periodosContables[periodoAnterior];
+            this.saveAll();
+            this.irModulo('cierre-periodo'); // Recargar el módulo
+            this.showToast(`Período ${periodoAnterior} ha sido reabierto.`, 'success');
+        }
+    });
+},
 });

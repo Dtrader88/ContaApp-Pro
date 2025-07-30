@@ -571,7 +571,7 @@ getAgingData(tipoContacto, fechaReporte) {
             guardarBtn.disabled = false; // Se permite pagar menos
         }
     },
-                    guardarPagoCliente(e, ventaId) {
+                        async guardarPagoCliente(e, ventaId) {
         e.preventDefault();
         const venta = this.findById(this.transacciones, ventaId);
         const montoPagadoBanco = parseFloat(document.getElementById('pago-monto').value) || 0;
@@ -591,47 +591,55 @@ getAgingData(tipoContacto, fechaReporte) {
         const totalCreditosAplicados = creditosSeleccionados.reduce((sum, c) => sum + c.monto, 0);
         const totalAcreditado = montoPagadoBanco + totalCreditosAplicados;
 
-        // Registro de la transacción de pago (si hubo pago monetario)
-        if (montoPagadoBanco > 0) {
-            const pagoRegistrado = {
-                id: this.idCounter++, tipo: 'pago_cliente', fecha: fecha, contactoId: venta.contactoId,
-                monto: montoPagadoBanco, cuentaBancoId: cuentaBancoId, ventaId: ventaId, comentario: comentario
-            };
-            this.transacciones.push(pagoRegistrado);
-            this.crearAsiento(fecha, `Pago Factura #${venta.numeroFactura || venta.id}`, [
-                { cuentaId: cuentaBancoId, debe: montoPagadoBanco, haber: 0 },
-                { cuentaId: cuentaCxcId, debe: 0, haber: montoPagadoBanco }
-            ], pagoRegistrado.id);
-        }
-
-        // Aplicación de créditos
-        creditosSeleccionados.forEach(creditoInfo => {
-            const credito = this.findById(this.transacciones, creditoInfo.id);
-            if (credito) {
-                credito.montoAplicado = (credito.montoAplicado || 0) + creditoInfo.monto;
-                const cuentaContrapartidaId = credito.tipo === 'nota_credito' ? 420 : 220; // 420: Devoluciones, 220: Anticipos
-                // El asiento de aplicación salda la cuenta de pasivo/ingreso-contrario contra CXC
-                this.crearAsiento(fecha, `Aplicación de ${credito.tipo} #${credito.id} a Factura #${venta.numeroFactura}`, [
-                    { cuentaId: cuentaContrapartidaId, debe: creditoInfo.monto, haber: 0 },
-                    { cuentaId: cuentaCxcId, debe: 0, haber: creditoInfo.monto }
-                ]);
+        // --- INICIO DE LA REFACTORIZACIÓN ---
+        try {
+            if (montoPagadoBanco > 0) {
+                const pagoRegistrado = {
+                    id: this.idCounter++, tipo: 'pago_cliente', fecha: fecha, contactoId: venta.contactoId,
+                    monto: montoPagadoBanco, cuentaBancoId: cuentaBancoId, ventaId: ventaId, comentario: comentario
+                };
+                this.transacciones.push(pagoRegistrado);
+                this.crearAsiento(fecha, `Pago Factura #${venta.numeroFactura || venta.id}`, [
+                    { cuentaId: cuentaBancoId, debe: montoPagadoBanco, haber: 0 },
+                    { cuentaId: cuentaCxcId, debe: 0, haber: montoPagadoBanco }
+                ], pagoRegistrado.id);
             }
-        });
 
-        // Actualizar la factura
-        venta.montoPagado = (venta.montoPagado || 0) + totalAcreditado;
-        if (venta.montoPagado >= venta.total - 0.01) {
-            venta.estado = 'Pagada';
-        } else if (venta.montoPagado > 0) {
-            venta.estado = 'Parcial';
-        } else {
-            venta.estado = 'Pendiente';
+            creditosSeleccionados.forEach(creditoInfo => {
+                const credito = this.findById(this.transacciones, creditoInfo.id);
+                if (credito) {
+                    credito.montoAplicado = (credito.montoAplicado || 0) + creditoInfo.monto;
+                    // NOTA PARA BACKEND: La cuenta de contrapartida debe ser validada.
+                    const cuentaContrapartidaId = credito.tipo === 'nota_credito' ? 490 : 220; // 490: Descuentos/Devoluciones, 220: Anticipos
+                    this.crearAsiento(fecha, `Aplicación de ${credito.tipo} #${credito.id} a Factura #${venta.numeroFactura}`, [
+                        { cuentaId: cuentaContrapartidaId, debe: creditoInfo.monto, haber: 0 },
+                        { cuentaId: cuentaCxcId, debe: 0, haber: creditoInfo.monto }
+                    ]);
+                }
+            });
+
+            venta.montoPagado = (venta.montoPagado || 0) + totalAcreditado;
+            if (venta.montoPagado >= venta.total - 0.01) {
+                venta.estado = 'Pagada';
+            } else if (venta.montoPagado > 0) {
+                venta.estado = 'Parcial';
+            }
+
+            await this.repository.actualizarMultiplesDatos({
+                transacciones: this.transacciones,
+                asientos: this.asientos,
+                idCounter: this.idCounter
+            });
+
+            this.closeModal();
+            this.irModulo('cxc', { clienteId: venta.contactoId });
+            this.showToast('Pago registrado y aplicado con éxito.', 'success');
+
+        } catch (error) {
+            console.error("Error al guardar el pago del cliente:", error);
+            this.showToast(`Error al guardar: ${error.message}`, 'error');
         }
-
-        this.saveAll();
-        this.closeModal();
-        this.irModulo('cxc', { clienteId: venta.contactoId });
-        this.showToast('Pago registrado y aplicado con éxito.', 'success');
+        // --- FIN DE LA REFACTORIZACIÓN ---
     },
     toggleAllCheckboxes(source, className) {
         const checkboxes = document.getElementsByClassName(className);
@@ -743,7 +751,7 @@ getAgingData(tipoContacto, fechaReporte) {
         guardarBtn.disabled = montoTotalPago <= 0;
     },
 
-    guardarPagoLote(e, tipoContacto) {
+        async guardarPagoLote(e, tipoContacto) {
         e.preventDefault();
         const montoTotalPago = parseFloat(document.getElementById('pago-lote-monto-total').value);
         const cuentaBancoId = parseInt(document.getElementById('pago-lote-cuenta-banco').value);
@@ -755,45 +763,61 @@ getAgingData(tipoContacto, fechaReporte) {
         const contacto = this.findById(this.contactos, primeraFactura.contactoId);
 
         const esCobro = tipoContacto === 'cliente';
-        const cuentaContrapartidaId = esCobro ? 120 : 210; // 120: CxC, 210: CxP
+        const cuentaContrapartidaId = esCobro ? 120 : 210;
         const pagoTipo = esCobro ? 'pago_cliente' : 'pago_proveedor';
         const navModulo = esCobro ? 'cxc' : 'cxp';
 
-        // 1. Crear un único asiento contable por el total del pago
-        const pagoRegistrado = {
-            id: this.idCounter++, tipo: pagoTipo, fecha: fecha, contactoId: contacto.id,
-            monto: montoTotalPago, cuentaBancoId: cuentaBancoId, comentario: comentario, esLote: true
-        };
-        this.transacciones.push(pagoRegistrado);
-        this.crearAsiento(fecha, `Pago en lote ${esCobro ? 'de' : 'a'} ${contacto.nombre}. ${comentario}`, [
-            { cuentaId: cuentaBancoId, debe: esCobro ? montoTotalPago : 0, haber: esCobro ? 0 : montoTotalPago },
-            { cuentaId: cuentaContrapartidaId, debe: esCobro ? 0 : montoTotalPago, haber: esCobro ? montoTotalPago : 0 }
-        ], pagoRegistrado.id);
+        try {
+            const pagoRegistrado = {
+                id: this.idCounter++, tipo: pagoTipo, fecha: fecha, contactoId: contacto.id,
+                monto: montoTotalPago, cuentaBancoId: cuentaBancoId, comentario: comentario, esLote: true
+            };
+            this.transacciones.push(pagoRegistrado);
+            
+            const asiento = this.crearAsiento(fecha, `Pago en lote ${esCobro ? 'de' : 'a'} ${contacto.nombre}. ${comentario}`, [
+                { cuentaId: cuentaBancoId, debe: esCobro ? montoTotalPago : 0, haber: esCobro ? 0 : montoTotalPago },
+                { cuentaId: cuentaContrapartidaId, debe: esCobro ? 0 : montoTotalPago, haber: esCobro ? montoTotalPago : 0 }
+            ], pagoRegistrado.id);
 
-        // 2. Distribuir el pago entre las facturas
-        let montoRestante = montoTotalPago;
-        rows.forEach(row => {
-            if (montoRestante <= 0) return;
-            
-            const facturaId = parseInt(row.dataset.facturaId);
-            const factura = this.findById(this.transacciones, facturaId);
-            const saldoFactura = factura.total - (factura.montoPagado || 0);
-            
-            const montoAAplicar = Math.min(saldoFactura, montoRestante);
-            
-            factura.montoPagado = (factura.montoPagado || 0) + montoAAplicar;
-            if (factura.montoPagado >= factura.total - 0.01) {
-                factura.estado = 'Pagado';
-            } else {
-                factura.estado = 'Parcial';
+            if (!asiento) {
+                throw new Error("No se pudo crear el asiento contable para el pago en lote.");
             }
-            montoRestante -= montoAAplicar;
-        });
+
+            let montoRestante = montoTotalPago;
+            rows.forEach(row => {
+                if (montoRestante <= 0) return;
+                
+                const facturaId = parseInt(row.dataset.facturaId);
+                const factura = this.findById(this.transacciones, facturaId);
+                const saldoFactura = factura.total - (factura.montoPagado || 0);
+                
+                const montoAAplicar = Math.min(saldoFactura, montoRestante);
+                
+                factura.montoPagado = (factura.montoPagado || 0) + montoAAplicar;
+                if (factura.montoPagado >= factura.total - 0.01) {
+                    factura.estado = 'Pagado';
+                } else {
+                    factura.estado = 'Parcial';
+                }
+                montoRestante -= montoAAplicar;
+            });
+            
+            // --- INICIO DE LA REFACTORIZACIÓN ---
+            await this.repository.actualizarMultiplesDatos({
+                transacciones: this.transacciones,
+                asientos: this.asientos,
+                idCounter: this.idCounter
+            });
+            // --- FIN DE LA REFACTORIZACIÓN ---
+
+            this.closeModal();
+            this.irModulo(navModulo);
+            this.showToast('Pago en lote registrado y aplicado con éxito.', 'success');
         
-        this.saveAll();
-        this.closeModal();
-        this.irModulo(navModulo);
-        this.showToast('Pago en lote registrado y aplicado con éxito.', 'success');
+        } catch(error) {
+            console.error("Error al guardar pago en lote:", error);
+            this.showToast(`Error al guardar: ${error.message}`, 'error');
+        }
     },
     procesarSeleccionDePago(tipoContacto) {
         const checkboxClass = tipoContacto === 'cliente' ? 'cxc-factura-check' : 'cxp-gasto-check';
@@ -1039,7 +1063,7 @@ renderAnticipos(containerId) {
         </form>`;
         this.showModal(modalHTML, 'xl');
     },
-    guardarAnticipo(e) {
+        async guardarAnticipo(e) {
         e.preventDefault();
         const clienteId = parseInt(document.getElementById('anticipo-cliente').value);
         const monto = parseFloat(document.getElementById('anticipo-monto').value);
@@ -1047,18 +1071,33 @@ renderAnticipos(containerId) {
         const fecha = document.getElementById('anticipo-fecha').value;
         const cliente = this.findById(this.contactos, clienteId);
         const cuentaAnticiposId = 220;
-        const transaccion = { id: this.idCounter++, tipo: 'anticipo', fecha, contactoId: clienteId, total: monto, saldoAplicado: 0 };
+        
+        const transaccion = { id: this.idCounter++, tipo: 'anticipo', fecha, contactoId: clienteId, total: monto, montoAplicado: 0 };
         this.transacciones.push(transaccion);
+        
         const asiento = this.crearAsiento(fecha, `Anticipo de ${cliente.nombre}`, [
             { cuentaId: cuentaBancoId, debe: monto, haber: 0 },
             { cuentaId: cuentaAnticiposId, debe: 0, haber: monto }
         ], transaccion.id);
+        
+        // --- INICIO DE LA REFACTORIZACIÓN ---
         if (asiento) {
-            this.saveAll();
-            this.closeModal();
-            this.irModulo('cxc', { submodulo: 'anticipos' });
-            this.showToast('Anticipo registrado con éxito.', 'success');
+            try {
+                await this.repository.actualizarMultiplesDatos({
+                    transacciones: this.transacciones,
+                    asientos: this.asientos,
+                    idCounter: this.idCounter
+                });
+
+                this.closeModal();
+                this.irModulo('cxc', { submodulo: 'anticipos' });
+                this.showToast('Anticipo registrado con éxito.', 'success');
+            } catch (error) {
+                console.error("Error al guardar anticipo:", error);
+                this.showToast(`Error al guardar: ${error.message}`, 'error');
+            }
         }
+        // --- FIN DE LA REFACTORIZACIÓN ---
     },
     
     // Módulo: Cuentas por Pagar (CXP)
@@ -1256,7 +1295,7 @@ renderAnticipos(containerId) {
         </form>`;
         this.showModal(modalHTML, 'xl');
     },
-            guardarPagoProveedor(e, gastoId) {
+                async guardarPagoProveedor(e, gastoId) {
         e.preventDefault();
         const gasto = this.findById(this.transacciones, gastoId);
         const monto = parseFloat(document.getElementById('pago-monto').value);
@@ -1265,36 +1304,49 @@ renderAnticipos(containerId) {
         const comentario = document.getElementById('pago-comentario').value;
         const cuentaCxpId = 210;
 
-        const pagoRegistrado = {
-            id: this.idCounter++,
-            tipo: 'pago_proveedor', // Nuevo tipo de transacción
-            fecha: fecha,
-            contactoId: gasto.contactoId,
-            monto: monto,
-            cuentaOrigenId: cuentaOrigenId,
-            gastoId: gastoId, // Vínculo al gasto original
-            comentario: comentario
-        };
-        this.transacciones.push(pagoRegistrado);
+        try {
+            const pagoRegistrado = {
+                id: this.idCounter++,
+                tipo: 'pago_proveedor',
+                fecha: fecha,
+                contactoId: gasto.contactoId,
+                monto: monto,
+                cuentaOrigenId: cuentaOrigenId,
+                gastoId: gastoId,
+                comentario: comentario
+            };
+            this.transacciones.push(pagoRegistrado);
 
-        const asiento = this.crearAsiento(fecha, `Pago a proveedor por: ${gasto.descripcion}`, [
-            { cuentaId: cuentaCxpId, debe: monto, haber: 0 },
-            { cuentaId: cuentaOrigenId, debe: 0, haber: monto }
-        ], pagoRegistrado.id);
+            const asiento = this.crearAsiento(fecha, `Pago a proveedor por: ${gasto.descripcion}`, [
+                { cuentaId: cuentaCxpId, debe: monto, haber: 0 },
+                { cuentaId: cuentaOrigenId, debe: 0, haber: monto }
+            ], pagoRegistrado.id);
 
-        if (asiento) {
-            gasto.montoPagado = (gasto.montoPagado || 0) + monto;
-            if (gasto.montoPagado >= gasto.total - 0.01) {
-                gasto.estado = 'Pagado';
-            } else if (gasto.montoPagado > 0) {
-                gasto.estado = 'Parcial';
+            if (asiento) {
+                gasto.montoPagado = (gasto.montoPagado || 0) + monto;
+                if (gasto.montoPagado >= gasto.total - 0.01) {
+                    gasto.estado = 'Pagado';
+                } else if (gasto.montoPagado > 0) {
+                    gasto.estado = 'Parcial';
+                }
+
+                // --- INICIO DE LA REFACTORIZACIÓN ---
+                await this.repository.actualizarMultiplesDatos({
+                    transacciones: this.transacciones,
+                    asientos: this.asientos,
+                    idCounter: this.idCounter
+                });
+                // --- FIN DE LA REFACTORIZACIÓN ---
+
+                this.closeModal();
+                this.irModulo('cxp', { proveedorId: gasto.contactoId });
+                this.showToast('Pago a proveedor registrado con éxito.', 'success');
             } else {
-                gasto.estado = 'Pendiente';
+                throw new Error("No se pudo generar el asiento contable para el pago.");
             }
-            this.saveAll();
-            this.closeModal();
-            this.irModulo('cxp', { proveedorId: gasto.contactoId });
-            this.showToast('Pago a proveedor registrado con éxito.', 'success');
+        } catch (error) {
+            console.error("Error al guardar el pago a proveedor:", error);
+            this.showToast(`Error al guardar: ${error.message}`, 'error');
         }
     },
             abrirModalHistorialGasto(gastoId) {

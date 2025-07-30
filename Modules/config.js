@@ -278,34 +278,11 @@ renderConfig_Licencia() {
         );
     },
     exportarDatos() {
-        // CAMBIO CLAVE: En lugar de leer del localStorage,
-        // construimos el objeto de datos a partir del estado actual de la aplicación,
-        // asegurando que exportamos exactamente lo que se guarda en Firebase.
-        const dataToSave = {
-            empresa: this.empresa,
-            licencia: this.licencia,
-            idCounter: this.idCounter,
-            planDeCuentas: this.planDeCuentas.map(({saldo, ...rest}) => rest),
-            asientos: this.asientos,
-            transacciones: this.transacciones,
-            contactos: this.contactos,
-            productos: this.productos,
-            recurrentes: this.recurrentes,
-            activosFijos: this.activosFijos,
-            listasMateriales: this.listasMateriales,
-            ordenesProduccion: this.ordenesProduccion,
-            unidadesMedida: this.unidadesMedida,
-            bancoImportado: this.bancoImportado
-        };
-        
-        // Convertimos el objeto a un texto JSON bien formateado.
-        const data = JSON.stringify(dataToSave, null, 2);
-
+        const data = localStorage.getItem("conta_app_data");
         if (!data) {
             this.showToast("No hay datos para exportar.", 'error');
             return;
         }
-        
         const blob = new Blob([data], {type: "application/json"});
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -408,7 +385,7 @@ renderConfig_Licencia() {
         </form>`;
         this.showModal(modalHTML, 'xl');
     },
-        guardarContacto(e, id = null) {
+                async guardarContacto(e, id = null) {
         e.preventDefault();
         const data = {
             nombre: document.getElementById('contacto-nombre').value,
@@ -416,36 +393,68 @@ renderConfig_Licencia() {
             email: document.getElementById('contacto-email').value,
             telefono: document.getElementById('contacto-telefono').value
         };
-        if (id) {
-            const contacto = this.findById(this.contactos, id);
-            Object.assign(contacto, data);
-        } else {
-            this.contactos.push({ id: this.idCounter++, ...data });
+
+        try {
+            if (id) {
+                // --- INICIO DE LA REFACTORIZACIÓN (EDITAR) ---
+                // 1. Preparamos el objeto actualizado sin modificar aún el estado local.
+                const contactoOriginal = this.findById(this.contactos, id);
+                const contactoActualizado = { ...contactoOriginal, ...data };
+
+                // 2. Intentamos guardar en el repositorio PRIMERO.
+                await this.repository.actualizarContacto(contactoActualizado);
+                
+                // 3. SOLO SI tiene éxito, actualizamos el estado local.
+                Object.assign(contactoOriginal, data);
+                // --- FIN DE LA REFACTORIZACIÓN (EDITAR) ---
+
+            } else {
+                // --- INICIO DE LA REFACTORIZACIÓN (CREAR) ---
+                // 1. Preparamos el nuevo objeto.
+                const nuevoContacto = { id: this.idCounter++, ...data };
+                
+                // 2. Intentamos guardar en el repositorio PRIMERO.
+                await this.repository.guardarContacto(nuevoContacto);
+
+                // 3. SOLO SI tiene éxito, actualizamos el estado local.
+                this.contactos.push(nuevoContacto);
+                // --- FIN DE LA REFACTORIZACIÓN (CREAR) ---
+            }
+
+            // El resto del flujo (UI) se mantiene igual y solo se ejecuta si todo fue bien.
+            this.closeModal();
+            this.irModulo('config', { submodulo: 'contactos' }); 
+            this.showToast(`Contacto ${id ? 'actualizado' : 'creado'} con éxito.`, 'success');
+
+        } catch (error) {
+            console.error("Error al guardar contacto:", error);
+            this.showToast(`Error al guardar: ${error.message}`, 'error');
+            // IMPORTANTE: Si el guardado falla, el estado local no se ha modificado,
+            // por lo que la UI se mantiene consistente con la base de datos.
         }
-        this.saveAll();
-        this.closeModal();
-        this.irModulo('config', { submodulo: 'contactos' }); 
-        this.showToast(`Contacto ${id ? 'actualizado' : 'creado'} con éxito.`, 'success');
     },
-        eliminarContacto(id) {
-        // 1. Verificar si el contacto tiene transacciones asociadas
+            eliminarContacto(id) {
         const tieneTransacciones = this.transacciones.some(t => t.contactoId === id);
 
-        // 2. Si tiene historial, bloquear la eliminación y notificar al usuario
         if (tieneTransacciones) {
             this.showToast('No se puede eliminar. El contacto tiene facturas o gastos asociados.', 'error');
             return;
         }
 
-        // 3. Si no tiene historial, pedir confirmación antes de borrar
-        this.showConfirm('¿Seguro que deseas eliminar este contacto? Esta acción no se puede deshacer.', () => {
-            // Eliminar el contacto de la lista
-            this.contactos = this.contactos.filter(c => c.id !== id);
-            
-            // Guardar los cambios, recargar la vista y notificar el éxito
-            this.saveAll();
-            this.irModulo('config', { submodulo: 'contactos' });
-            this.showToast('Contacto eliminado con éxito.', 'success');
+        this.showConfirm('¿Seguro que deseas eliminar este contacto? Esta acción no se puede deshacer.', async () => {
+            try {
+                // Primero, eliminamos del repositorio
+                await this.repository.eliminarContacto(id);
+                
+                // Si tiene éxito, actualizamos el estado local
+                this.contactos = this.contactos.filter(c => c.id !== id);
+                
+                this.irModulo('config', { submodulo: 'contactos' });
+                this.showToast('Contacto eliminado con éxito.', 'success');
+            } catch (error) {
+                console.error("Error al eliminar contacto:", error);
+                this.showToast(`Error al eliminar: ${error.message}`, 'error');
+            }
         });
     },
     abrirSubModalNuevoContacto(tipo, selectIdToUpdate) {
