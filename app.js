@@ -1552,29 +1552,33 @@ getPeriodoContableActual() {
     },
 
     renderPaginationControls(module, totalItems) {
+        // Corrección: La barra ahora se muestra incluso si solo hay una página.
+        // No se muestra únicamente si no hay absolutamente ningún resultado.
+        if (totalItems === 0) return '';
+
         const { currentPage, perPage } = this.getPaginationState(module);
         const totalPages = Math.ceil(totalItems / perPage);
 
-        if (totalPages <= 1) return '';
-
         let pageButtonsHTML = '';
-        const maxButtons = 5;
-        let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
-        let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+        if (totalPages > 1) {
+            const maxButtons = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+            let endPage = Math.min(totalPages, startPage + maxButtons - 1);
 
-        if (endPage - startPage + 1 < maxButtons) {
-            startPage = Math.max(1, endPage - maxButtons + 1);
-        }
+            if (endPage - startPage + 1 < maxButtons) {
+                startPage = Math.max(1, endPage - maxButtons + 1);
+            }
 
-        for (let i = startPage; i <= endPage; i++) {
-            const isActive = i === currentPage;
-            pageButtonsHTML += `<button class="pagination-btn ${isActive ? 'active' : ''}" onclick="ContaApp.goToPage('${module}', ${i})">${i}</button>`;
+            for (let i = startPage; i <= endPage; i++) {
+                const isActive = i === currentPage;
+                pageButtonsHTML += `<button class="pagination-btn ${isActive ? 'active' : ''}" onclick="ContaApp.goToPage('${module}', ${i})">${i}</button>`;
+            }
         }
 
         return `
             <div class="pagination-controls conta-card">
                 <div class="text-sm font-semibold">
-                    Página ${currentPage} de ${totalPages}
+                    Página ${currentPage} de ${totalPages} (${totalItems} en total)
                 </div>
                 <div class="flex items-center gap-1">
                     <button class="pagination-btn" onclick="ContaApp.goToPage('${module}', ${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>« Ant</button>

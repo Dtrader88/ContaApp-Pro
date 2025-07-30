@@ -81,20 +81,20 @@ ordenarVentasPor(columna) {
     </div>`;
     
     let contentHTML;
-    if (todasLasTransacciones.length === 0) {
+    let transaccionesFiltradas = todasLasTransacciones;
+    if (filters.search) {
+        const term = filters.search.toLowerCase();
+        transaccionesFiltradas = transaccionesFiltradas.filter(t => {
+            const cliente = this.findById(this.contactos, t.contactoId);
+            return t.numeroFactura?.toLowerCase().includes(term) || t.numeroNota?.toLowerCase().includes(term) || (cliente && cliente.nombre.toLowerCase().includes(term));
+        });
+    }
+    if (filters.startDate) { transaccionesFiltradas = transaccionesFiltradas.filter(t => t.fecha >= filters.startDate); }
+    if (filters.endDate) { transaccionesFiltradas = transaccionesFiltradas.filter(t => t.fecha <= filters.endDate); }
+    
+    if (transaccionesFiltradas.length === 0 && !filters.search && !filters.startDate && !filters.endDate) {
         contentHTML = this.generarEstadoVacioHTML('fa-shopping-cart','Aún no tienes ventas registradas','Haz clic en el botón para crear tu primera factura y empezar a crecer.','+ Crear Primera Venta',"ContaApp.abrirModalVenta()");
     } else {
-        let transaccionesFiltradas = todasLasTransacciones;
-        if (filters.search) {
-            const term = filters.search.toLowerCase();
-            transaccionesFiltradas = transaccionesFiltradas.filter(t => {
-                const cliente = this.findById(this.contactos, t.contactoId);
-                return t.numeroFactura?.toLowerCase().includes(term) || t.numeroNota?.toLowerCase().includes(term) || (cliente && cliente.nombre.toLowerCase().includes(term));
-            });
-        }
-        if (filters.startDate) { transaccionesFiltradas = transaccionesFiltradas.filter(t => t.fecha >= filters.startDate); }
-        if (filters.endDate) { transaccionesFiltradas = transaccionesFiltradas.filter(t => t.fecha <= filters.endDate); }
-        
         const filterFormHTML = `<div class="conta-card p-3 mb-4">
             <form onsubmit="event.preventDefault(); ContaApp.filtrarLista('ventas');" class="flex flex-wrap items-end gap-3">
                 <div><label class="text-xs font-semibold">Buscar por Cliente o #</label><input type="search" id="ventas-search" class="conta-input md:w-72" value="${filters.search || ''}"></div>
@@ -176,20 +176,15 @@ ordenarVentasPor(columna) {
                 </tr>`;
             });
 
-            resultsHTML = `<div class="conta-card overflow-auto">
-                            <table class="min-w-full text-sm conta-table-zebra">
-                                <thead><tr>
-                                    ${generarEncabezado('Documento #', 'numeroFactura')}
-                                    ${generarEncabezado('Fecha', 'fecha')}
-                                    ${generarEncabezado('Cliente', 'cliente')}
-                                    ${generarEncabezado('Total', 'total')}
-                                    ${generarEncabezado('Estado', 'estado')}
-                                    <th class="conta-table-th text-center">Acciones</th>
-                                </tr></thead>
-                                <tbody>${tableRowsHTML}</tbody>
-                            </table>
-                           </div>
-                           ${paginationHTML}`;
+            resultsHTML = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
+                ${generarEncabezado('Documento #', 'numeroFactura')}
+                ${generarEncabezado('Fecha', 'fecha')}
+                ${generarEncabezado('Cliente', 'cliente')}
+                ${generarEncabezado('Total', 'total')}
+                ${generarEncabezado('Estado', 'estado')}
+                <th class="conta-table-th text-center">Acciones</th>
+            </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>
+            ${paginationHTML}`;
         }
         contentHTML = filterFormHTML + resultsHTML;
     }

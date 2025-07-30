@@ -75,8 +75,14 @@ Object.assign(ContaApp, {
     if (productosFiltrados.length === 0) {
         html += `<div class="conta-card text-center p-8 text-[var(--color-text-secondary)]"><i class="fa-solid fa-box-open fa-3x mb-4 opacity-50"></i><h3 class="font-bold text-lg">Sin Productos</h3><p>No se encontraron productos en esta categoría.</p></div>`;
     } else {
+        const { currentPage, perPage } = this.getPaginationState('inventario');
+        const startIndex = (currentPage - 1) * perPage;
+        const endIndex = startIndex + perPage;
+        productosFiltrados.sort((a,b) => a.nombre.localeCompare(b.nombre));
+        const itemsParaMostrar = productosFiltrados.slice(startIndex, endIndex);
+
         let tableRowsHTML = '';
-        productosFiltrados.sort((a,b) => a.nombre.localeCompare(b.nombre)).forEach(p => {
+        itemsParaMostrar.forEach(p => {
             const isLowStock = p.tipo === 'producto' && p.stockMinimo > 0 && p.stock <= p.stockMinimo;
             const rowClass = isLowStock ? 'low-stock-row' : '';
             const stockDisplay = p.tipo === 'producto' ? p.stock : 'N/A';
@@ -84,7 +90,6 @@ Object.assign(ContaApp, {
             const unidad = this.findById(this.unidadesMedida, p.unidadMedidaId);
             const unidadDisplay = p.tipo === 'producto' ? (unidad ? unidad.nombre : 'N/A') : 'N/A';
 
-            // --- INICIO DE LA MEJORA: Añadir botón de Vender ---
             tableRowsHTML += `
                 <tr class="cursor-pointer hover:bg-[var(--color-bg-accent)] ${rowClass}" onclick="ContaApp.irModulo('inventario', { productoId: ${p.id} })">
                     <td class="conta-table-td font-bold">${p.nombre} ${lowStockIcon}</td>
@@ -98,7 +103,6 @@ Object.assign(ContaApp, {
                         ${p.tipo === 'producto' ? `<button class="conta-btn conta-btn-small conta-btn-success ml-2" title="Vender este Producto" onclick="ContaApp.venderDesdeInventario(${p.id})">Vender</button>` : ''}
                     </td>
                 </tr>`;
-            // --- FIN DE LA MEJORA ---
         });
         
         html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
@@ -109,6 +113,8 @@ Object.assign(ContaApp, {
             <th class="conta-table-th text-right">Costo</th>
             <th class="conta-table-th text-center">Acciones</th>
         </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
+        
+        this.renderPaginationControls('inventario', productosFiltrados.length);
     }
     document.getElementById('inventario-contenido').innerHTML = html;
 },
