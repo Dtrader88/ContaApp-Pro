@@ -15,21 +15,16 @@ Object.assign(ContaApp, {
             '+ Registrar Primera Compra', "ContaApp.abrirModalNuevaCompra()"
         );
     } else {
-        html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
-            <thead>
-                <tr>
-                    <th class="conta-table-th">Fecha</th>
-                    <th class="conta-table-th">Referencia #</th>
-                    <th class="conta-table-th">Proveedor</th>
-                    <th class="conta-table-th">Descripción</th>
-                    <th class="conta-table-th text-right">Total</th>
-                    <th class="conta-table-th">Estado</th>
-                    <th class="conta-table-th text-center">Acciones</th>
-                </tr>
-            </thead>
-            <tbody>`;
-        
-        compras.sort((a,b) => new Date(b.fecha) - new Date(a.fecha)).forEach(compra => {
+        const { currentPage, perPage } = this.getPaginationState('compras');
+        const startIndex = (currentPage - 1) * perPage;
+        const endIndex = startIndex + perPage;
+
+        compras.sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+        const itemsParaMostrar = compras.slice(startIndex, endIndex);
+        const paginationHTML = this.renderPaginationControls('compras', compras.length);
+
+        let tableRows = '';
+        itemsParaMostrar.forEach(compra => {
             const proveedor = this.findById(this.contactos, compra.contactoId);
             const isAnulada = compra.estado === 'Anulada';
             
@@ -46,7 +41,7 @@ Object.assign(ContaApp, {
                 accionesHTML += `<button class="conta-btn-icon delete" title="Anular Compra" onclick="event.stopPropagation(); ContaApp.anularCompra(${compra.id})"><i class="fa-solid fa-ban"></i></button>`;
             }
 
-            html += `
+            tableRows += `
                 <tr class="cursor-pointer ${rowClass}" onclick="ContaApp.abrirModalDetalleCompra(${compra.id})">
                     <td class="conta-table-td">${compra.fecha}</td>
                     <td class="conta-table-td font-mono">${compra.referencia || 'N/A'}</td>
@@ -58,7 +53,21 @@ Object.assign(ContaApp, {
                 </tr>
             `;
         });
-        html += `</tbody></table></div>`;
+
+        html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
+            <thead>
+                <tr>
+                    <th class="conta-table-th">Fecha</th>
+                    <th class="conta-table-th">Referencia #</th>
+                    <th class="conta-table-th">Proveedor</th>
+                    <th class="conta-table-th">Descripción</th>
+                    <th class="conta-table-th text-right">Total</th>
+                    <th class="conta-table-th">Estado</th>
+                    <th class="conta-table-th text-center">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>${tableRows}</tbody></table></div>
+            ${paginationHTML}`;
     }
     
     document.getElementById('compras').innerHTML = html;

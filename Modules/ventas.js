@@ -112,16 +112,12 @@ ordenarVentasPor(columna) {
                              <p>No se encontraron transacciones que coincidan con los filtros aplicados.</p>
                            </div>`;
         } else {
-            // ===== INICIO DE LA LÓGICA DE PAGINACIÓN =====
             const { currentPage, perPage } = this.getPaginationState('ventas');
             const startIndex = (currentPage - 1) * perPage;
             const endIndex = startIndex + perPage;
-            const itemsParaMostrar = transaccionesFiltradas.slice(startIndex, endIndex);
-            const paginationHTML = this.renderPaginationControls('ventas', transaccionesFiltradas.length);
-            // ===== FIN DE LA LÓGICA DE PAGINACIÓN =====
             
             const { column, order } = this.ventasSortState;
-            itemsParaMostrar.sort((a, b) => { // Se cambia transaccionesFiltradas por itemsParaMostrar
+            transaccionesFiltradas.sort((a, b) => {
                 let valA, valB;
                 if (column === 'cliente') {
                     valA = this.findById(this.contactos, a.contactoId)?.nombre || '';
@@ -130,6 +126,9 @@ ordenarVentasPor(columna) {
                 if (typeof valA === 'string') { return order === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA); } 
                 else { return order === 'asc' ? valA - valB : valB - valA; }
             });
+            
+            const itemsParaMostrar = transaccionesFiltradas.slice(startIndex, endIndex);
+            const paginationHTML = this.renderPaginationControls('ventas', transaccionesFiltradas.length);
             
             const generarEncabezado = (nombreColumna, clave) => {
                 let icono = '';
@@ -140,7 +139,7 @@ ordenarVentasPor(columna) {
             };
 
             let tableRowsHTML = '';
-            itemsParaMostrar.forEach(t => { // Se cambia transaccionesFiltradas por itemsParaMostrar
+            itemsParaMostrar.forEach(t => {
                 const cliente = this.findById(this.contactos, t.contactoId);
                 let estadoClass = '', estadoTexto = t.estado, totalDisplay, numeroDisplay, accionesHTML, rowOnclick;
 
@@ -190,7 +189,7 @@ ordenarVentasPor(columna) {
                                 <tbody>${tableRowsHTML}</tbody>
                             </table>
                            </div>
-                           ${paginationHTML}`; // Se añaden los controles al final
+                           ${paginationHTML}`;
         }
         contentHTML = filterFormHTML + resultsHTML;
     }

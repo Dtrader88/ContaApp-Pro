@@ -61,7 +61,6 @@ Object.assign(ContaApp, {
         }
     }
 
-    // --- MEJORA VISUAL: Se añade la clase 'text-center' a cada tarjeta ---
     const kpiHTML = `
         <div class="flex flex-wrap justify-center gap-4 mb-4">
             <div class="conta-card kpi-dashboard-card w-64 text-center"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-calendar-day fa-fw me-2"></i> Gastos del Mes</span><p class="font-bold text-xl conta-text-danger mt-1">${this.formatCurrency(gastosDelMes)}</p></div>
@@ -74,7 +73,6 @@ Object.assign(ContaApp, {
     if (todosLosGastos.length === 0) {
         contentHTML = this.generarEstadoVacioHTML('fa-receipt','Aún no tienes gastos','Registra tu primer gasto o compra para mantener tus finanzas al día.','+ Crear Primer Gasto',"ContaApp.abrirModalGasto()");
     } else {
-        // ... (El resto de la función se mantiene igual)
         let gastosFiltrados = todosLosGastos;
         if (filters.search) {
             const term = filters.search.toLowerCase();
@@ -103,8 +101,16 @@ Object.assign(ContaApp, {
                               <p>No se encontraron gastos que coincidan con los filtros aplicados.</p>
                             </div>`;
         } else {
+            const { currentPage, perPage } = this.getPaginationState('gastos');
+            const startIndex = (currentPage - 1) * perPage;
+            const endIndex = startIndex + perPage;
+            
+            gastosFiltrados.sort((a, b) => new Date(b.fecha) - new Date(a.fecha) || b.id - a.id);
+            const itemsParaMostrar = gastosFiltrados.slice(startIndex, endIndex);
+            const paginationHTML = this.renderPaginationControls('gastos', gastosFiltrados.length);
+
             let tableRowsHTML = '';
-            gastosFiltrados.sort((a, b) => new Date(b.fecha) - new Date(a.fecha) || b.id - a.id).forEach(g => {
+            itemsParaMostrar.forEach(g => {
                 const proveedor = this.findById(this.contactos, g.contactoId);
                 const estado = g.estado || 'Pendiente';
                 let estadoClass = estado === 'Pagado' ? 'tag-success' : (estado === 'Parcial' ? 'tag-accent' : 'tag-warning');
@@ -124,7 +130,8 @@ Object.assign(ContaApp, {
                 <th class="conta-table-th">#</th><th class="conta-table-th">Fecha</th><th class="conta-table-th">Proveedor</th>
                 <th class="conta-table-th">Descripción</th><th class="conta-table-th text-right">Total</th><th class="conta-table-th">Estado</th>
                 <th class="conta-table-th text-center">Acciones</th>
-            </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
+            </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>
+            ${paginationHTML}`;
         }
         contentHTML = filterFormHTML + resultsHTML;
     }
