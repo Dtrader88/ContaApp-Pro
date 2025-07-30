@@ -350,7 +350,13 @@ Object.assign(ContaApp, {
         if (asientos.length === 0) {
             html += `<div class="conta-card text-center p-8 text-[var(--color-text-secondary)]">No hay asientos que coincidan con los filtros.</div>`;
         } else {
-            asientos.sort((a,b) => new Date(b.fecha) - new Date(b.fecha) || b.id - a.id).forEach(asiento => {
+            const { currentPage, perPage } = this.getPaginationState('diario-general');
+            const startIndex = (currentPage - 1) * perPage;
+            const endIndex = startIndex + perPage;
+            asientos.sort((a,b) => new Date(b.fecha) - new Date(b.fecha) || b.id - a.id);
+            const itemsParaMostrar = asientos.slice(startIndex, endIndex);
+
+            itemsParaMostrar.forEach(asiento => {
                 html += `<div class="conta-card mb-4">
                     <div class="flex justify-between items-center border-b border-[var(--color-border-accent)] pb-2 mb-2">
                         <div>
@@ -379,6 +385,8 @@ Object.assign(ContaApp, {
                 });
                 html += `</tbody></table></div>`;
             });
+            
+            this.renderPaginationControls('diario-general', asientos.length);
         }
         document.getElementById('diario-general').innerHTML = html;
         if(filters.search) document.getElementById('diario-general-search').value = filters.search;

@@ -19,28 +19,22 @@ Object.assign(ContaApp, {
         if (this.activosFijos.length === 0) {
             html = this.generarEstadoVacioHTML('fa-building-columns', 'Aún no tienes activos registrados', 'Registra tu primer activo para empezar a gestionar su depreciación.', '+ Registrar Compra de Activo', "ContaApp.abrirModalActivoFijo()");
         } else {
-            html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
-                <thead>
-                    <tr>
-                        <th class="conta-table-th">Activo</th>
-                        <th class="conta-table-th">Fecha Compra</th>
-                        <th class="conta-table-th text-right">Costo</th>
-                        <th class="conta-table-th text-right">Dep. Acum.</th>
-                        <th class="conta-table-th text-right">Valor en Libros</th>
-                        <th class="conta-table-th">Estado</th>
-                        <th class="conta-table-th text-center">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>`;
+            const { currentPage, perPage } = this.getPaginationState('activos-fijos');
+            const startIndex = (currentPage - 1) * perPage;
+            const endIndex = startIndex + perPage;
+            
+            const activosOrdenados = this.activosFijos.sort((a,b) => new Date(b.fechaCompra) - new Date(a.fechaCompra));
+            const itemsParaMostrar = activosOrdenados.slice(startIndex, endIndex);
 
-            this.activosFijos.sort((a,b) => new Date(b.fechaCompra) - new Date(a.fechaCompra)).forEach(activo => {
+            let tableRows = '';
+            itemsParaMostrar.forEach(activo => {
                 const valorEnLibros = activo.costo - activo.depreciacionAcumulada;
                 let estadoClass = 'tag-neutral';
                 if (activo.estado === 'Activo') estadoClass = 'tag-success';
                 if (activo.estado === 'Depreciado') estadoClass = 'tag-accent';
                 if (activo.estado === 'Vendido' || activo.estado === 'De Baja') estadoClass = 'tag-anulada';
 
-                html += `
+                tableRows += `
                     <tr class="cursor-pointer hover:bg-[var(--color-bg-accent)]" onclick="ContaApp.irModulo('activos-fijos', { activoId: ${activo.id} })">
                         <td class="conta-table-td font-bold">${activo.nombre}</td>
                         <td class="conta-table-td">${activo.fechaCompra}</td>
@@ -60,7 +54,21 @@ Object.assign(ContaApp, {
                 `;
             });
 
-            html += `</tbody></table></div>`;
+            html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
+                <thead>
+                    <tr>
+                        <th class="conta-table-th">Activo</th>
+                        <th class="conta-table-th">Fecha Compra</th>
+                        <th class="conta-table-th text-right">Costo</th>
+                        <th class="conta-table-th text-right">Dep. Acum.</th>
+                        <th class="conta-table-th text-right">Valor en Libros</th>
+                        <th class="conta-table-th">Estado</th>
+                        <th class="conta-table-th text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>${tableRows}</tbody></table></div>`;
+
+            this.renderPaginationControls('activos-fijos', this.activosFijos.length);
         }
         
         document.getElementById('activos-fijos').innerHTML = html;
