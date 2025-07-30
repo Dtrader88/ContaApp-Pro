@@ -50,7 +50,6 @@ ordenarVentasPor(columna) {
 
     let todasLasTransacciones = this.transacciones.filter(t => t.tipo === 'venta' || t.tipo === 'nota_credito');
     
-    // ... (La sección de kpiHTML se mantiene igual)
     const hoy = new Date();
     const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0,10);
     const ventasNetasDelMes = todasLasTransacciones.filter(t => t.fecha >= primerDiaMes && t.estado !== 'Anulada').reduce((sum, t) => {
@@ -113,8 +112,16 @@ ordenarVentasPor(columna) {
                              <p>No se encontraron transacciones que coincidan con los filtros aplicados.</p>
                            </div>`;
         } else {
+            // ===== INICIO DE LA LÓGICA DE PAGINACIÓN =====
+            const { currentPage, perPage } = this.getPaginationState('ventas');
+            const startIndex = (currentPage - 1) * perPage;
+            const endIndex = startIndex + perPage;
+            const itemsParaMostrar = transaccionesFiltradas.slice(startIndex, endIndex);
+            const paginationHTML = this.renderPaginationControls('ventas', transaccionesFiltradas.length);
+            // ===== FIN DE LA LÓGICA DE PAGINACIÓN =====
+            
             const { column, order } = this.ventasSortState;
-            transaccionesFiltradas.sort((a, b) => {
+            itemsParaMostrar.sort((a, b) => { // Se cambia transaccionesFiltradas por itemsParaMostrar
                 let valA, valB;
                 if (column === 'cliente') {
                     valA = this.findById(this.contactos, a.contactoId)?.nombre || '';
@@ -133,7 +140,7 @@ ordenarVentasPor(columna) {
             };
 
             let tableRowsHTML = '';
-            transaccionesFiltradas.forEach(t => {
+            itemsParaMostrar.forEach(t => { // Se cambia transaccionesFiltradas por itemsParaMostrar
                 const cliente = this.findById(this.contactos, t.contactoId);
                 let estadoClass = '', estadoTexto = t.estado, totalDisplay, numeroDisplay, accionesHTML, rowOnclick;
 
@@ -170,14 +177,20 @@ ordenarVentasPor(columna) {
                 </tr>`;
             });
 
-            resultsHTML = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
-                ${generarEncabezado('Documento #', 'numeroFactura')}
-                ${generarEncabezado('Fecha', 'fecha')}
-                ${generarEncabezado('Cliente', 'cliente')}
-                ${generarEncabezado('Total', 'total')}
-                ${generarEncabezado('Estado', 'estado')}
-                <th class="conta-table-th text-center">Acciones</th>
-            </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
+            resultsHTML = `<div class="conta-card overflow-auto">
+                            <table class="min-w-full text-sm conta-table-zebra">
+                                <thead><tr>
+                                    ${generarEncabezado('Documento #', 'numeroFactura')}
+                                    ${generarEncabezado('Fecha', 'fecha')}
+                                    ${generarEncabezado('Cliente', 'cliente')}
+                                    ${generarEncabezado('Total', 'total')}
+                                    ${generarEncabezado('Estado', 'estado')}
+                                    <th class="conta-table-th text-center">Acciones</th>
+                                </tr></thead>
+                                <tbody>${tableRowsHTML}</tbody>
+                            </table>
+                           </div>
+                           ${paginationHTML}`; // Se añaden los controles al final
         }
         contentHTML = filterFormHTML + resultsHTML;
     }

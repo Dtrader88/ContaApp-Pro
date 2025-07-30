@@ -18,6 +18,7 @@ const ContaApp = {
     unidadesMedida: [],
     tempItemsParaVenta: [],
     bancoImportado: {},
+    paginationState: {},
     
     // --- LÍNEA AÑADIDA PARA SOLUCIONAR EL ERROR ---
     aperturaData: {
@@ -1529,4 +1530,54 @@ getPeriodoContableActual() {
         document.body.removeChild(a);
         this.showToast('Exportación completada.', 'success');
     },
+    getPaginationState(module) {
+        if (!this.paginationState[module]) {
+            this.paginationState[module] = { currentPage: 1, perPage: 50 };
+        }
+        return this.paginationState[module];
+    },
+
+    changeItemsPerPage(module, perPageValue) {
+        const state = this.getPaginationState(module);
+        state.perPage = parseInt(perPageValue);
+        state.currentPage = 1; // Reset to first page
+        this.irModulo(module, this.moduleFilters[module]);
+    },
+
+    goToPage(module, page) {
+        const state = this.getPaginationState(module);
+        state.currentPage = page;
+        this.irModulo(module, this.moduleFilters[module]);
+    },
+
+    renderPaginationControls(module, totalItems) {
+        const { currentPage, perPage } = this.getPaginationState(module);
+        const totalPages = Math.ceil(totalItems / perPage);
+
+        if (totalPages <= 1) return '';
+
+        let pageButtonsHTML = '';
+        for (let i = 1; i <= totalPages; i++) {
+            const isActive = i === currentPage;
+            pageButtonsHTML += `<button class="pagination-btn ${isActive ? 'active' : ''}" onclick="ContaApp.goToPage('${module}', ${i})">${i}</button>`;
+        }
+
+        return `
+            <div class="pagination-controls conta-card">
+                <div class="flex items-center gap-2">
+                    <label for="items-per-page" class="text-sm">Mostrar:</label>
+                    <select id="items-per-page" class="conta-input !p-1" onchange="ContaApp.changeItemsPerPage('${module}', this.value)">
+                        <option value="50" ${perPage === 50 ? 'selected' : ''}>50</option>
+                        <option value="100" ${perPage === 100 ? 'selected' : ''}>100</option>
+                    </select>
+                    <span class="text-sm text-[var(--color-text-secondary)]">de ${totalItems} resultados</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button class="pagination-btn" onclick="ContaApp.goToPage('${module}', ${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>« Ant</button>
+                    ${pageButtonsHTML}
+                    <button class="pagination-btn" onclick="ContaApp.goToPage('${module}', ${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>Sig »</button>
+                </div>
+            </div>
+        `;
+    }
 };
