@@ -355,3 +355,14 @@ tfoot tr:hover { background-color: var(--color-bg-accent); }
     transform: translateY(-4px);
     box-shadow: 0 4px 10px rgba(0,0,0,0.2);
 }
+#financial-performance-container, #top-expenses-container {
+    position: relative; /* Esencial para que el canvas se posicione correctamente */
+    min-height: 250px;
+}
+#financial-performance-container canvas, #top-expenses-container canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100% !important;   /* !important para sobreescribir estilos de Chart.js */
+    height: 100% !important;  /* !important para sobreescribir estilos de Chart.js */
+}

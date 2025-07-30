@@ -121,10 +121,10 @@ Object.assign(ContaApp, {
             'quick-actions': () => `<div class="h-full">
                 <h3 class="conta-subtitle !mb-4 !border-0">Acciones Rápidas</h3>
                 <div class="grid grid-cols-2 gap-3 h-full">
-                    <a onclick="ContaApp.irModulo('ventas', {action: 'new'})" class="quick-action-button"><i class="fa-solid fa-file-invoice-dollar fa-2x"></i><span class="text-sm font-semibold">Nueva Venta</span></a>
-                    <a onclick="ContaApp.abrirModalGasto()" class="quick-action-button"><i class="fa-solid fa-receipt fa-2x"></i><span class="text-sm font-semibold">Nuevo Gasto</span></a>
-                    <a onclick="ContaApp.abrirModalPagoRapido()" class="quick-action-button"><i class="fa-solid fa-hand-holding-dollar fa-2x"></i><span class="text-sm font-semibold">Registrar Pago</span></a>
-                    <a onclick="ContaApp.abrirModalAjusteInventario()" class="quick-action-button"><i class="fa-solid fa-wrench fa-2x"></i><span class="text-sm font-semibold">Ajustar Stock</span></a>
+                    <a onclick="ContaApp.irModulo('ventas', {action: 'new'})" class="quick-action-button"><i class="fa-solid fa-file-invoice-dollar fa-xl"></i><span class="text-sm font-semibold">Nueva Venta</span></a>
+                    <a onclick="ContaApp.abrirModalGasto()" class="quick-action-button"><i class="fa-solid fa-receipt fa-xl"></i><span class="text-sm font-semibold">Nuevo Gasto</span></a>
+                    <a onclick="ContaApp.abrirModalPagoRapido()" class="quick-action-button"><i class="fa-solid fa-hand-holding-dollar fa-xl"></i><span class="text-sm font-semibold">Registrar Pago</span></a>
+                    <a onclick="ContaApp.abrirModalAjusteInventario()" class="quick-action-button"><i class="fa-solid fa-wrench fa-xl"></i><span class="text-sm font-semibold">Ajustar Stock</span></a>
                 </div>
             </div>`
         };
@@ -132,17 +132,23 @@ Object.assign(ContaApp, {
         const contentWidgetsHTML = this.empresa.dashboardContentWidgets.order.map(widgetId => {
             const settings = this.empresa.dashboardContentWidgets.settings[widgetId];
             if (!settings || !settings.visible) return '';
-            return `<div class="conta-card" data-widget-id="${widgetId}">${contentWidgetDefinitions[widgetId](settings)}</div>`;
+            return `<div class="conta-card flex flex-col" data-widget-id="${widgetId}">${contentWidgetDefinitions[widgetId](settings)}</div>`;
         }).join('');
 
-        const layoutClass = currentLayout === 'grid' ? 'lg:grid-cols-2' : 'lg:grid-cols-1';
+        const layoutClass = currentLayout === 'grid' ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1';
 
+        // ===== INICIO DE LA CORRECCIÓN FINAL DEL LAYOUT =====
+        // 1. Se añade w-full a la cuadrícula para que ocupe todo el ancho del contenedor.
+        // 2. Se cambia el breakpoint a "lg" para que el 2x2 se active en pantallas más grandes.
         const dashboardHTML = `
-    <div class="flex flex-nowrap gap-4 overflow-x-auto pb-4">${kpiWidgetsHTML}</div>
-    <div id="dashboard-grid" class="grid grid-cols-1 ${layoutClass} gap-6 mt-6 animate-fadeInUp">
-        ${contentWidgetsHTML}
-    </div>
-`;
+            <div class="max-w-7xl mx-auto h-full flex flex-col">
+                <div class="flex-shrink-0 flex flex-nowrap gap-4 overflow-x-auto pb-4">${kpiWidgetsHTML}</div>
+                <div id="dashboard-grid" class="flex-grow w-full grid ${layoutClass} lg:grid-rows-2 gap-6 mt-6 animate-fadeInUp">
+                    ${contentWidgetsHTML}
+                </div>
+            </div>
+        `;
+        // ===== FIN DE LA CORRECCIÓN FINAL DEL LAYOUT =====
         
         document.getElementById("dashboard").innerHTML = dashboardHTML;
         document.getElementById("dashboard").style.height = '100%';
@@ -158,42 +164,6 @@ Object.assign(ContaApp, {
 
         this.initDashboardDragAndDrop();
         this.renderSparklines();
-    },
-
-    abrirModalPersonalizarDashboard() {
-        const kpiDefinitions = {
-            ingresos: 'Ingresos (Últ. 30 días)', gastos: 'Costos + Gastos (Últ. 30 días)', resultadoNeto: 'Resultado Neto (Últ. 30 días)',
-            bancos: 'Saldo en Bancos', cxc: 'Cuentas por Cobrar', cxp: 'Cuentas por Pagar', inventario: 'Valor de Inventario'
-        };
-        const contentWidgetDefinitions = {
-            financialPerformance: 'Gráfico: Ingresos vs. Gastos', 
-            'activity-feed': 'Feed de Actividad Reciente',
-            topExpenses: 'Gráfico: Principales Gastos', 
-            'quick-actions': 'Panel de Acciones Rápidas'
-        };
-
-        const selectedKPIs = this.empresa.dashboardWidgets || [];
-        const contentSettings = this.empresa.dashboardContentWidgets.settings;
-
-        const kpiCheckboxes = Object.entries(kpiDefinitions).map(([id, title]) => `
-            <div class="flex items-center"><input type="checkbox" id="kpi-${id}" value="${id}" class="h-4 w-4 kpi-checkbox" ${selectedKPIs.includes(id) ? 'checked' : ''}><label for="kpi-${id}" class="ml-3 text-sm">${title}</label></div>
-        `).join('');
-
-        const contentCheckboxes = Object.entries(contentWidgetDefinitions).map(([id, title]) => {
-            const isVisible = contentSettings[id] ? contentSettings[id].visible : true;
-            return `<div class="flex items-center"><input type="checkbox" id="content-${id}" value="${id}" class="h-4 w-4 content-checkbox" ${isVisible ? 'checked' : ''}><label for="content-${id}" class="ml-3 text-sm">${title}</label></div>`;
-        }).join('');
-
-        const modalHTML = `
-            <h3 class="conta-title mb-4">Personalizar Dashboard</h3>
-            <p class="text-[var(--color-text-secondary)] mb-4 text-sm">Selecciona los elementos que deseas ver. En el dashboard, puedes arrastrar y soltar los widgets principales para reordenarlos.</p>
-            <form onsubmit="ContaApp.guardarPersonalizacionDashboard(event)">
-                <div class="conta-card mb-6"><h4 class="conta-subtitle !border-0 !mb-2">Indicadores Superiores (KPIs)</h4><div class="grid grid-cols-2 md:grid-cols-3 gap-4">${kpiCheckboxes}</div></div>
-                <div class="conta-card"><h4 class="conta-subtitle !border-0 !mb-2">Widgets de Contenido (Arrastrables)</h4><div class="grid grid-cols-1 md:grid-cols-2 gap-4">${contentCheckboxes}</div></div>
-                <div class="flex justify-end gap-2 mt-8"><button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button><button type="submit" class="conta-btn">Guardar Cambios</button></div>
-            </form>
-        `;
-        this.showModal(modalHTML, '3xl');
     },
 
     guardarPersonalizacionDashboard(e) {
