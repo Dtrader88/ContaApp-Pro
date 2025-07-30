@@ -306,12 +306,14 @@ Object.assign(ContaApp, {
     agregarItemGasto() {
         const container = document.getElementById('gasto-items-container');
         
-        // Obtenemos SOLO las cuentas de gasto (grupo 500)
+        // --- INICIO DE LA CORRECCIÓN ---
+        // Se corrige el filtro para que apunte al grupo de GASTOS (código 600) en lugar de COSTOS (código 500).
         const cuentasGastoOptions = this.planDeCuentas
-            .filter(c => c.tipo === 'DETALLE' && c.codigo.startsWith('5'))
+            .filter(c => c.tipo === 'DETALLE' && c.codigo.startsWith('6'))
             .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }))
             .map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`)
             .join('');
+        // --- FIN DE LA CORRECCIÓN ---
 
         const itemHTML = `
             <div class="grid grid-cols-12 gap-2 items-center dynamic-row gasto-item-row">

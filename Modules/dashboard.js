@@ -14,8 +14,12 @@ Object.assign(ContaApp, {
                 }
             };
         }
+        // ===== INICIO DE LA MEJORA: Definir y guardar el orden de las acciones rápidas =====
+        if (!this.empresa.quickActionsOrder) {
+            this.empresa.quickActionsOrder = ['new_sale', 'new_expense', 'new_production_order', 'new_purchase', 'new_product', 'new_contact', 'settings', 'new_transfer'];
+        }
+        // ===== FIN DE LA MEJORA =====
 
-        // --- INICIO DE LA LÓGICA REESTRUCTURADA Y CORREGIDA ---
         const hoy = new Date();
         const finPeriodoActual = hoy.toISOString().slice(0, 10);
         const inicioPeriodoActual = new Date(new Date().setDate(hoy.getDate() - 30)).toISOString().slice(0, 10);
@@ -40,7 +44,6 @@ Object.assign(ContaApp, {
         const cxcSaldo = saldosAcumulados.find(c => c.codigo === '120')?.saldo || 0;
         const inventarioSaldo = saldosAcumulados.find(c => c.codigo === '130')?.saldo || 0;
         const cxpSaldo = saldosAcumulados.find(c => c.codigo === '210')?.saldo || 0;
-        // --- FIN DE LA LÓGICA REESTRUCTURADA ---
 
         const currentLayout = this.empresa.dashboardLayout || 'grid';
         document.getElementById('page-actions-header').innerHTML = `
@@ -108,7 +111,7 @@ Object.assign(ContaApp, {
                     <h3 class="conta-subtitle !mb-0 !border-0">Ingresos vs. Gastos</h3>
                     ${timeRangeSelectorHTML('financialPerformance', settings.timeRange)}
                 </div>
-                <div id="financial-performance-container" class="flex-grow"></div>
+                <div id="financial-performance-container" class="flex-grow relative"></div>
             </div>`,
             'activity-feed': () => `<div><h3 class="conta-subtitle !mb-2 !border-0">Actividad Reciente</h3><div id="activity-feed-container"></div></div>`,
             topExpenses: (settings) => `<div class="widget-full-height">
@@ -116,17 +119,34 @@ Object.assign(ContaApp, {
                     <h3 class="conta-subtitle !mb-0 !border-0">Principales Gastos</h3>
                     ${timeRangeSelectorHTML('topExpenses', settings.timeRange)}
                 </div>
-                <div id="top-expenses-container" class="flex-grow"></div>
+                <div id="top-expenses-container" class="flex-grow relative"></div>
             </div>`,
-            'quick-actions': () => `<div class="h-full">
-                <h3 class="conta-subtitle !mb-4 !border-0">Acciones Rápidas</h3>
-                <div class="grid grid-cols-2 gap-3 h-full">
-                    <a onclick="ContaApp.irModulo('ventas', {action: 'new'})" class="quick-action-button"><i class="fa-solid fa-file-invoice-dollar fa-xl"></i><span class="text-sm font-semibold">Nueva Venta</span></a>
-                    <a onclick="ContaApp.abrirModalGasto()" class="quick-action-button"><i class="fa-solid fa-receipt fa-xl"></i><span class="text-sm font-semibold">Nuevo Gasto</span></a>
-                    <a onclick="ContaApp.abrirModalPagoRapido()" class="quick-action-button"><i class="fa-solid fa-hand-holding-dollar fa-xl"></i><span class="text-sm font-semibold">Registrar Pago</span></a>
-                    <a onclick="ContaApp.abrirModalAjusteInventario()" class="quick-action-button"><i class="fa-solid fa-wrench fa-xl"></i><span class="text-sm font-semibold">Ajustar Stock</span></a>
-                </div>
-            </div>`
+            'quick-actions': () => {
+                const quickActionDefinitions = {
+                    'new_sale': { label: 'Nueva Venta', icon: 'fa-file-invoice-dollar', color: 'success', onclick: "ContaApp.irModulo('ventas', {action: 'new'})" },
+                    'new_expense': { label: 'Nuevo Gasto', icon: 'fa-receipt', color: 'danger', onclick: "ContaApp.abrirModalGasto()" },
+                    'new_production_order': { label: 'Nueva Orden Prod.', icon: 'fa-cogs', color: 'accent', onclick: "ContaApp.abrirModalOrdenProduccion()" },
+                    'new_purchase': { label: 'Nueva Compra', icon: 'fa-shopping-basket', color: 'accent', onclick: "ContaApp.abrirModalNuevaCompra()" },
+                    'new_product': { label: 'Nuevo Producto', icon: 'fa-box', color: 'primary', onclick: "ContaApp.abrirModalProducto()" },
+                    'new_contact': { label: 'Nuevo Contacto', icon: 'fa-user-plus', color: 'primary', onclick: "ContaApp.abrirModalContacto()" },
+                    'settings': { label: 'Ajustes', icon: 'fa-cog', color: 'accent', onclick: "ContaApp.irModulo('config')" },
+                    'new_transfer': { label: 'Transferencia', icon: 'fa-exchange-alt', color: 'success', onclick: "ContaApp.abrirModalTransferencia()" },
+                };
+
+                const actionsHTML = this.empresa.quickActionsOrder.map(actionId => {
+                    const action = quickActionDefinitions[actionId];
+                    if (!action) return '';
+                    return `<a onclick="${action.onclick}" class="quick-action-button" data-action-id="${actionId}">
+                                <i class="fa-solid ${action.icon} fa-4x quick-action-icon-${action.color}"></i>
+                                <span class="quick-action-label">${action.label}</span>
+                            </a>`;
+                }).join('');
+
+                return `<div class="h-full">
+                            <h3 class="conta-subtitle !mb-4 !border-0">Acciones Rápidas</h3>
+                            <div id="quick-actions-grid" class="grid grid-cols-4 gap-4 h-full items-center">${actionsHTML}</div>
+                        </div>`;
+            }
         };
         
         const contentWidgetsHTML = this.empresa.dashboardContentWidgets.order.map(widgetId => {
@@ -137,18 +157,14 @@ Object.assign(ContaApp, {
 
         const layoutClass = currentLayout === 'grid' ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1';
 
-        // ===== INICIO DE LA CORRECCIÓN FINAL DEL LAYOUT =====
-        // 1. Se añade w-full a la cuadrícula para que ocupe todo el ancho del contenedor.
-        // 2. Se cambia el breakpoint a "lg" para que el 2x2 se active en pantallas más grandes.
         const dashboardHTML = `
-            <div class="max-w-7xl mx-auto h-full flex flex-col">
-                <div class="flex-shrink-0 flex flex-nowrap gap-4 overflow-x-auto pb-4">${kpiWidgetsHTML}</div>
-                <div id="dashboard-grid" class="flex-grow w-full grid ${layoutClass} lg:grid-rows-2 gap-6 mt-6 animate-fadeInUp">
+            <div class="h-full flex flex-col">
+                <div class="flex-shrink-0 w-full flex justify-center flex-nowrap gap-4 overflow-x-auto pb-4">${kpiWidgetsHTML}</div>
+                <div id="dashboard-grid" class="flex-grow grid ${layoutClass} lg:grid-rows-2 gap-6 mt-6 animate-fadeInUp">
                     ${contentWidgetsHTML}
                 </div>
             </div>
         `;
-        // ===== FIN DE LA CORRECCIÓN FINAL DEL LAYOUT =====
         
         document.getElementById("dashboard").innerHTML = dashboardHTML;
         document.getElementById("dashboard").style.height = '100%';
@@ -163,6 +179,7 @@ Object.assign(ContaApp, {
         });
 
         this.initDashboardDragAndDrop();
+        this.initQuickActionsDragAndDrop(); // Se añade la inicialización para las acciones rápidas
         this.renderSparklines();
     },
 
@@ -376,13 +393,24 @@ Object.assign(ContaApp, {
         const labels = gastosPorCategoria.map(g => g.nombre);
         const data = gastosPorCategoria.map(g => g.monto);
         
+        // ===== INICIO DE LA CORRECCIÓN =====
+        const themePalette = [
+            this.getThemeColor('--color-danger'),
+            this.getThemeColor('--color-accent'),
+            this.getThemeColor('--color-primary'),
+            this.getThemeColor('--color-success'),
+            this.getThemeColor('--color-text-secondary')
+        ];
+
         const datasets = [{
             label: 'Gasto del Período',
             data: data,
-            backgroundColor: ['#F87171', '#E545B7', '#F77F00', '#33B1FF', '#34D399'].map(c => c + 'CC'),
-            borderColor: ['#F87171', '#E545B7', '#F77F00', '#33B1FF', '#34D399'],
-            borderWidth: 1
+            // Se aplica una transparencia '33' (20%) para que coincida con el otro gráfico.
+            backgroundColor: themePalette.map(color => color + '33'),
+            borderColor: themePalette,
+            borderWidth: 1.5
         }];
+        // ===== FIN DE LA CORRECCIÓN =====
 
         return { labels, datasets };
     },
@@ -485,5 +513,20 @@ Object.assign(ContaApp, {
         });
         html += '</ul>';
         container.innerHTML = html;
+    },
+    initQuickActionsDragAndDrop() {
+        const grid = document.getElementById('quick-actions-grid');
+        if (grid) {
+            new Sortable(grid, {
+                animation: 150,
+                ghostClass: 'quick-action-ghost',
+                onEnd: (evt) => {
+                    const newOrder = Array.from(evt.target.children).map(item => item.dataset.actionId);
+                    this.empresa.quickActionsOrder = newOrder;
+                    this.saveAll();
+                    this.showToast('Orden de acciones rápidas guardado.', 'success');
+                }
+            });
+        }
     },
 });
