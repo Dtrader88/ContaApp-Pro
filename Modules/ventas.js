@@ -209,7 +209,12 @@ ordenarVentasPor(columna) {
                 "ContaApp.abrirModalCotizacion()"
             );
         } else {
-            let cotizacionesFiltradas = cotizaciones.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+            const { currentPage, perPage } = this.getPaginationState('ventas-cotizaciones');
+            const startIndex = (currentPage - 1) * perPage;
+            const endIndex = startIndex + perPage;
+            
+            cotizaciones.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+            const itemsParaMostrar = cotizaciones.slice(startIndex, endIndex);
 
             let tableHTML = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
                 <th class="conta-table-th">#</th>
@@ -220,7 +225,7 @@ ordenarVentasPor(columna) {
                 <th class="conta-table-th text-center">Acciones</th>
             </tr></thead><tbody>`;
 
-            cotizacionesFiltradas.forEach(c => {
+            itemsParaMostrar.forEach(c => {
                 const cliente = this.findById(this.contactos, c.contactoId);
                 let estadoClass = '';
                 switch (c.estado) {
@@ -243,6 +248,8 @@ ordenarVentasPor(columna) {
             });
             tableHTML += `</tbody></table></div>`;
             contentHTML = tableHTML;
+            
+            this.renderPaginationControls('ventas-cotizaciones', cotizaciones.length);
         }
         document.getElementById('ventas-contenido').innerHTML = contentHTML;
     },

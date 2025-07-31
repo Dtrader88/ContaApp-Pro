@@ -1033,16 +1033,18 @@ renderAnticipos(containerId) {
     if (anticipos.length === 0) {
         html = this.generarEstadoVacioHTML('fa-hand-holding-dollar','Sin anticipos de clientes','Registra aquí los pagos que recibes de tus clientes por adelantado.','+ Registrar Anticipo',"ContaApp.abrirModalAnticipo()");
     } else {
-        html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
-<th class="conta-table-th">Fecha</th><th class="conta-table-th">Cliente</th>
-<th class="conta-table-th text-right">Monto Original</th>
-<th class="conta-table-th text-right">Saldo Restante</th>
-<th class="conta-table-th text-center">Acciones</th>
-</tr></thead><tbody>`;
-        anticipos.sort((a,b) => new Date(b.fecha) - new Date(a.fecha)).forEach(a => {
+        const { currentPage, perPage } = this.getPaginationState('cxc-anticipos');
+        const startIndex = (currentPage - 1) * perPage;
+        const endIndex = startIndex + perPage;
+        
+        anticipos.sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+        const itemsParaMostrar = anticipos.slice(startIndex, endIndex);
+
+        let tableRows = '';
+        itemsParaMostrar.forEach(a => {
             const cliente = this.findById(this.contactos, a.contactoId);
             const saldoRestante = (a.total || 0) - (a.montoAplicado || 0);
-            html += `<tr class="cursor-pointer hover:bg-[var(--color-bg-accent)]" onclick="ContaApp.abrirModalHistorialAnticipo(${a.id})">
+            tableRows += `<tr class="cursor-pointer hover:bg-[var(--color-bg-accent)]" onclick="ContaApp.abrirModalHistorialAnticipo(${a.id})">
                 <td class="conta-table-td">${a.fecha}</td>
                 <td class="conta-table-td">${cliente?.nombre || 'N/A'}</td>
                 <td class="conta-table-td text-right font-mono">${this.formatCurrency(a.total)}</td>
@@ -1052,7 +1054,14 @@ renderAnticipos(containerId) {
                 </td>
             </tr>`;
         });
-        html += `</tbody></table></div>`;
+
+        html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
+<th class="conta-table-th">Fecha</th><th class="conta-table-th">Cliente</th>
+<th class="conta-table-th text-right">Monto Original</th>
+<th class="conta-table-th text-right">Saldo Restante</th>
+<th class="conta-table-th text-center">Acciones</th>
+</tr></thead><tbody>${tableRows}</tbody></table></div>`;
+        this.renderPaginationControls('cxc-anticipos', anticipos.length);
     }
     document.getElementById(containerId).innerHTML = html;
 },

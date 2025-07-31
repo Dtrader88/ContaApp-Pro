@@ -70,20 +70,20 @@ Object.assign(ContaApp, {
     `;
     
     let contentHTML;
-    if (todosLosGastos.length === 0) {
+    let gastosFiltrados = todosLosGastos;
+    if (filters.search) {
+        const term = filters.search.toLowerCase();
+        gastosFiltrados = gastosFiltrados.filter(g => {
+            const proveedor = this.findById(this.contactos, g.contactoId);
+            return g.id.toString().includes(term) || g.descripcion.toLowerCase().includes(term) || (proveedor && proveedor.nombre.toLowerCase().includes(term));
+        });
+    }
+    if (filters.startDate) gastosFiltrados = gastosFiltrados.filter(g => g.fecha >= filters.startDate);
+    if (filters.endDate) gastosFiltrados = gastosFiltrados.filter(g => g.fecha <= filters.endDate);
+
+    if (gastosFiltrados.length === 0 && !filters.search && !filters.startDate && !filters.endDate) {
         contentHTML = this.generarEstadoVacioHTML('fa-receipt','Aún no tienes gastos','Registra tu primer gasto o compra para mantener tus finanzas al día.','+ Crear Primer Gasto',"ContaApp.abrirModalGasto()");
     } else {
-        let gastosFiltrados = todosLosGastos;
-        if (filters.search) {
-            const term = filters.search.toLowerCase();
-            gastosFiltrados = gastosFiltrados.filter(g => {
-                const proveedor = this.findById(this.contactos, g.contactoId);
-                return g.id.toString().includes(term) || g.descripcion.toLowerCase().includes(term) || (proveedor && proveedor.nombre.toLowerCase().includes(term));
-            });
-        }
-        if (filters.startDate) gastosFiltrados = gastosFiltrados.filter(g => g.fecha >= filters.startDate);
-        if (filters.endDate) gastosFiltrados = gastosFiltrados.filter(g => g.fecha <= filters.endDate);
-
         const filterFormHTML = `<div class="conta-card p-3 mb-4">
             <form onsubmit="event.preventDefault(); ContaApp.filtrarLista('gastos');" class="flex flex-wrap items-end gap-3">
                 <div><label class="text-xs font-semibold">Buscar por Proveedor, Desc. o #</label><input type="search" id="gastos-search" class="conta-input md:w-72" value="${filters.search || ''}"></div>
@@ -107,7 +107,6 @@ Object.assign(ContaApp, {
             
             gastosFiltrados.sort((a, b) => new Date(b.fecha) - new Date(a.fecha) || b.id - a.id);
             const itemsParaMostrar = gastosFiltrados.slice(startIndex, endIndex);
-            const paginationHTML = this.renderPaginationControls('gastos', gastosFiltrados.length);
 
             let tableRowsHTML = '';
             itemsParaMostrar.forEach(g => {
@@ -130,8 +129,9 @@ Object.assign(ContaApp, {
                 <th class="conta-table-th">#</th><th class="conta-table-th">Fecha</th><th class="conta-table-th">Proveedor</th>
                 <th class="conta-table-th">Descripción</th><th class="conta-table-th text-right">Total</th><th class="conta-table-th">Estado</th>
                 <th class="conta-table-th text-center">Acciones</th>
-            </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>
-            ${paginationHTML}`;
+            </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
+            
+            this.renderPaginationControls('gastos', gastosFiltrados.length);
         }
         contentHTML = filterFormHTML + resultsHTML;
     }
@@ -545,6 +545,13 @@ Object.assign(ContaApp, {
             "ContaApp.abrirModalOrdenDeCompra()"
         );
     } else {
+        const { currentPage, perPage } = this.getPaginationState('gastos-oc');
+        const startIndex = (currentPage - 1) * perPage;
+        const endIndex = startIndex + perPage;
+        
+        ordenes.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+        const itemsParaMostrar = ordenes.slice(startIndex, endIndex);
+
         let tableHTML = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
             <th class="conta-table-th"># Orden</th>
             <th class="conta-table-th">Fecha</th>
@@ -554,7 +561,7 @@ Object.assign(ContaApp, {
             <th class="conta-table-th text-center">Acciones</th>
         </tr></thead><tbody>`;
 
-        ordenes.sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).forEach(oc => {
+        itemsParaMostrar.forEach(oc => {
             const proveedor = this.findById(this.contactos, oc.contactoId);
             let estadoClass = '';
             switch (oc.estado) {
@@ -564,7 +571,6 @@ Object.assign(ContaApp, {
                 default: estadoClass = 'tag-neutral'; // Pendiente
             }
 
-            // --- INICIO DE LA LÓGICA CORREGIDA ---
             let accionesHTML = '';
             if (oc.estado === 'Pendiente' || oc.estado === 'Recibido Parcial') {
                 accionesHTML += `<button class="conta-btn conta-btn-small" onclick="ContaApp.convertirOCaGasto(${oc.id})">Registrar Gasto</button>`;
@@ -572,7 +578,6 @@ Object.assign(ContaApp, {
             if (oc.estado !== 'Anulada' && oc.estado !== 'Recibido Total') {
                 accionesHTML += `<button class="conta-btn-icon delete ml-2" title="Anular Orden" onclick="ContaApp.anularOrdenDeCompra(${oc.id})"><i class="fa-solid fa-ban"></i></button>`;
             }
-            // --- FIN DE LA LÓGICA CORREGIDA ---
 
             tableHTML += `<tr>
                 <td class="conta-table-td font-mono">${oc.numeroOrden || oc.id}</td>
@@ -585,6 +590,7 @@ Object.assign(ContaApp, {
         });
         tableHTML += `</tbody></table></div>`;
         contentHTML = tableHTML;
+        this.renderPaginationControls('gastos-oc', ordenes.length);
     }
     
     document.getElementById('gastos-contenido').innerHTML = contentHTML;
@@ -665,22 +671,26 @@ generarSiguienteNumeroDeOC() {
 
 agregarItemOC() {
     const container = document.getElementById('oc-items-container');
-    const cuentasGastoOptions = this.planDeCuentas
-        .filter(c => c.tipo === 'DETALLE' && (c.codigo.startsWith('5') || c.id === 130))
+    
+    // ===== INICIO DE LA CORRECCIÓN =====
+    // Se ajusta el filtro para incluir únicamente las cuentas de Inventario para Reventa (13001) y Materias Primas (13002).
+    const cuentasInventarioOptions = this.planDeCuentas
+        .filter(c => c.id === 13001 || c.id === 13002)
         .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }))
-        .map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`).join('');
+        .map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`)
+        .join('');
+    // ===== FIN DE LA CORRECCIÓN =====
 
     const itemHTML = `
         <div class="grid grid-cols-12 gap-2 items-center dynamic-row oc-item-row">
             <div class="oc-item-inputs-container col-span-11 grid grid-cols-10 gap-2 items-center">
-                 <select class="col-span-7 conta-input" onchange="ContaApp.handleOCItemChange(this)">${cuentasGastoOptions}</select>
+                 <select class="col-span-7 conta-input" onchange="ContaApp.handleOCItemChange(this)">${cuentasInventarioOptions}</select>
                  <input type="number" step="0.01" min="0" placeholder="Monto" class="col-span-3 conta-input text-right oc-item-monto" oninput="ContaApp.actualizarTotalesOC()">
             </div>
             <button type="button" class="col-span-1 conta-btn-icon delete" onclick="this.closest('.oc-item-row').remove(); ContaApp.actualizarTotalesOC();">🗑️</button>
         </div>
     `;
     container.insertAdjacentHTML('beforeend', itemHTML);
-    // Para simplificar, la OC no manejará stock, solo montos. La gestión de stock se hará al convertirla en Gasto.
 },
 // Esta función es un placeholder por si en el futuro queremos una lógica más compleja como en gastos.
 handleOCItemChange(selectElement) {

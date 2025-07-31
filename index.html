@@ -62,7 +62,7 @@
                 <a id="nav-config" class="conta-nav-link" onclick="ContaApp.irModulo('config')"><i class="fa-solid fa-cog fa-fw me-2"></i> Ajustes</a>
             </div>
         </nav>
-        <main class="flex-1 flex flex-col relative">
+                <main class="flex-1 flex flex-col relative">
             <div id="content-header" class="bg-[var(--color-bg-secondary)] shadow-sm p-4 flex justify-between items-center gap-4 no-print">
                 <div class="flex items-center gap-4">
                     <button id="back-button" class="conta-btn-icon" onclick="ContaApp.irAtras()" title="Ir Atrás" disabled>
@@ -99,8 +99,10 @@
                 <div id="bancos" style="display:none;"></div>
                 <div id="reportes" style="display:none;"></div>
                 <div id="config" style="display:none;"></div>
-                <div id="pagination-container" class="no-print"></div>
             </div>
+            <!-- INICIO DE LA CORRECCIÓN: El contenedor ahora es hermano de #content-area -->
+            <div id="pagination-container" class="no-print"></div>
+            <!-- FIN DE LA CORRECCIÓN -->
         </main>
     </div>
     <div id="modal-bg" class="fixed inset-0 bg-black bg-opacity-70 hidden items-center justify-center z-50 p-4 overflow-y-auto no-print" onclick="ContaApp.closeModal()">

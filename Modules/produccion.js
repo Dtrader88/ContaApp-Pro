@@ -394,7 +394,6 @@ Object.assign(ContaApp, {
         </button>
     `;
 
-    // Filtramos por la categoría correcta: Productos Terminados (13004)
     const productosTerminados = this.productos.filter(p => 
         p.cuentaInventarioId === 13004
     );
@@ -402,14 +401,32 @@ Object.assign(ContaApp, {
     let html;
     if (productosTerminados.length === 0) {
         html = this.generarEstadoVacioHTML(
-            'fa-box-open', // Ícono cambiado para reflejar que no hay productos
+            'fa-box-open',
             'No hay productos terminados',
             'Completa una Orden de Producción para que los productos fabricados aparezcan aquí.',
             'Ir a Órdenes de Producción',
             "ContaApp.irModulo('produccion', {submodulo: 'ordenes-produccion'})"
         );
     } else {
-        // --- INICIO DE LA CORRECCIÓN: Reordenamiento de columnas y adición de "Costo" ---
+        const { currentPage, perPage } = this.getPaginationState('produccion-terminada');
+        const startIndex = (currentPage - 1) * perPage;
+        const endIndex = startIndex + perPage;
+        const itemsParaMostrar = productosTerminados.slice(startIndex, endIndex);
+        
+        let tableRows = '';
+        itemsParaMostrar.forEach(producto => {
+            const unidad = this.findById(this.unidadesMedida, producto.unidadMedidaId);
+            tableRows += `
+                <tr>
+                    <td class="conta-table-td text-center"><input type="checkbox" class="prod-terminada-check" data-producto-id="${producto.id}"></td>
+                    <td class="conta-table-td font-bold">${producto.nombre}</td>
+                    <td class="conta-table-td">${unidad ? unidad.nombre : 'N/A'}</td>
+                    <td class="conta-table-td text-right font-mono">${producto.stock}</td>
+                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(producto.costo)}</td>
+                </tr>
+            `;
+        });
+
         html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
             <thead>
                 <tr>
@@ -420,22 +437,9 @@ Object.assign(ContaApp, {
                     <th class="conta-table-th text-right">Costo Unitario</th>
                 </tr>
             </thead>
-            <tbody>`;
+            <tbody>${tableRows}</tbody></table></div>`;
         
-        productosTerminados.forEach(producto => {
-            const unidad = this.findById(this.unidadesMedida, producto.unidadMedidaId);
-            html += `
-                <tr>
-                    <td class="conta-table-td text-center"><input type="checkbox" class="prod-terminada-check" data-producto-id="${producto.id}"></td>
-                    <td class="conta-table-td font-bold">${producto.nombre}</td>
-                    <td class="conta-table-td">${unidad ? unidad.nombre : 'N/A'}</td>
-                    <td class="conta-table-td text-right font-mono">${producto.stock}</td>
-                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(producto.costo)}</td>
-                </tr>
-            `;
-        });
-        html += `</tbody></table></div>`;
-        // --- FIN DE LA CORRECCIÓN ---
+        this.renderPaginationControls('produccion-terminada', productosTerminados.length);
     }
     
     document.getElementById('produccion-contenido').innerHTML = html;

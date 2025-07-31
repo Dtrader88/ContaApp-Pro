@@ -21,7 +21,6 @@ Object.assign(ContaApp, {
 
         compras.sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
         const itemsParaMostrar = compras.slice(startIndex, endIndex);
-        const paginationHTML = this.renderPaginationControls('compras', compras.length);
 
         let tableRows = '';
         itemsParaMostrar.forEach(compra => {
@@ -66,8 +65,9 @@ Object.assign(ContaApp, {
                     <th class="conta-table-th text-center">Acciones</th>
                 </tr>
             </thead>
-            <tbody>${tableRows}</tbody></table></div>
-            ${paginationHTML}`;
+            <tbody>${tableRows}</tbody></table></div>`;
+        
+        this.renderPaginationControls('compras', compras.length);
     }
     
     document.getElementById('compras').innerHTML = html;
