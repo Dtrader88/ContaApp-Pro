@@ -1562,26 +1562,34 @@ getPeriodoContableActual() {
         const container = document.getElementById('pagination-container');
         if (!container) return;
 
+        // --- INICIO DE LA CORRECCIÓN ---
+        // La barra se muestra siempre que haya al menos 1 item, sin importar el número de páginas.
+        if (totalItems === 0) {
+            container.innerHTML = ''; // Limpia el contenedor si no hay items.
+            return;
+        }
+        // --- FIN DE LA CORRECCIÓN ---
+
         const { currentPage, perPage } = this.getPaginationState(module);
         const totalPages = Math.ceil(totalItems / perPage);
 
-        if (totalPages <= 1) {
-            container.innerHTML = ''; // Limpia el contenedor si no se necesita paginación
-            return;
-        }
-
         let pageButtonsHTML = '';
-        const maxButtons = 5;
-        let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
-        let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+        if (totalPages > 1) {
+            const maxButtons = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+            let endPage = Math.min(totalPages, startPage + maxButtons - 1);
 
-        if (endPage - startPage + 1 < maxButtons) {
-            startPage = Math.max(1, endPage - maxButtons + 1);
-        }
+            if (endPage - startPage + 1 < maxButtons) {
+                startPage = Math.max(1, endPage - maxButtons + 1);
+            }
 
-        for (let i = startPage; i <= endPage; i++) {
-            const isActive = i === currentPage;
-            pageButtonsHTML += `<button class="pagination-btn ${isActive ? 'active' : ''}" onclick="ContaApp.goToPage('${module}', ${i})">${i}</button>`;
+            for (let i = startPage; i <= endPage; i++) {
+                const isActive = i === currentPage;
+                pageButtonsHTML += `<button class="pagination-btn ${isActive ? 'active' : ''}" onclick="ContaApp.goToPage('${module}', ${i})">${i}</button>`;
+            }
+        } else {
+            // Si solo hay una página, muestra el número 1 como activo y deshabilitado.
+            pageButtonsHTML += `<button class="pagination-btn active" disabled>1</button>`;
         }
 
         container.innerHTML = `

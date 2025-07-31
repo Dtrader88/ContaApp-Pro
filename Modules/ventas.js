@@ -50,6 +50,7 @@ ordenarVentasPor(columna) {
 
     let todasLasTransacciones = this.transacciones.filter(t => t.tipo === 'venta' || t.tipo === 'nota_credito');
     
+    // ... (La lógica de KPI se mantiene igual) ...
     const hoy = new Date();
     const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0,10);
     const ventasNetasDelMes = todasLasTransacciones.filter(t => t.fecha >= primerDiaMes && t.estado !== 'Anulada').reduce((sum, t) => {
@@ -128,7 +129,6 @@ ordenarVentasPor(columna) {
             });
             
             const itemsParaMostrar = transaccionesFiltradas.slice(startIndex, endIndex);
-            const paginationHTML = this.renderPaginationControls('ventas', transaccionesFiltradas.length);
             
             const generarEncabezado = (nombreColumna, clave) => {
                 let icono = '';
@@ -183,8 +183,11 @@ ordenarVentasPor(columna) {
                 ${generarEncabezado('Total', 'total')}
                 ${generarEncabezado('Estado', 'estado')}
                 <th class="conta-table-th text-center">Acciones</th>
-            </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>
-            ${paginationHTML}`;
+            </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
+
+            // --- CORRECCIÓN FINAL ---
+            // Se llama a la función aquí, pero ya no se añade su resultado al HTML.
+            this.renderPaginationControls('ventas', transaccionesFiltradas.length);
         }
         contentHTML = filterFormHTML + resultsHTML;
     }

@@ -397,10 +397,12 @@ tfoot tr:hover { background-color: var(--color-bg-accent); }
     right: 0;
     z-index: 50; /* Por encima del contenido, debajo de los modales */
 }
+
 #content-area {
     /* Añade espacio en la parte inferior para que la última fila no quede oculta */
     padding-bottom: 80px !important;
 }
+
 .pagination-controls {
     display: flex;
     justify-content: space-between;
