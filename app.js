@@ -769,7 +769,7 @@ irAtras() {
     },
 
     // Gestión de Datos (LocalStorage)
-        saveAll(){
+        async saveAll(){
         const dataToSave = {
             empresa: this.empresa,
             licencia: this.licencia,
@@ -786,7 +786,7 @@ irAtras() {
             unidadesMedida: this.unidadesMedida,
             bancoImportado: this.bancoImportado
         };
-        this.repository.saveAll(dataToSave);
+        await this.repository.saveAll(dataToSave);
     },
         // CAMBIO CLAVE: la función ahora recibe los datos como argumento
         loadAll(dataString){

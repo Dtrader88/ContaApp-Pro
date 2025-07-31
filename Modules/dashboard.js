@@ -26,40 +26,31 @@ Object.assign(ContaApp, {
             'new_transfer': { label: 'Transferencia', icon: 'fa-exchange-alt', color: 'success', onclick: "ContaApp.abrirModalTransferencia()" },
         };
         
-        // ===== INICIO DE LA CORRECCIÓN: Autocorrección del orden de acciones rápidas =====
         const validActionKeys = Object.keys(quickActionDefinitions);
         if (!this.empresa.quickActionsOrder || this.empresa.quickActionsOrder.length === 0) {
             this.empresa.quickActionsOrder = validActionKeys;
         } else {
-            // Elimina cualquier clave inválida o antigua del array guardado
             this.empresa.quickActionsOrder = this.empresa.quickActionsOrder.filter(key => validActionKeys.includes(key));
         }
-        // ===== FIN DE LA CORRECCIÓN =====
+
+        // ===== INICIO DE LA CORRECCIÓN: Cálculo de KPIs simplificado y más robusto =====
+        this.actualizarSaldosGlobales(); // Asegura que los saldos de las cuentas estén al día
 
         const hoy = new Date();
         const finPeriodoActual = hoy.toISOString().slice(0, 10);
         const inicioPeriodoActual = new Date(new Date().setDate(hoy.getDate() - 30)).toISOString().slice(0, 10);
-        const finPeriodoAnterior = new Date(new Date().setDate(hoy.getDate() - 31)).toISOString().slice(0, 10);
-        const inicioPeriodoAnterior = new Date(new Date().setDate(hoy.getDate() - 60)).toISOString().slice(0, 10);
 
-        const saldosPeriodoActual = this.getSaldosPorPeriodo(finPeriodoActual, inicioPeriodoActual);
-        const saldosPeriodoAnterior = this.getSaldosPorPeriodo(finPeriodoAnterior, inicioPeriodoAnterior);
-        const saldosAcumulados = this.getSaldosPorPeriodo();
-
-        const ingresosPeriodo = saldosPeriodoActual.find(c => c.codigo === '400')?.saldo || 0;
-        const costosPeriodo = saldosPeriodoActual.find(c => c.codigo === '500')?.saldo || 0;
-        const gastosPeriodo = saldosPeriodoActual.find(c => c.codigo === '600')?.saldo || 0;
-        const totalEgresosPeriodo = costosPeriodo + gastosPeriodo;
-
-        const ingresosPeriodoAnterior = saldosPeriodoAnterior.find(c => c.codigo === '400')?.saldo || 0;
-        const costosPeriodoAnterior = saldosPeriodoAnterior.find(c => c.codigo === '500')?.saldo || 0;
-        const gastosPeriodoAnterior = saldosPeriodoAnterior.find(c => c.codigo === '600')?.saldo || 0;
-        const totalEgresosAnterior = costosPeriodoAnterior + gastosPeriodoAnterior;
+        const transaccionesPeriodo = this.transacciones.filter(t => t.fecha >= inicioPeriodoActual && t.fecha <= finPeriodoActual && t.estado !== 'Anulada');
         
-        const bancosSaldo = saldosAcumulados.find(c => c.codigo === '110')?.saldo || 0;
-        const cxcSaldo = saldosAcumulados.find(c => c.codigo === '120')?.saldo || 0;
-        const inventarioSaldo = saldosAcumulados.find(c => c.codigo === '130')?.saldo || 0;
-        const cxpSaldo = saldosAcumulados.find(c => c.codigo === '210')?.saldo || 0;
+        const ingresosPeriodo = transaccionesPeriodo.filter(t => t.tipo === 'venta').reduce((sum, t) => sum + t.total, 0);
+        const egresosPeriodo = transaccionesPeriodo.filter(t => t.tipo === 'gasto' || t.tipo === 'compra_inventario').reduce((sum, t) => sum + t.total, 0);
+        
+        // El saldo en bancos, cxc y cxp sí se toma del balance global, que es más preciso.
+        const bancosSaldo = this.planDeCuentas.find(c => c.codigo === '110')?.saldo || 0;
+        const cxcSaldo = this.planDeCuentas.find(c => c.codigo === '120')?.saldo || 0;
+        const cxpSaldo = this.planDeCuentas.find(c => c.codigo === '210')?.saldo || 0;
+        const inventarioSaldo = this.planDeCuentas.find(c => c.codigo === '130')?.saldo || 0;
+        // ===== FIN DE LA CORRECCIÓN =====
 
         const currentLayout = this.empresa.dashboardLayout || 'grid';
         document.getElementById('page-actions-header').innerHTML = `
@@ -71,22 +62,10 @@ Object.assign(ContaApp, {
                 <button class="conta-btn conta-btn-small conta-btn-accent" onclick="ContaApp.abrirModalPersonalizarDashboard()"><i class="fa-solid fa-wand-magic-sparkles me-2"></i> Personalizar</button>
             </div>`;
         
-        const getTendenciaHTML = (valorActual, valorAnterior) => {
-            if (valorAnterior === 0 && valorActual !== 0) return `<span class="text-xs text-[var(--color-text-secondary)]">Nuevo</span>`;
-            if (valorAnterior === 0) return '';
-            const cambio = valorActual - valorAnterior;
-            const porcentaje = Math.abs(valorAnterior) > 0 ? (cambio / Math.abs(valorAnterior)) * 100 : 0;
-            const esPositivo = porcentaje >= 0;
-            const colorClass = esPositivo ? 'conta-text-success' : 'conta-text-danger';
-            const icon = esPositivo ? 'fa-arrow-up' : 'fa-arrow-down';
-            
-            return `<span class="text-xs font-bold ${colorClass} flex items-center gap-1"><i class="fa-solid ${icon}"></i>${Math.abs(porcentaje).toFixed(1)}%</span>`;
-        };
-
         const kpiWidgetDefinitions = {
-            ingresos: { title: 'Ingresos (Últ. 30 días)', value: () => ingresosPeriodo, colorClass: 'conta-text-success', link: "ContaApp.irModulo('ventas')", tendencia: getTendenciaHTML(ingresosPeriodo, ingresosPeriodoAnterior) },
-            gastos: { title: 'Costos + Gastos (Últ. 30 días)', value: () => totalEgresosPeriodo, colorClass: 'conta-text-danger', link: "ContaApp.irModulo('gastos')", tendencia: getTendenciaHTML(totalEgresosPeriodo, totalEgresosAnterior) },
-            resultadoNeto: { title: 'Resultado Neto (Últ. 30 días)', value: () => ingresosPeriodo - totalEgresosPeriodo, colorClass: 'dinamica', link: "ContaApp.irModulo('reportes', { submodulo: 'pnl' })", tendencia: getTendenciaHTML(ingresosPeriodo - totalEgresosPeriodo, ingresosPeriodoAnterior - totalEgresosAnterior) },
+            ingresos: { title: 'Ingresos (Últ. 30 días)', value: () => ingresosPeriodo, colorClass: 'conta-text-success', link: "ContaApp.irModulo('ventas')" },
+            gastos: { title: 'Egresos (Últ. 30 días)', value: () => egresosPeriodo, colorClass: 'conta-text-danger', link: "ContaApp.irModulo('gastos')" },
+            resultadoNeto: { title: 'Resultado Neto (Últ. 30 días)', value: () => ingresosPeriodo - egresosPeriodo, colorClass: 'dinamica', link: "ContaApp.irModulo('reportes', { submodulo: 'pnl' })" },
             bancos: { title: 'Saldo en Bancos (Actual)', value: () => bancosSaldo, colorClass: 'conta-text-primary', link: "ContaApp.irModulo('bancos')" },
             cxc: { title: 'Cuentas por Cobrar (Actual)', value: () => cxcSaldo, colorClass: 'conta-text-accent', link: "ContaApp.irModulo('cxc')" },
             cxp: { title: 'Cuentas por Pagar (Actual)', value: () => cxpSaldo, colorClass: 'conta-text-danger', link: "ContaApp.irModulo('cxp')" },
@@ -103,7 +82,6 @@ Object.assign(ContaApp, {
             return `<a onclick="${widget.link}" class="conta-card conta-card-clickable kpi-dashboard-card w-64">
                         <div class="flex justify-between items-start">
                             <span class="text-xs text-[var(--color-text-secondary)]">${widget.title}</span>
-                            ${widget.tendencia || ''}
                         </div>
                         <div class="flex justify-between items-end">
                             <p class="font-bold text-2xl ${colorClass} mt-1">${this.formatCurrency(valor)}</p>
@@ -140,7 +118,7 @@ Object.assign(ContaApp, {
             'quick-actions': () => {
                 const actionsHTML = this.empresa.quickActionsOrder.map(actionId => {
                     const action = quickActionDefinitions[actionId];
-                    if (!action) return ''; // Esta línea ahora previene el error
+                    if (!action) return '';
                     return `<a onclick="${action.onclick}" class="quick-action-button" data-action-id="${actionId}">
                                 <i class="fa-solid ${action.icon} fa-4x quick-action-icon-${action.color}"></i>
                                 <span class="quick-action-label">${action.label}</span>
@@ -188,7 +166,7 @@ Object.assign(ContaApp, {
         this.renderSparklines();
     },
 
-    guardarPersonalizacionDashboard(e) {
+    async guardarPersonalizacionDashboard(e) {
         e.preventDefault();
         const selectedKPIs = Array.from(document.querySelectorAll('.kpi-checkbox:checked')).map(cb => cb.value);
         
@@ -201,7 +179,8 @@ Object.assign(ContaApp, {
         });
 
         this.empresa.dashboardWidgets = selectedKPIs;
-        this.saveAll();
+        await this.saveAll(); // <-- Se añade 'await' para esperar el guardado
+
         this.closeModal();
         this.irModulo('dashboard');
         this.showToast('Dashboard actualizado.', 'success');
@@ -287,7 +266,14 @@ Object.assign(ContaApp, {
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
             const data = this.getSparklineData(widgetId);
-            const pValue = canvas.closest('.kpi-dashboard-card').querySelector('p');
+            
+            // ===== INICIO DE LA CORRECCIÓN: Verificación de seguridad =====
+            const card = canvas.closest('.kpi-dashboard-card');
+            if (!card) return; // Si no se encuentra la tarjeta, no se puede continuar.
+            const pValue = card.querySelector('p');
+            if (!pValue) return; // Si no se encuentra el párrafo del valor, tampoco se puede.
+            // ===== FIN DE LA CORRECCIÓN =====
+
             const widgetColor = getComputedStyle(pValue).color;
 
             const existingChart = Chart.getChart(ctx);
