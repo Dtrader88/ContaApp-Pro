@@ -33,25 +33,32 @@ Object.assign(ContaApp, {
             this.empresa.quickActionsOrder = this.empresa.quickActionsOrder.filter(key => validActionKeys.includes(key));
         }
 
-        // ===== INICIO DE LA CORRECCIÓN: Cálculo de KPIs simplificado y más robusto =====
-        this.actualizarSaldosGlobales(); // Asegura que los saldos de las cuentas estén al día
-
+        // ===== INICIO DE LA CORRECCIÓN PROFUNDA =====
         const hoy = new Date();
         const finPeriodoActual = hoy.toISOString().slice(0, 10);
         const inicioPeriodoActual = new Date(new Date().setDate(hoy.getDate() - 30)).toISOString().slice(0, 10);
+        const finPeriodoAnterior = new Date(new Date().setDate(hoy.getDate() - 31)).toISOString().slice(0, 10);
+        const inicioPeriodoAnterior = new Date(new Date().setDate(hoy.getDate() - 60)).toISOString().slice(0, 10);
 
-        const transaccionesPeriodo = this.transacciones.filter(t => t.fecha >= inicioPeriodoActual && t.fecha <= finPeriodoActual && t.estado !== 'Anulada');
-        
-        const ingresosPeriodo = transaccionesPeriodo.filter(t => t.tipo === 'venta').reduce((sum, t) => sum + t.total, 0);
-        const egresosPeriodo = transaccionesPeriodo.filter(t => t.tipo === 'gasto' || t.tipo === 'compra_inventario').reduce((sum, t) => sum + t.total, 0);
-        
-        // El saldo en bancos, cxc y cxp sí se toma del balance global, que es más preciso.
-        const bancosSaldo = this.planDeCuentas.find(c => c.codigo === '110')?.saldo || 0;
-        const cxcSaldo = this.planDeCuentas.find(c => c.codigo === '120')?.saldo || 0;
-        const cxpSaldo = this.planDeCuentas.find(c => c.codigo === '210')?.saldo || 0;
-        const inventarioSaldo = this.planDeCuentas.find(c => c.codigo === '130')?.saldo || 0;
-        // ===== FIN DE LA CORRECCIÓN =====
+        const saldosPeriodoActual = this.getSaldosPorPeriodo(finPeriodoActual, inicioPeriodoActual);
+        const saldosPeriodoAnterior = this.getSaldosPorPeriodo(finPeriodoAnterior, inicioPeriodoAnterior);
+        const saldosAcumulados = this.getSaldosPorPeriodo();
 
+        const ingresosPeriodo = saldosPeriodoActual.find(c => c.codigo === '400')?.saldo || 0;
+        const costosPeriodo = saldosPeriodoActual.find(c => c.codigo === '500')?.saldo || 0;
+        const gastosPeriodo = saldosPeriodoActual.find(c => c.codigo === '600')?.saldo || 0;
+        const totalEgresosPeriodo = costosPeriodo + gastosPeriodo;
+
+        const ingresosPeriodoAnterior = saldosPeriodoAnterior.find(c => c.codigo === '400')?.saldo || 0;
+        const costosPeriodoAnterior = saldosPeriodoAnterior.find(c => c.codigo === '500')?.saldo || 0;
+        const gastosPeriodoAnterior = saldosPeriodoAnterior.find(c => c.codigo === '600')?.saldo || 0;
+        const totalEgresosAnterior = costosPeriodoAnterior + gastosPeriodoAnterior;
+        
+        const bancosSaldo = saldosAcumulados.find(c => c.codigo === '110')?.saldo || 0;
+        const cxcSaldo = saldosAcumulados.find(c => c.codigo === '120')?.saldo || 0;
+        const inventarioSaldo = saldosAcumulados.find(c => c.codigo === '130')?.saldo || 0;
+        const cxpSaldo = saldosAcumulados.find(c => c.codigo === '210')?.saldo || 0;
+        
         const currentLayout = this.empresa.dashboardLayout || 'grid';
         document.getElementById('page-actions-header').innerHTML = `
             <div class="flex items-center gap-4">
@@ -62,10 +69,22 @@ Object.assign(ContaApp, {
                 <button class="conta-btn conta-btn-small conta-btn-accent" onclick="ContaApp.abrirModalPersonalizarDashboard()"><i class="fa-solid fa-wand-magic-sparkles me-2"></i> Personalizar</button>
             </div>`;
         
+        const getTendenciaHTML = (valorActual, valorAnterior) => {
+            if (valorAnterior === 0 && valorActual !== 0) return `<span class="text-xs text-[var(--color-text-secondary)]">Nuevo</span>`;
+            if (valorAnterior === 0) return '';
+            const cambio = valorActual - valorAnterior;
+            const porcentaje = Math.abs(valorAnterior) > 0 ? (cambio / Math.abs(valorAnterior)) * 100 : 0;
+            const esPositivo = porcentaje >= 0;
+            const colorClass = esPositivo ? 'conta-text-success' : 'conta-text-danger';
+            const icon = esPositivo ? 'fa-arrow-up' : 'fa-arrow-down';
+            
+            return `<span class="text-xs font-bold ${colorClass} flex items-center gap-1"><i class="fa-solid ${icon}"></i>${Math.abs(porcentaje).toFixed(1)}%</span>`;
+        };
+
         const kpiWidgetDefinitions = {
-            ingresos: { title: 'Ingresos (Últ. 30 días)', value: () => ingresosPeriodo, colorClass: 'conta-text-success', link: "ContaApp.irModulo('ventas')" },
-            gastos: { title: 'Egresos (Últ. 30 días)', value: () => egresosPeriodo, colorClass: 'conta-text-danger', link: "ContaApp.irModulo('gastos')" },
-            resultadoNeto: { title: 'Resultado Neto (Últ. 30 días)', value: () => ingresosPeriodo - egresosPeriodo, colorClass: 'dinamica', link: "ContaApp.irModulo('reportes', { submodulo: 'pnl' })" },
+            ingresos: { title: 'Ingresos (Últ. 30 días)', value: () => ingresosPeriodo, colorClass: 'conta-text-success', link: "ContaApp.irModulo('ventas')", tendencia: getTendenciaHTML(ingresosPeriodo, ingresosPeriodoAnterior) },
+            gastos: { title: 'Costos + Gastos (Últ. 30 días)', value: () => totalEgresosPeriodo, colorClass: 'conta-text-danger', link: "ContaApp.irModulo('gastos')", tendencia: getTendenciaHTML(totalEgresosPeriodo, totalEgresosAnterior) },
+            resultadoNeto: { title: 'Resultado Neto (Últ. 30 días)', value: () => ingresosPeriodo - totalEgresosPeriodo, colorClass: 'dinamica', link: "ContaApp.irModulo('reportes', { submodulo: 'pnl' })", tendencia: getTendenciaHTML(ingresosPeriodo - totalEgresosPeriodo, ingresosPeriodoAnterior - totalEgresosAnterior) },
             bancos: { title: 'Saldo en Bancos (Actual)', value: () => bancosSaldo, colorClass: 'conta-text-primary', link: "ContaApp.irModulo('bancos')" },
             cxc: { title: 'Cuentas por Cobrar (Actual)', value: () => cxcSaldo, colorClass: 'conta-text-accent', link: "ContaApp.irModulo('cxc')" },
             cxp: { title: 'Cuentas por Pagar (Actual)', value: () => cxpSaldo, colorClass: 'conta-text-danger', link: "ContaApp.irModulo('cxp')" },
@@ -82,6 +101,7 @@ Object.assign(ContaApp, {
             return `<a onclick="${widget.link}" class="conta-card conta-card-clickable kpi-dashboard-card w-64">
                         <div class="flex justify-between items-start">
                             <span class="text-xs text-[var(--color-text-secondary)]">${widget.title}</span>
+                            ${widget.tendencia || ''}
                         </div>
                         <div class="flex justify-between items-end">
                             <p class="font-bold text-2xl ${colorClass} mt-1">${this.formatCurrency(valor)}</p>
@@ -89,6 +109,7 @@ Object.assign(ContaApp, {
                         </div>
                     </a>`;
         }).join('');
+        // ===== FIN DE LA CORRECCIÓN PROFUNDA =====
         
         const timeRangeSelectorHTML = (chartId, timeRange) => {
             const options = { currentMonth: 'Este Mes', last3months: 'Últ. 3 Meses', last6months: 'Últ. 6 Meses', yearToDate: 'Año Actual' };
@@ -166,10 +187,54 @@ Object.assign(ContaApp, {
         this.renderSparklines();
     },
 
+    abrirModalPersonalizarDashboard() {
+        const kpiDefinitions = {
+            ingresos: 'Ingresos (Últ. 30 días)', gastos: 'Costos + Gastos (Últ. 30 días)', resultadoNeto: 'Resultado Neto (Últ. 30 días)',
+            bancos: 'Saldo en Bancos', cxc: 'Cuentas por Cobrar', cxp: 'Cuentas por Pagar', inventario: 'Valor de Inventario'
+        };
+        const contentWidgetDefinitions = {
+            financialPerformance: 'Gráfico: Ingresos vs. Gastos', 
+            'activity-feed': 'Feed de Actividad Reciente',
+            topExpenses: 'Gráfico: Principales Gastos', 
+            'quick-actions': 'Panel de Acciones Rápidas'
+        };
+
+        const selectedKPIs = this.empresa.dashboardWidgets || [];
+        const contentSettings = this.empresa.dashboardContentWidgets.settings;
+
+        const kpiCheckboxes = Object.entries(kpiDefinitions).map(([id, title]) => `
+            <div class="flex items-center"><input type="checkbox" id="kpi-${id}" value="${id}" class="h-4 w-4 kpi-checkbox" ${selectedKPIs.includes(id) ? 'checked' : ''}><label for="kpi-${id}" class="ml-3 text-sm">${title}</label></div>
+        `).join('');
+
+        const contentCheckboxes = Object.entries(contentWidgetDefinitions).map(([id, title]) => {
+            const isVisible = contentSettings[id] ? contentSettings[id].visible : true;
+            return `<div class="flex items-center"><input type="checkbox" id="content-${id}" value="${id}" class="h-4 w-4 content-checkbox" ${isVisible ? 'checked' : ''}><label for="content-${id}" class="ml-3 text-sm">${title}</label></div>`;
+        }).join('');
+
+        const modalHTML = `
+            <h3 class="conta-title mb-4">Personalizar Dashboard</h3>
+            <p class="text-[var(--color-text-secondary)] mb-4 text-sm">Selecciona los elementos que deseas ver. En el dashboard, puedes arrastrar y soltar los widgets principales para reordenarlos.</p>
+            <form onsubmit="ContaApp.guardarPersonalizacionDashboard(event)">
+                <div class="conta-card mb-6"><h4 class="conta-subtitle !border-0 !mb-2">Indicadores Superiores (KPIs)</h4><div class="grid grid-cols-2 md:grid-cols-3 gap-4">${kpiCheckboxes}</div></div>
+                <div class="conta-card"><h4 class="conta-subtitle !border-0 !mb-2">Widgets de Contenido (Arrastrables)</h4><div class="grid grid-cols-1 md:grid-cols-2 gap-4">${contentCheckboxes}</div></div>
+                <div class="flex justify-end gap-2 mt-8"><button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button><button type="submit" class="conta-btn">Guardar Cambios</button></div>
+            </form>
+        `;
+        this.showModal(modalHTML, '3xl');
+    },
+
     async guardarPersonalizacionDashboard(e) {
         e.preventDefault();
+        
         const selectedKPIs = Array.from(document.querySelectorAll('.kpi-checkbox:checked')).map(cb => cb.value);
         
+        if (!this.empresa.dashboardContentWidgets) {
+            this.empresa.dashboardContentWidgets = { order: [], settings: {} };
+        }
+        if (!this.empresa.dashboardContentWidgets.settings) {
+            this.empresa.dashboardContentWidgets.settings = {};
+        }
+
         const contentCheckboxes = document.querySelectorAll('.content-checkbox');
         contentCheckboxes.forEach(cb => {
             if (!this.empresa.dashboardContentWidgets.settings[cb.value]) {
@@ -179,11 +244,16 @@ Object.assign(ContaApp, {
         });
 
         this.empresa.dashboardWidgets = selectedKPIs;
-        await this.saveAll(); // <-- Se añade 'await' para esperar el guardado
 
-        this.closeModal();
-        this.irModulo('dashboard');
-        this.showToast('Dashboard actualizado.', 'success');
+        try {
+            await this.saveAll();
+            this.closeModal();
+            this.irModulo('dashboard');
+            this.showToast('Dashboard actualizado.', 'success');
+        } catch (error) {
+            console.error('Error al guardar la personalización del dashboard:', error);
+            this.showToast('No se pudo guardar la configuración.', 'error');
+        }
     },
 
     initDashboardDragAndDrop() {

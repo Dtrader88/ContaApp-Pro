@@ -809,7 +809,7 @@ irAtras() {
             dashboardLayout: 'grid',
             pdfTemplate: 'clasica',
             pdfColor: '#1877f2',
-            periodosContables: {} // <-- AÑADIDO
+            periodosContables: {}
         },
         licencia: {
             cliente: "Usuario Principal",
@@ -844,6 +844,7 @@ irAtras() {
 
     if (dataString) {
         const data = JSON.parse(dataString);
+        // Carga los datos guardados, usando los datos por defecto como base
         this.empresa = { ...defaultData.empresa, ...data.empresa };
         this.licencia = data.licencia || defaultData.licencia;
         this.idCounter = data.idCounter || defaultData.idCounter;
@@ -860,16 +861,19 @@ irAtras() {
         this.unidadesMedida = data.unidadesMedida || defaultData.unidadesMedida;
         this.bancoImportado = data.bancoImportado || defaultData.bancoImportado;
 
+        // --- INICIO DE LA CORRECCIÓN ---
+        // Se elimina la lógica de seguridad redundante. La fusión anterior ya se encarga de esto.
+        // Si `data.empresa` no tiene `dashboardWidgets`, la propiedad vendrá de `defaultData.empresa`.
+        // Si `data.empresa` tiene `dashboardWidgets: []`, ese será el valor final, que es lo correcto.
         this.verificarYActualizarPlanDeCuentas();
 
         if (!this.empresa.presupuestos) this.empresa.presupuestos = {};
-        if (!this.empresa.dashboardWidgets) this.empresa.dashboardWidgets = defaultData.empresa.dashboardWidgets;
         if (!this.empresa.dashboardContentWidgets || !this.empresa.dashboardContentWidgets.order) {
             this.empresa.dashboardContentWidgets = defaultData.empresa.dashboardContentWidgets;
         }
         if (!this.empresa.dashboardLayout) this.empresa.dashboardLayout = defaultData.empresa.dashboardLayout;
-        // <-- AÑADIDO
         if (!this.empresa.periodosContables) this.empresa.periodosContables = {};
+        // --- FIN DE LA CORRECCIÓN ---
     } else {
         Object.assign(this, defaultData);
     }
