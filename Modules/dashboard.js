@@ -14,11 +14,27 @@ Object.assign(ContaApp, {
                 }
             };
         }
-        // ===== INICIO DE LA MEJORA: Definir y guardar el orden de las acciones rápidas =====
-        if (!this.empresa.quickActionsOrder) {
-            this.empresa.quickActionsOrder = ['new_sale', 'new_expense', 'new_production_order', 'new_purchase', 'new_product', 'new_contact', 'settings', 'new_transfer'];
+        
+        const quickActionDefinitions = {
+            'new_sale': { label: 'Nueva Venta', icon: 'fa-file-invoice-dollar', color: 'success', onclick: "ContaApp.irModulo('ventas', {action: 'new'})" },
+            'new_expense': { label: 'Nuevo Gasto', icon: 'fa-receipt', color: 'danger', onclick: "ContaApp.abrirModalGasto()" },
+            'new_production_order': { label: 'Nueva Orden Prod.', icon: 'fa-cogs', color: 'accent', onclick: "ContaApp.abrirModalOrdenProduccion()" },
+            'new_purchase': { label: 'Nueva Compra', icon: 'fa-shopping-basket', color: 'accent', onclick: "ContaApp.abrirModalNuevaCompra()" },
+            'new_product': { label: 'Nuevo Producto', icon: 'fa-box', color: 'primary', onclick: "ContaApp.abrirModalProducto()" },
+            'new_contact': { label: 'Nuevo Contacto', icon: 'fa-user-plus', color: 'primary', onclick: "ContaApp.abrirModalContacto()" },
+            'settings': { label: 'Ajustes', icon: 'fa-cog', color: 'accent', onclick: "ContaApp.irModulo('config')" },
+            'new_transfer': { label: 'Transferencia', icon: 'fa-exchange-alt', color: 'success', onclick: "ContaApp.abrirModalTransferencia()" },
+        };
+        
+        // ===== INICIO DE LA CORRECCIÓN: Autocorrección del orden de acciones rápidas =====
+        const validActionKeys = Object.keys(quickActionDefinitions);
+        if (!this.empresa.quickActionsOrder || this.empresa.quickActionsOrder.length === 0) {
+            this.empresa.quickActionsOrder = validActionKeys;
+        } else {
+            // Elimina cualquier clave inválida o antigua del array guardado
+            this.empresa.quickActionsOrder = this.empresa.quickActionsOrder.filter(key => validActionKeys.includes(key));
         }
-        // ===== FIN DE LA MEJORA =====
+        // ===== FIN DE LA CORRECCIÓN =====
 
         const hoy = new Date();
         const finPeriodoActual = hoy.toISOString().slice(0, 10);
@@ -122,20 +138,9 @@ Object.assign(ContaApp, {
                 <div id="top-expenses-container" class="flex-grow relative"></div>
             </div>`,
             'quick-actions': () => {
-                const quickActionDefinitions = {
-                    'new_sale': { label: 'Nueva Venta', icon: 'fa-file-invoice-dollar', color: 'success', onclick: "ContaApp.irModulo('ventas', {action: 'new'})" },
-                    'new_expense': { label: 'Nuevo Gasto', icon: 'fa-receipt', color: 'danger', onclick: "ContaApp.abrirModalGasto()" },
-                    'new_production_order': { label: 'Nueva Orden Prod.', icon: 'fa-cogs', color: 'accent', onclick: "ContaApp.abrirModalOrdenProduccion()" },
-                    'new_purchase': { label: 'Nueva Compra', icon: 'fa-shopping-basket', color: 'accent', onclick: "ContaApp.abrirModalNuevaCompra()" },
-                    'new_product': { label: 'Nuevo Producto', icon: 'fa-box', color: 'primary', onclick: "ContaApp.abrirModalProducto()" },
-                    'new_contact': { label: 'Nuevo Contacto', icon: 'fa-user-plus', color: 'primary', onclick: "ContaApp.abrirModalContacto()" },
-                    'settings': { label: 'Ajustes', icon: 'fa-cog', color: 'accent', onclick: "ContaApp.irModulo('config')" },
-                    'new_transfer': { label: 'Transferencia', icon: 'fa-exchange-alt', color: 'success', onclick: "ContaApp.abrirModalTransferencia()" },
-                };
-
                 const actionsHTML = this.empresa.quickActionsOrder.map(actionId => {
                     const action = quickActionDefinitions[actionId];
-                    if (!action) return '';
+                    if (!action) return ''; // Esta línea ahora previene el error
                     return `<a onclick="${action.onclick}" class="quick-action-button" data-action-id="${actionId}">
                                 <i class="fa-solid ${action.icon} fa-4x quick-action-icon-${action.color}"></i>
                                 <span class="quick-action-label">${action.label}</span>
@@ -179,7 +184,7 @@ Object.assign(ContaApp, {
         });
 
         this.initDashboardDragAndDrop();
-        this.initQuickActionsDragAndDrop(); // Se añade la inicialización para las acciones rápidas
+        this.initQuickActionsDragAndDrop();
         this.renderSparklines();
     },
 
