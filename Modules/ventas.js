@@ -41,74 +41,128 @@ ordenarVentasPor(columna) {
         }
     },
     async renderVentas_TabHistorial(filters = {}) {
-        document.getElementById('page-actions-header').innerHTML = `
-            <div class="flex gap-2 flex-wrap">
-                <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarVentasCSV()"><i class="fa-solid fa-file-csv me-2"></i>Exportar CSV</button>
-                <button class="conta-btn conta-btn-accent" onclick="ContaApp.abrirModalCotizacion()">+ Nueva Cotización</button>
-                <button class="conta-btn" onclick="ContaApp.abrirModalVenta()">+ Nueva Venta</button>
-            </div>`;
-        
-        const todasLasTransacciones = this.transacciones.length > 0 ? this.transacciones : (await this.repository.getPaginatedTransactions({ perPage: 10000, filters: { tipos: ['venta', 'nota_credito'] } })).data;
-        
-        // ... (La lógica de KPIs se mantiene igual) ...
-        const kpiHTML = `<!-- ... El HTML de los KPIs no cambia ... -->`;
-        
-        const filterFormHTML = `<div class="conta-card p-3 mb-4">
-            <form onsubmit="event.preventDefault(); ContaApp.filtrarLista('ventas');" class="flex flex-wrap items-end gap-3">
-                <div><label class="text-xs font-semibold">Buscar por Cliente o #</label><input type="search" id="ventas-search" class="conta-input md:w-72" value="${filters.search || ''}"></div>
-                <div><label class="text-xs font-semibold">Desde</label><input type="date" id="ventas-start-date" class="conta-input" value="${filters.startDate || ''}"></div>
-                <div><label class="text-xs font-semibold">Hasta</label><input type="date" id="ventas-end-date" class="conta-input" value="${filters.endDate || ''}"></div>
-                <button type="submit" class="conta-btn">Filtrar</button>
-                <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.abrirModalFiltrosAvanzadosVentas()">Filtros Avanzados</button>
-            </form>
+    document.getElementById('page-actions-header').innerHTML = `
+        <div class="flex gap-2 flex-wrap">
+            <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarVentasCSV()"><i class="fa-solid fa-file-csv me-2"></i>Exportar CSV</button>
+            <button class="conta-btn conta-btn-accent" onclick="ContaApp.abrirModalCotizacion()">+ Nueva Cotización</button>
+            <button class="conta-btn" onclick="ContaApp.abrirModalVenta()">+ Nueva Venta</button>
         </div>`;
-        
-        const { currentPage, perPage } = this.getPaginationState('ventas');
-        const { column, order } = this.ventasSortState;
 
-        const { data: itemsParaMostrar, totalItems } = await this.repository.getPaginatedTransactions({
-            page: currentPage, perPage: perPage,
-            filters: {
-                tipos: ['venta', 'nota_credito'], search: filters.search,
-                startDate: filters.startDate, endDate: filters.endDate,
-                ...filters // Incluir filtros avanzados
-            },
-            sort: { column, order }
-        });
-        
-        let resultsHTML;
-        if (totalItems === 0) {
-            resultsHTML = `<div class="conta-card text-center p-8 text-[var(--color-text-secondary)]"><i class="fa-solid fa-filter-circle-xmark fa-3x mb-4 opacity-50"></i><h3 class="font-bold text-lg">Sin Resultados</h3><p>No se encontraron transacciones.</p></div>`;
-        } else {
-            const generarEncabezado = (nombreColumna, clave) => {
-                let icono = this.ventasSortState.column === clave ? (this.ventasSortState.order === 'asc' ? '<i class="fa-solid fa-arrow-up ml-2"></i>' : '<i class="fa-solid fa-arrow-down ml-2"></i>') : '';
-                return `<th class="conta-table-th cursor-pointer" onclick="ContaApp.ordenarVentasPor('${clave}')">${nombreColumna} ${icono}</th>`;
-            };
+    const todasLasTransacciones = this.transacciones.length > 0 ? this.transacciones : (await this.repository.getPaginatedTransactions({ perPage: 10000, filters: { tipos: ['venta', 'nota_credito'] } })).data;
+    
+    const hoy = new Date();
+    const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0,10);
+    const ventasNetasDelMes = todasLasTransacciones.filter(t => t.fecha >= primerDiaMes && t.estado !== 'Anulada').reduce((sum, t) => {
+        if (t.tipo === 'venta') return sum + t.total;
+        if (t.tipo === 'nota_credito') return sum - t.total;
+        return sum;
+    }, 0);
+    const ventasActivas = todasLasTransacciones.filter(t => t.tipo === 'venta' && t.estado !== 'Anulada');
+    const ticketPromedio = ventasActivas.length > 0 ? (ventasActivas.reduce((sum, v) => sum + v.total, 0) / ventasActivas.length) : 0;
+    let productoEstrella = 'N/A';
+    if (ventasActivas.length > 0) {
+        const ventasPorItem = ventasActivas.flatMap(v => v.items).reduce((acc, item) => { let itemId = item.itemType === 'producto' ? `P-${item.productoId}` : `S-${item.cuentaId}`; let totalVentaItem = item.cantidad * item.precio; acc[itemId] = (acc[itemId] || 0) + totalVentaItem; return acc; }, {});
+        if(Object.keys(ventasPorItem).length > 0) { 
+            const maxVendidoId = Object.keys(ventasPorItem).reduce((a, b) => ventasPorItem[a] > ventasPorItem[b] ? a : b); 
+            const [tipo, id] = maxVendidoId.split('-'); 
+            if (tipo === 'P') { 
+                const producto = this.findById(this.productos, id); 
+                if(producto) productoEstrella = producto.nombre; 
+            } else { 
+                const cuenta = this.findById(this.planDeCuentas, id);
+                if(cuenta) productoEstrella = cuenta.nombre; 
+            } 
+        } 
+    }
+    const kpiHTML = `<div class="flex flex-wrap justify-center gap-4 mb-4">
+        <div class="conta-card kpi-dashboard-card w-64 text-center"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-calendar-day fa-fw me-2"></i> Ventas Netas del Mes</span><p class="font-bold text-xl conta-text-primary mt-1">${this.formatCurrency(ventasNetasDelMes)}</p></div>
+        <div class="conta-card kpi-dashboard-card w-64 text-center"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-receipt fa-fw me-2"></i> Ticket Promedio (Ventas)</span><p class="font-bold text-xl conta-text-success mt-1">${this.formatCurrency(ticketPromedio)}</p></div>
+        <div class="conta-card kpi-dashboard-card w-64 text-center"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-star fa-fw me-2"></i> Producto/Servicio Estrella</span><p class="font-bold text-xl conta-text-accent mt-1 truncate">${productoEstrella}</p></div>
+    </div>`;
+    
+    const filterFormHTML = `<div class="conta-card p-3 mb-4">
+        <form onsubmit="event.preventDefault(); ContaApp.filtrarLista('ventas');" class="flex flex-wrap items-end gap-3">
+            <div><label class="text-xs font-semibold">Buscar por Cliente o #</label><input type="search" id="ventas-search" class="conta-input md:w-72" value="${filters.search || ''}"></div>
+            <div><label class="text-xs font-semibold">Desde</label><input type="date" id="ventas-start-date" class="conta-input" value="${filters.startDate || ''}"></div>
+            <div><label class="text-xs font-semibold">Hasta</label><input type="date" id="ventas-end-date" class="conta-input" value="${filters.endDate || ''}"></div>
+            <button type="submit" class="conta-btn">Filtrar</button>
+            <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.abrirModalFiltrosAvanzadosVentas()">Filtros Avanzados</button>
+        </form>
+    </div>`;
+    
+    const { currentPage, perPage } = this.getPaginationState('ventas');
+    const { column, order } = this.ventasSortState;
 
-            let tableRowsHTML = '';
-            itemsParaMostrar.forEach(t => {
-                const cliente = this.findById(this.contactos, t.contactoId);
-                let estadoClass = '', estadoTexto = t.estado, totalDisplay, numeroDisplay, accionesHTML, rowOnclick;
+    const { data: itemsParaMostrar, totalItems } = await this.repository.getPaginatedTransactions({
+        page: currentPage, perPage: perPage,
+        filters: {
+            tipos: ['venta', 'nota_credito'],
+            ...filters 
+        },
+        sort: { column, order }
+    });
+    
+    let resultsHTML;
+    if (totalItems === 0) {
+        resultsHTML = `<div class="conta-card text-center p-8 text-[var(--color-text-secondary)]"><i class="fa-solid fa-filter-circle-xmark fa-3x mb-4 opacity-50"></i><h3 class="font-bold text-lg">Sin Resultados</h3><p>No se encontraron transacciones que coincidan con los filtros aplicados.</p></div>`;
+    } else {
+        const generarEncabezado = (nombreColumna, clave) => {
+            let icono = this.ventasSortState.column === clave ? (this.ventasSortState.order === 'asc' ? '<i class="fa-solid fa-arrow-up ml-2"></i>' : '<i class="fa-solid fa-arrow-down ml-2"></i>') : '';
+            return `<th class="conta-table-th cursor-pointer" onclick="ContaApp.ordenarVentasPor('${clave}')">${nombreColumna} ${icono}</th>`;
+        };
 
-                if (t.tipo === 'venta') {
-                    // ... (lógica de estado y display se mantiene)
-                    accionesHTML = `<button class="conta-btn-icon" title="Ver Factura" onclick="event.stopPropagation(); ContaApp.abrirVistaPreviaFactura(${t.id})"><i class="fa-solid fa-file-lines"></i></button>
-                                    <button class="conta-btn-icon edit" title="Duplicar Venta" onclick="event.stopPropagation(); ContaApp.abrirModalVenta(null, null, ${t.id})"><i class="fa-solid fa-copy"></i></button>
-                                    ${t.estado !== 'Anulada' && this.hasPermission('anular_transaccion') ? `<button class="conta-btn-icon delete" title="Anular Factura" onclick="event.stopPropagation(); ContaApp.anularVenta(${t.id})"><i class="fa-solid fa-ban"></i></button>` : ''}`;
-                    rowOnclick = `ContaApp.abrirVistaPreviaFactura(${t.id})`;
-                } else { // Nota de Crédito
-                    // ... (lógica de NC se mantiene)
+        let tableRowsHTML = '';
+        itemsParaMostrar.forEach(t => {
+            const cliente = this.findById(this.contactos, t.contactoId);
+            let estadoClass = '', estadoTexto = t.estado || 'Pendiente', totalDisplay, numeroDisplay, accionesHTML, rowOnclick;
+
+            if (t.tipo === 'venta') {
+                switch(t.estado) {
+                    case 'Pagada': estadoClass = 'tag-success'; break;
+                    case 'Pendiente': estadoClass = 'tag-warning'; break;
+                    case 'Parcial': estadoClass = 'tag-accent'; break;
+                    case 'Anulada': estadoClass = 'tag-anulada'; break;
+                    default: estadoClass = 'tag-neutral';
                 }
-                
-                tableRowsHTML += `<tr class="cursor-pointer" onclick="${rowOnclick}">...</tr>`; // El contenido de la fila se abrevia
-            });
+                totalDisplay = this.formatCurrency(t.total);
+                numeroDisplay = t.numeroFactura || t.id;
+                accionesHTML = `<button class="conta-btn-icon" title="Ver Factura" onclick="event.stopPropagation(); ContaApp.abrirVistaPreviaFactura(${t.id})"><i class="fa-solid fa-file-lines"></i></button>
+                                <button class="conta-btn-icon edit" title="Duplicar Venta" onclick="event.stopPropagation(); ContaApp.abrirModalVenta(null, null, ${t.id})"><i class="fa-solid fa-copy"></i></button>
+                                ${t.estado !== 'Anulada' && this.hasPermission('anular_transaccion') ? `<button class="conta-btn-icon delete" title="Anular Factura" onclick="event.stopPropagation(); ContaApp.anularVenta(${t.id})"><i class="fa-solid fa-ban"></i></button>` : ''}`;
+                rowOnclick = `ContaApp.abrirVistaPreviaFactura(${t.id})`;
+            } else {
+                estadoClass = 'tag-nota-credito';
+                estadoTexto = 'Nota de Crédito';
+                totalDisplay = `-${this.formatCurrency(t.total)}`;
+                numeroDisplay = t.numeroNota || t.id;
+                accionesHTML = `<button class="conta-btn-icon" title="Ver Nota de Crédito" onclick="event.stopPropagation(); ContaApp.abrirVistaPreviaNotaCredito(${t.id})"><i class="fa-solid fa-file-lines"></i></button>`;
+                rowOnclick = `ContaApp.abrirVistaPreviaNotaCredito(${t.id})`;
+            }
+            
+            tableRowsHTML += `<tr class="cursor-pointer" onclick="${rowOnclick}">
+                <td class="conta-table-td font-mono">${numeroDisplay}</td>
+                <td class="conta-table-td">${t.fecha}</td>
+                <td class="conta-table-td">${cliente?.nombre || 'N/A'}</td>
+                <td class="conta-table-td text-right font-mono ${t.tipo === 'nota_credito' ? 'conta-text-danger' : ''}">${totalDisplay}</td>
+                <td class="conta-table-td"><span class="tag ${estadoClass}">${estadoTexto}</span></td>
+                <td class="conta-table-td text-center">${accionesHTML}</td>
+            </tr>`;
+        });
 
-            resultsHTML = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>...</tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
-            this.renderPaginationControls('ventas', totalItems);
-        }
-        
-        document.getElementById('ventas-contenido').innerHTML = kpiHTML + filterFormHTML + resultsHTML;
-    },
+        resultsHTML = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
+            ${generarEncabezado('Documento #', 'numeroFactura')}
+            ${generarEncabezado('Fecha', 'fecha')}
+            ${generarEncabezado('Cliente', 'cliente')}
+            ${generarEncabezado('Total', 'total')}
+            ${generarEncabezado('Estado', 'estado')}
+            <th class="conta-table-th text-center">Acciones</th>
+        </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
+
+        this.renderPaginationControls('ventas', totalItems);
+    }
+    
+    document.getElementById('ventas-contenido').innerHTML = kpiHTML + filterFormHTML + resultsHTML;
+},
     renderVentas_TabCotizaciones(filters = {}) {
         document.getElementById('page-actions-header').innerHTML = `<button class="conta-btn" onclick="ContaApp.abrirModalCotizacion()">+ Nueva Cotización</button>`;
 

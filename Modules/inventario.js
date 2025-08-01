@@ -412,9 +412,8 @@ Object.assign(ContaApp, {
         .map(u => `<option value="${u.id}" ${producto.unidadMedidaId === u.id ? 'selected' : ''}>${u.nombre}</option>`)
         .join('');
     
-    // --- MEJORA: Opciones para la nueva categoría de inventario ---
     const cuentasInventarioOptions = this.planDeCuentas
-        .filter(c => c.parentId === 130) // Filtramos por las subcuentas de "Inventarios"
+        .filter(c => c.parentId === 130)
         .map(c => `<option value="${c.id}" ${producto.cuentaInventarioId === c.id ? 'selected' : ''}>${c.nombre}</option>`)
         .join('');
 
@@ -436,7 +435,9 @@ Object.assign(ContaApp, {
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
                 <label>Unidad de Medida</label>
+                <!-- ===== INICIO DE LA CORRECCIÓN CLAVE ===== -->
                 <select id="prod-unidad" class="w-full p-2 mt-1">${unidadesOptions}</select>
+                <!-- ===== FIN DE LA CORRECCIÓN CLAVE (se añadió el id="prod-unidad") ===== -->
             </div>
             <div><label>Stock Inicial</label><input type="number" id="prod-stock" class="w-full p-2 mt-1" value="${producto.stock || 0}" ${isEditing ? 'disabled':''}></div>
             <div><label>Costo Unitario</label><input type="number" step="0.01" id="prod-costo" class="w-full p-2 mt-1" value="${producto.costo || 0}"></div>
@@ -449,10 +450,8 @@ Object.assign(ContaApp, {
 
     if (isEditing) {
         document.getElementById('prod-unidad').value = producto.unidadMedidaId || 1;
-        // Asignamos el valor guardado para la categoría de inventario
         document.getElementById('prod-cuenta-inventario').value = producto.cuentaInventarioId || 13001;
     } else {
-        // Asignamos "Productos para Reventa" por defecto
         document.getElementById('prod-cuenta-inventario').value = 13001;
     }
 },
@@ -496,7 +495,6 @@ Object.assign(ContaApp, {
                             { cuentaId: 330, debe: 0, haber: valorInventario }
                         ]
                     );
-                    // Si se crea un asiento, también debemos persistir el array de asientos.
                     datosParaGuardar.asientos = this.asientos;
                 }
                 

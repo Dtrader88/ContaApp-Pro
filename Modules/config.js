@@ -10,6 +10,9 @@ Object.assign(ContaApp, {
             <div class="flex gap-2 mb-6 border-b border-[var(--color-border-accent)] flex-wrap">
                 <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'perfil' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'perfil'})">Perfil de la Compañía</button>
                 <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'contactos' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'contactos'})">Contactos</button>
+                <!-- ===== INICIO DE LÍNEA AÑADIDA ===== -->
+                <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'roles' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'roles'})">Roles y Permisos</button>
+                <!-- ===== FIN DE LÍNEA AÑADIDA ===== -->
                 <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'unidades' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'unidades'})">Unidades de Medida</button>
                 <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'licencia' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'licencia'})">Licencia y Activación</button>
                 <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'personalizacion' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'personalizacion'})">Personalización y Datos</button>
@@ -23,6 +26,7 @@ Object.assign(ContaApp, {
         switch (submodulo) {
             case 'perfil': this.renderConfig_Perfil(); break;
             case 'contactos': this.renderContactos('config-contenido'); break;
+            case 'roles': this.renderConfig_Roles(); break; // <-- Nueva línea
             case 'unidades': this.renderConfig_Unidades(); break;
             case 'licencia': this.renderConfig_Licencia(); break;
             case 'personalizacion': this.renderConfig_Personalizacion(); break;
@@ -641,5 +645,106 @@ renderConfig_Licencia() {
             this.irModulo('config', { submodulo: 'unidades' });
             this.showToast('Unidad eliminada.', 'success');
         });
+    },
+    renderConfig_Roles() {
+        let html = `<div class="conta-card">
+            <h3 class="conta-subtitle">Gestión de Roles y Permisos</h3>
+            <p class="text-sm text-[var(--color-text-secondary)] mt-2 mb-6">Define qué pueden ver y hacer los usuarios en la aplicación. Los cambios se aplicarán la próxima vez que inicien sesión.</p>
+            <div class="space-y-4">`;
+
+        for (const rolKey in this.empresa.roles) {
+            const rol = this.empresa.roles[rolKey];
+            html += `
+                <div class="p-4 border rounded-lg flex justify-between items-center">
+                    <div>
+                        <h4 class="font-bold text-lg">${rol.nombre}</h4>
+                        <p class="text-sm text-[var(--color-text-secondary)]">${rolKey === 'administrador' ? 'Acceso total a todas las funciones.' : `${rol.permisos.modules.length} módulos y ${rol.permisos.actions.length} acciones permitidas.`}</p>
+                    </div>
+                    ${rolKey !== 'administrador' ? `<button class="conta-btn conta-btn-accent" onclick="ContaApp.abrirModalEditarRol('${rolKey}')">Editar Permisos</button>` : ''}
+                </div>
+            `;
+        }
+
+        html += `</div></div>`;
+        document.getElementById('config-contenido').innerHTML = html;
+    },
+
+    abrirModalEditarRol(rolKey) {
+        const rol = this.empresa.roles[rolKey];
+        if (!rol) return;
+
+        const allPermissions = {
+            "Módulos Principales": {
+                'dashboard': 'Dashboard', 'ventas': 'Ventas', 'cxc': 'Cuentas por Cobrar', 'gastos': 'Gastos',
+                'compras': 'Compras', 'cxp': 'Cuentas por Pagar', 'bancos': 'Bancos y Tarjetas',
+                'inventario': 'Inventario', 'produccion': 'Producción'
+            },
+            "Módulos Contables": {
+                'plan-de-cuentas': 'Plan de Cuentas', 'diario-general': 'Diario General',
+                'cierre-periodo': 'Cierre del Período', 'activos-fijos': 'Activos Fijos'
+            },
+            "Módulos de Sistema": {
+                'reportes': 'Reportes', 'config': 'Ajustes'
+            },
+            "Acciones Financieras": {
+                'registrar_cobros': 'Registrar Cobros (CXC)',
+                'registrar_pagos': 'Registrar Pagos (CXP)',
+                'anular_transaccion': 'Anular Facturas y Gastos',
+            },
+            "Acciones de Gestión": {
+                'gestionar_periodos': 'Cerrar/Reabrir Períodos Contables',
+                'eliminar_registros': 'Eliminar Registros (Contactos, Productos, etc.)',
+            }
+        };
+
+        let formHTML = '';
+        for (const groupName in allPermissions) {
+            formHTML += `<fieldset class="conta-card p-4"><legend class="font-bold text-base mb-2">${groupName}</legend><div class="grid grid-cols-2 md:grid-cols-3 gap-3">`;
+            for (const key in allPermissions[groupName]) {
+                const isChecked = rol.permisos.modules.includes(key) || rol.permisos.actions.includes(key);
+                formHTML += `
+                    <label class="flex items-center text-sm cursor-pointer">
+                        <input type="checkbox" value="${key}" class="h-4 w-4 permiso-checkbox" ${isChecked ? 'checked' : ''}>
+                        <span class="ml-2">${allPermissions[groupName][key]}</span>
+                    </label>
+                `;
+            }
+            formHTML += `</div></fieldset>`;
+        }
+
+        const modalHTML = `
+            <h3 class="conta-title mb-4">Editando Permisos para: ${rol.nombre}</h3>
+            <form onsubmit="event.preventDefault(); ContaApp.guardarRol('${rolKey}')" class="space-y-4">
+                ${formHTML}
+                <div class="flex justify-end gap-2 mt-6">
+                    <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button>
+                    <button type="submit" class="conta-btn">Guardar Cambios</button>
+                </div>
+            </form>`;
+        this.showModal(modalHTML, '4xl');
+    },
+
+    guardarRol(rolKey) {
+        const rol = this.empresa.roles[rolKey];
+        if (!rol) return;
+
+        rol.permisos.modules = [];
+        rol.permisos.actions = [];
+
+        const moduleKeys = ['dashboard', 'ventas', 'cxc', 'gastos', 'compras', 'cxp', 'bancos', 'inventario', 'produccion', 'plan-de-cuentas', 'diario-general', 'cierre-periodo', 'activos-fijos', 'reportes', 'config'];
+
+        document.querySelectorAll('.permiso-checkbox:checked').forEach(checkbox => {
+            const key = checkbox.value;
+            if (moduleKeys.includes(key)) {
+                rol.permisos.modules.push(key);
+            } else {
+                rol.permisos.actions.push(key);
+            }
+        });
+
+        this.saveAll(); // Guarda toda la estructura de la empresa, incluyendo los roles actualizados
+        this.closeModal();
+        this.renderConfig_Roles(); // Re-renderiza la vista para mostrar los cambios
+        this.showToast('Permisos del rol actualizados con éxito.', 'success');
     },
 });

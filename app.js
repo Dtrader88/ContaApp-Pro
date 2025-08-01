@@ -1,4 +1,27 @@
-const ContaApp = {
+
+const ROLES = {
+    administrador: {
+        nombre: "Administrador",
+        permisos: {
+            modules: ['dashboard', 'ventas', 'cxc', 'gastos', 'compras', 'cxp', 'bancos', 'inventario', 'produccion', 'plan-de-cuentas', 'diario-general', 'cierre-periodo', 'activos-fijos', 'reportes', 'config'],
+            actions: ['anular_transaccion', 'eliminar_registros', 'gestionar_periodos', 'gestionar_configuracion']
+        }
+    },
+    contador: {
+        nombre: "Contador",
+        permisos: {
+            modules: ['dashboard', 'ventas', 'cxc', 'gastos', 'compras', 'cxp', 'bancos', 'inventario', 'produccion', 'plan-de-cuentas', 'diario-general', 'cierre-periodo', 'activos-fijos', 'reportes'],
+            actions: ['anular_transaccion']
+        }
+    },
+    vendedor: {
+        nombre: "Vendedor",
+        permisos: {
+            modules: ['dashboard', 'ventas', 'cxc', 'inventario'],
+            actions: []
+        }
+    }
+};const ContaApp = {
     // Propiedades del estado de la aplicación
     repository: null, 
     empresa: {},
@@ -40,7 +63,26 @@ const ContaApp = {
         column: 'fecha',
         order: 'desc'
     },  
+        hasPermission(permissionKey) {
+        if (!this.currentUser || !this.currentUser.rol) {
+            return false;
+        }
+        const rolKey = this.currentUser.rol.toLowerCase();
+        const rolConfig = this.empresa.roles ? this.empresa.roles[rolKey] : null;
 
+        if (!rolConfig) {
+            return false; // El rol del usuario no existe en la configuración
+        }
+
+        const permisos = rolConfig.permisos;
+
+        // El administrador siempre tiene todos los permisos
+        if (permisos.modules.includes('*') || permisos.actions.includes('*')) {
+            return true;
+        }
+        
+        return permisos.modules.includes(permissionKey) || permisos.actions.includes(permissionKey);
+    },
             // Inicialización de la aplicación
     // Inicialización de la aplicación
             async init(repository, userProfile) { 
@@ -471,12 +513,22 @@ irAtras() {
     this.irModulo(previousState.mod, previousState.params, true);
 },
         async irModulo(mod, params = {}, isBackNavigation = false) {
-        // --- INICIO DE LA MEJORA: Limpiar la paginación al cambiar de módulo ---
+        // ===== INICIO DE VERIFICACIÓN DE PERMISOS DE ROL =====
+        if (!this.hasPermission(mod)) {
+            this.showToast('No tienes permiso para acceder a este módulo.', 'error');
+            console.warn(`Intento de acceso denegado al módulo '${mod}' por el rol '${this.currentUser.rol}'.`);
+            // Si el usuario no tiene permiso, lo enviamos al dashboard como página segura por defecto.
+            if (mod !== 'dashboard') { // Evitar un bucle infinito si el dashboard está denegado
+                this.irModulo('dashboard');
+            }
+            return;
+        }
+        // ===== FIN DE VERIFICACIÓN DE PERMISOS DE ROL =====
+
         const paginationContainer = document.getElementById('pagination-container');
         if (paginationContainer) {
             paginationContainer.innerHTML = '';
         }
-        // --- FIN DE LA MEJORA ---
 
         if (!this.licencia || !this.licencia.modulosActivos) {
             console.warn(`Intento de navegar al módulo '${mod}' antes de que la licencia esté cargada. Abortando.`);
@@ -484,23 +536,15 @@ irAtras() {
         }
 
         const mapaLicencias = {
-            'inventario': 'INVENTARIO_BASE',
-            'bancos': 'FINANZAS_AVANZADO',
-            'cierre-periodo': 'CONTABILIDAD_AVANZADO',
-            'activos-fijos': 'ACTIVOS_AVANZADOS',
-            'produccion': 'PRODUCCION',
+            'inventario': 'INVENTARIO_BASE', 'bancos': 'FINANZAS_AVANZADO', 'cierre-periodo': 'CONTABILIDAD_AVANZADO',
+            'activos-fijos': 'ACTIVOS_AVANZADOS', 'produccion': 'PRODUCCION',
         };
 
         const licenciaRequerida = mapaLicencias[mod];
-        
         if (licenciaRequerida && !this.licencia.modulosActivos.includes(licenciaRequerida)) {
             const elToShow = document.getElementById(mod);
             if (elToShow) {
-                elToShow.innerHTML = this.generarEstadoVacioHTML(
-                    'fa-lock', 'Módulo Bloqueado',
-                    `Esta funcionalidad no está incluida en tu paquete "${this.licencia.paquete}".`,
-                    'Volver al Dashboard', "ContaApp.irModulo('dashboard')"
-                );
+                elToShow.innerHTML = this.generarEstadoVacioHTML('fa-lock', 'Módulo Bloqueado', `Esta funcionalidad no está incluida en tu paquete "${this.licencia.paquete}".`, 'Volver al Dashboard', "ContaApp.irModulo('dashboard')");
                 elToShow.style.display = "block";
             }
             this.showToast(`El módulo '${mod}' requiere un paquete superior.`, 'error');
@@ -542,12 +586,34 @@ irAtras() {
             document.querySelectorAll('.conta-nav-link').forEach(el => el.classList.remove('active'));
             
             const elToShow = document.getElementById(mod);
-            if (elToShow) {
-                elToShow.style.display = "block";
-            }
+            if (elToShow) elToShow.style.display = "block";
             
             const navLink = document.getElementById("nav-" + mod);
             if (navLink) navLink.classList.add("active");
+
+            // ===== INICIO DE LÓGICA PARA OCULTAR ENLACES DEL MENÚ =====
+            document.querySelectorAll('nav .conta-nav-link').forEach(link => {
+                const linkMod = link.id.replace('nav-', '');
+                if (!this.hasPermission(linkMod)) {
+                    link.style.display = 'none';
+                } else {
+                    link.style.display = 'block';
+                }
+            });
+            // Ocultar los títulos de las secciones si todos sus hijos están ocultos
+            document.querySelectorAll('nav .text-xs.font-bold').forEach(title => {
+                let nextElement = title.nextElementSibling;
+                let allHidden = true;
+                while(nextElement && nextElement.classList.contains('conta-nav-link')) {
+                    if (nextElement.style.display !== 'none') {
+                        allHidden = false;
+                        break;
+                    }
+                    nextElement = nextElement.nextElementSibling;
+                }
+                title.style.display = allHidden ? 'none' : 'block';
+            });
+            // ===== FIN DE LÓGICA PARA OCULTAR ENLACES DEL MENÚ =====
 
             const moduleTitle = navLink ? navLink.innerText.trim() : mod.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
             
@@ -558,25 +624,17 @@ irAtras() {
             document.getElementById('page-actions-header').innerHTML = '';
             
             const moduleRenderers = {
-                'dashboard': this.renderDashboard,
-                'ventas': this.renderVentas,
-                'gastos': this.renderGastos,
-                'compras': this.renderCompras,
-                'cxc': (p) => p.clienteId ? this.renderCXCDetalleCliente(p.clienteId, p) : this.renderCXC(p),
+                'dashboard': this.renderDashboard, 'ventas': this.renderVentas, 'gastos': this.renderGastos,
+                'compras': this.renderCompras, 'cxc': (p) => p.clienteId ? this.renderCXCDetalleCliente(p.clienteId, p) : this.renderCXC(p),
                 'cxp': (p) => p.proveedorId ? this.renderCXPDetalleProveedor(p.proveedorId, p) : this.renderCXP(p),
-                'inventario': this.renderInventario,
-                'plan-de-cuentas': this.renderPlanDeCuentas,
-                'diario-general': this.renderDiarioGeneral,
-                'cierre-periodo': this.renderCierrePeriodo,
-                'bancos': this.renderBancosYTarjetas,
-                'reportes': this.renderReportes,
-                'activos-fijos': this.renderActivosFijos,
-                'produccion': this.renderProduccion,
-                'config': this.renderConfig
+                'inventario': this.renderInventario, 'plan-de-cuentas': this.renderPlanDeCuentas,
+                'diario-general': this.renderDiarioGeneral, 'cierre-periodo': this.renderCierrePeriodo,
+                'bancos': this.renderBancosYTarjetas, 'reportes': this.renderReportes, 'activos-fijos': this.renderActivosFijos,
+                'produccion': this.renderProduccion, 'config': this.renderConfig
             };
             
             if (moduleRenderers[mod]) {
-                await moduleRenderers[mod].call(this, params); // Espera a que el renderizado termine
+                await moduleRenderers[mod].call(this, params);
             }
             this.renderNotifications();
             if (params.action === 'new' && mod === 'ventas') {
@@ -806,21 +864,32 @@ irAtras() {
                     'quick-actions': { visible: true }
                 }
             },
-            dashboardLayout: 'grid',
-            pdfTemplate: 'clasica',
-            pdfColor: '#1877f2',
-            periodosContables: {}
+            dashboardLayout: 'grid', pdfTemplate: 'clasica', pdfColor: '#1877f2', periodosContables: {},
+            roles: {
+                administrador: {
+                    nombre: "Administrador",
+                    permisos: { modules: ['*'], actions: ['*'] }
+                },
+                contador: {
+                    nombre: "Contador",
+                    permisos: {
+                        modules: ['dashboard', 'ventas', 'cxc', 'gastos', 'compras', 'cxp', 'bancos', 'inventario', 'produccion', 'plan-de-cuentas', 'diario-general', 'cierre-periodo', 'activos-fijos', 'reportes'],
+                        actions: ['anular_transaccion']
+                    }
+                },
+                vendedor: {
+                    nombre: "Vendedor",
+                    permisos: {
+                        modules: ['dashboard', 'ventas', 'cxc', 'inventario'],
+                        actions: []
+                    }
+                }
+            }
         },
         licencia: {
             cliente: "Usuario Principal",
             paquete: "Profesional",
-            modulosActivos: [
-                "VENTAS", "GASTOS", "CXC", "CXP",
-                "PLAN_DE_CUENTAS", "DIARIO_GENERAL",
-                "CONFIGURACION", "INVENTARIO_BASE", "FINANZAS_AVANZADO",
-                "CONTABILIDAD_AVANZADO", "REPORTES_AVANZADOS", "ACTIVOS_AVANZADOS",
-                "PRODUCCION", "NOMINAS"
-            ]
+            modulosActivos: [ "VENTAS", "GASTOS", "CXC", "CXP", "PLAN_DE_CUENTAS", "DIARIO_GENERAL", "CONFIGURACION", "INVENTARIO_BASE", "FINANZAS_AVANZADO", "CONTABILIDAD_AVANZADO", "REPORTES_AVANZADOS", "ACTIVOS_AVANZADOS", "PRODUCCION", "NOMINAS" ]
         },
         idCounter: 1000,
         planDeCuentas: this.getPlanDeCuentasDefault(),
@@ -833,11 +902,8 @@ irAtras() {
         listasMateriales: [],
         ordenesProduccion: [],
         unidadesMedida: [
-            { id: 1, nombre: 'Unidad' },
-            { id: 2, nombre: 'Caja' },
-            { id: 3, nombre: 'Kg' },
-            { id: 4, nombre: 'Litro' },
-            { id: 5, nombre: 'Metro' }
+            { id: 1, nombre: 'Unidad' }, { id: 2, nombre: 'Caja' }, { id: 3, nombre: 'Kg' },
+            { id: 4, nombre: 'Litro' }, { id: 5, nombre: 'Metro' }
         ],
         bancoImportado: {}
     };
@@ -845,9 +911,9 @@ irAtras() {
     if (dataString) {
         const data = JSON.parse(dataString);
         this.empresa = { ...defaultData.empresa, ...data.empresa };
+        if (!this.empresa.roles) { this.empresa.roles = defaultData.empresa.roles; }
         this.licencia = data.licencia || defaultData.licencia;
         this.idCounter = data.idCounter || defaultData.idCounter;
-        
         this.planDeCuentas = data.planDeCuentas || defaultData.planDeCuentas;
         this.contactos = data.contactos || defaultData.contactos;
         this.productos = data.productos || defaultData.productos;
@@ -855,15 +921,19 @@ irAtras() {
         this.activosFijos = data.activosFijos || [];
         this.listasMateriales = data.listasMateriales || [];
         this.ordenesProduccion = data.ordenesProduccion || [];
-        this.unidadesMedida = data.unidadesMedida || defaultData.unidadesMedida;
         this.bancoImportado = data.bancoImportado || defaultData.bancoImportado;
         
-        // ===== CAMBIO CLAVE: IGNORAR DATOS GRANDES EN LA CARGA INICIAL =====
-        // Estos arrays comenzarán vacíos y se llenarán bajo demanda por cada módulo.
+        // ===== INICIO DE LA CORRECCIÓN CLAVE =====
+        // Se verifica si las unidades de medida existen y tienen contenido. Si no, se usan las por defecto.
+        // Esto corrige el problema para workspaces antiguos que no tenían esta propiedad.
+        this.unidadesMedida = (data.unidadesMedida && data.unidadesMedida.length > 0) 
+            ? data.unidadesMedida 
+            : defaultData.unidadesMedida;
+        // ===== FIN DE LA CORRECCIÓN CLAVE =====
+
         this.asientos = [];
         this.transacciones = [];
-        // ================================================================
-
+        
         this.verificarYActualizarPlanDeCuentas();
 
         if (!this.empresa.presupuestos) this.empresa.presupuestos = {};
