@@ -49,97 +49,98 @@ getEstadoDeCuenta(contactoId, tipoContacto) {
 },
     
     renderEstadoDeCuentaDetalle(contactoId, tipoContacto) {
-    const contacto = this.findById(this.contactos, contactoId);
-    const esCliente = tipoContacto === 'cliente';
-    
-    document.getElementById('page-title-header').innerText = `Estado de Cuenta: ${contacto.nombre}`;
-    
-    const accionesHTML = esCliente 
-        ? `<button class="conta-btn conta-btn-success" onclick="ContaApp.procesarSeleccionDePago('cliente')"><i class="fa-solid fa-hand-holding-dollar me-2"></i>Registrar Cobro</button>`
-        : `<button class="conta-btn conta-btn-success" onclick="ContaApp.procesarSeleccionDePago('proveedor')"><i class="fa-solid fa-money-bill-wave me-2"></i>Registrar Pago</button>`;
-    
-    document.getElementById('page-actions-header').innerHTML = `
-        <div class="flex gap-2">
-            <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarReporteEstilizadoPDF('Estado de Cuenta - ${contacto.nombre}', 'estado-de-cuenta-area')"><i class="fa-solid fa-print me-2"></i>Generar PDF</button>
-            ${accionesHTML}
-        </div>`;
+        const contacto = this.findById(this.contactos, contactoId);
+        const esCliente = tipoContacto === 'cliente';
+        
+        document.getElementById('page-title-header').innerText = `Estado de Cuenta: ${contacto.nombre}`;
+        
+        const accionesHTML = esCliente 
+            ? `<button class="conta-btn conta-btn-success" onclick="ContaApp.procesarSeleccionDePago('cliente')"><i class="fa-solid fa-hand-holding-dollar me-2"></i>Registrar Cobro</button>`
+            : `<button class="conta-btn conta-btn-success" onclick="ContaApp.procesarSeleccionDePago('proveedor')"><i class="fa-solid fa-money-bill-wave me-2"></i>Registrar Pago</button>`;
+        
+        document.getElementById('page-actions-header').innerHTML = `
+            <div class="flex gap-2">
+                <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarReporteEstilizadoPDF('Estado de Cuenta - ${contacto.nombre}', 'estado-de-cuenta-area')"><i class="fa-solid fa-print me-2"></i>Generar PDF</button>
+                ${accionesHTML}
+            </div>`;
 
-    const estadoDeCuenta = this.getEstadoDeCuenta(contactoId, tipoContacto);
-    
-    const transaccionesPendientes = this.transacciones.filter(t => 
-        t.contactoId === contactoId &&
-        (t.estado === 'Pendiente' || t.estado === 'Parcial')
-    );
-    const saldoFinal = transaccionesPendientes.reduce((sum, t) => sum + (t.total - (t.montoPagado || 0)), 0);
-
-    const totalFacturadoOComprado = estadoDeCuenta.filter(m => esCliente ? m.debito > 0 : m.credito > 0).reduce((sum, m) => sum + (esCliente ? m.debito : m.credito), 0);
-    const totalCobradoOPagado = estadoDeCuenta.filter(m => esCliente ? m.credito > 0 : m.debito > 0).reduce((sum, m) => sum + (esCliente ? m.credito : m.debito), 0);
-    
-    let kpiHTML = `
-        <div class="flex flex-wrap justify-center gap-4 mb-6">
-            <div class="conta-card kpi-dashboard-card w-64 text-center">
-                <div class="text-xs text-[var(--color-text-secondary)]">TOTAL ${esCliente ? 'FACTURADO' : 'COMPRADO'}</div>
-                <p class="font-bold text-xl mt-1 conta-text-primary">${this.formatCurrency(totalFacturadoOComprado)}</p>
-            </div>
-            <div class="conta-card kpi-dashboard-card w-64 text-center">
-                <div class="text-xs text-[var(--color-text-secondary)]">TOTAL ${esCliente ? 'COBRADO' : 'PAGADO'}</div>
-                <p class="font-bold text-xl mt-1 conta-text-success">${this.formatCurrency(totalCobradoOPagado)}</p>
-            </div>
-            <div class="conta-card kpi-dashboard-card w-64 text-center">
-                <div class="text-xs text-[var(--color-text-secondary)]">SALDO ACTUAL</div>
-                <p class="font-bold text-xl mt-1 ${saldoFinal > 0.01 ? 'conta-text-danger' : 'conta-text-success'}">${this.formatCurrency(saldoFinal)}</p>
-            </div>
-        </div>
-    `;
-    
-    // --- INICIO DE LA MEJORA: Mostrar TODAS las facturas con su estado ---
-    let tablaHTML = `<div class="conta-card overflow-auto" id="estado-de-cuenta-area">
-        <h3 class="conta-subtitle !border-0 text-center !mb-4">Movimientos de Cuenta</h3>
-        <table class="min-w-full text-sm conta-table-zebra">
-            <thead><tr>
-                <th class="conta-table-th">Fecha</th>
-                <th class="conta-table-th">Detalle</th>
-                <th class="conta-table-th">Estado</th>
-                <th class="conta-table-th text-right">Total</th>
-                <th class="conta-table-th text-right">Pagado</th>
-                <th class="conta-table-th text-right">Saldo</th>
-            </tr></thead>
-            <tbody>`;
-    
-    // Filtramos solo las transacciones que son facturas de venta o compra/gasto
-    const facturasDelContacto = this.transacciones.filter(t => 
-        t.contactoId === contactoId && 
-        (t.tipo === 'venta' || t.tipo === 'gasto' || t.tipo === 'compra_inventario')
-    ).sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
-
-    if (facturasDelContacto.length === 0) {
-        tablaHTML += `<tr><td colspan="6" class="text-center p-8 text-[var(--color-text-secondary)]">Este contacto aún no tiene facturas registradas.</td></tr>`;
-    } else {
-        facturasDelContacto.forEach(factura => {
-            const saldo = factura.total - (factura.montoPagado || 0);
-            const estado = factura.estado || 'Pendiente';
-            let estadoClass = estado === 'Pagado' ? 'tag-success' : (estado === 'Parcial' ? 'tag-accent' : 'tag-warning');
-            if (factura.estado === 'Anulada') estadoClass = 'tag-anulada';
+        // ===== INICIO DE LA LÓGICA DE KPIs MEJORADA =====
+        const transaccionesContacto = this.transacciones.filter(t => t.contactoId === contactoId && t.estado !== 'Anulada');
+        let kpiHTML = '';
+        
+        if (esCliente) {
+            const ventas = transaccionesContacto.filter(t => t.tipo === 'venta');
+            const totalFacturado = ventas.reduce((sum, v) => sum + v.total, 0);
+            const totalCobrado = ventas.reduce((sum, v) => sum + (v.montoPagado || 0), 0);
+            const saldoPendiente = totalFacturado - totalCobrado;
+            const ticketPromedio = ventas.length > 0 ? totalFacturado / ventas.length : 0;
             
-            const onclickAction = esCliente ? `ContaApp.abrirModalHistorialFactura(${factura.id})` : `ContaApp.abrirModalHistorialGasto(${factura.id})`;
+            kpiHTML = `
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <div class="conta-card kpi-dashboard-card text-center"><span class="text-xs text-[var(--color-text-secondary)]">Total Facturado</span><p class="font-bold text-xl conta-text-primary mt-1">${this.formatCurrency(totalFacturado)}</p></div>
+                    <div class="conta-card kpi-dashboard-card text-center"><span class="text-xs text-[var(--color-text-secondary)]">Total Cobrado</span><p class="font-bold text-xl conta-text-success mt-1">${this.formatCurrency(totalCobrado)}</p></div>
+                    <div class="conta-card kpi-dashboard-card text-center"><span class="text-xs text-[var(--color-text-secondary)]">Saldo Pendiente</span><p class="font-bold text-xl conta-text-danger mt-1">${this.formatCurrency(saldoPendiente)}</p></div>
+                    <div class="conta-card kpi-dashboard-card text-center"><span class="text-xs text-[var(--color-text-secondary)]">Ticket Promedio</span><p class="font-bold text-xl conta-text-accent mt-1">${this.formatCurrency(ticketPromedio)}</p></div>
+                </div>`;
+        } else { // esProveedor
+            const compras = transaccionesContacto.filter(t => t.tipo === 'gasto' || t.tipo === 'compra_inventario');
+            const totalComprado = compras.reduce((sum, c) => sum + c.total, 0);
+            const totalPagado = compras.reduce((sum, c) => sum + (c.montoPagado || 0), 0);
+            const saldoPorPagar = totalComprado - totalPagado;
+            
+            kpiHTML = `
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+                    <div class="conta-card kpi-dashboard-card text-center"><span class="text-xs text-[var(--color-text-secondary)]">Total Comprado</span><p class="font-bold text-xl conta-text-primary mt-1">${this.formatCurrency(totalComprado)}</p></div>
+                    <div class="conta-card kpi-dashboard-card text-center"><span class="text-xs text-[var(--color-text-secondary)]">Total Pagado</span><p class="font-bold text-xl conta-text-success mt-1">${this.formatCurrency(totalPagado)}</p></div>
+                    <div class="conta-card kpi-dashboard-card text-center"><span class="text-xs text-[var(--color-text-secondary)]">Saldo por Pagar</span><p class="font-bold text-xl conta-text-danger mt-1">${this.formatCurrency(saldoPorPagar)}</p></div>
+                </div>`;
+        }
+        // ===== FIN DE LA LÓGICA DE KPIs MEJORADA =====
 
-            tablaHTML += `<tr class="cursor-pointer hover:bg-[var(--color-bg-accent)]" onclick="${onclickAction}">
-                <td class="conta-table-td">${factura.fecha}</td>
-                <td class="conta-table-td">${factura.descripcion || `Factura #${factura.numeroFactura || factura.id}`}</td>
-                <td class="conta-table-td"><span class="tag ${estadoClass}">${estado}</span></td>
-                <td class="conta-table-td text-right font-mono">${this.formatCurrency(factura.total)}</td>
-                <td class="conta-table-td text-right font-mono">${this.formatCurrency(factura.montoPagado)}</td>
-                <td class="conta-table-td text-right font-mono font-bold">${this.formatCurrency(saldo)}</td>
-            </tr>`;
-        });
-    }
-    
-    tablaHTML += `</tbody></table></div>`;
-    // --- FIN DE LA MEJORA ---
-    
-    const containerId = esCliente ? 'cxc-contenido' : 'cxp-contenido';
-    document.getElementById(containerId).innerHTML = kpiHTML + tablaHTML;
-},
+        let tablaHTML = `<div class="conta-card overflow-auto" id="estado-de-cuenta-area">
+            <h3 class="conta-subtitle !border-0 text-center !mb-4">Movimientos de Cuenta</h3>
+            <table class="min-w-full text-sm conta-table-zebra">
+                <thead><tr>
+                    <th class="conta-table-th">Fecha</th>
+                    <th class="conta-table-th">Detalle</th>
+                    <th class="conta-table-th">Estado</th>
+                    <th class="conta-table-th text-right">Total</th>
+                    <th class="conta-table-th text-right">Pagado</th>
+                    <th class="conta-table-th text-right">Saldo</th>
+                </tr></thead>
+                <tbody>`;
+        
+        const facturasDelContacto = transaccionesContacto.filter(t => 
+            (esCliente && t.tipo === 'venta') || (!esCliente && (t.tipo === 'gasto' || t.tipo === 'compra_inventario'))
+        ).sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+
+        if (facturasDelContacto.length === 0) {
+            tablaHTML += `<tr><td colspan="6" class="text-center p-8 text-[var(--color-text-secondary)]">Este contacto aún no tiene facturas registradas.</td></tr>`;
+        } else {
+            facturasDelContacto.forEach(factura => {
+                const saldo = factura.total - (factura.montoPagado || 0);
+                const estado = factura.estado || 'Pendiente';
+                let estadoClass = estado === 'Pagado' ? 'tag-success' : (estado === 'Parcial' ? 'tag-accent' : 'tag-warning');
+                if (factura.estado === 'Anulada') estadoClass = 'tag-anulada';
+                
+                const onclickAction = esCliente ? `ContaApp.abrirModalHistorialFactura(${factura.id})` : `ContaApp.abrirModalHistorialGasto(${factura.id})`;
+
+                tablaHTML += `<tr class="cursor-pointer hover:bg-[var(--color-bg-accent)]" onclick="${onclickAction}">
+                    <td class="conta-table-td">${factura.fecha}</td>
+                    <td class="conta-table-td">${factura.descripcion || `Factura #${factura.numeroFactura || factura.id}`}</td>
+                    <td class="conta-table-td"><span class="tag ${estadoClass}">${estado}</span></td>
+                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(factura.total)}</td>
+                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(factura.montoPagado || 0)}</td>
+                    <td class="conta-table-td text-right font-mono font-bold">${this.formatCurrency(saldo)}</td>
+                </tr>`;
+            });
+        }
+        
+        tablaHTML += `</tbody></table></div>`;
+        
+        const containerId = esCliente ? 'cxc-contenido' : 'cxp-contenido';
+        document.getElementById(containerId).innerHTML = kpiHTML + tablaHTML;
+    },
 
   /**
      * Función genérica para calcular datos de antigüedad de saldos.

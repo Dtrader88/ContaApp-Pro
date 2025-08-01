@@ -578,7 +578,7 @@ irAtras() {
             if (moduleRenderers[mod]) {
                 await moduleRenderers[mod].call(this, params); // Espera a que el renderizado termine
             }
-
+            this.renderNotifications();
             if (params.action === 'new' && mod === 'ventas') {
                 setTimeout(() => this.abrirModalVenta(params.clienteId, params.anticipoId), 100);
             }
@@ -844,14 +844,11 @@ irAtras() {
 
     if (dataString) {
         const data = JSON.parse(dataString);
-        // Carga los datos guardados, usando los datos por defecto como base
         this.empresa = { ...defaultData.empresa, ...data.empresa };
         this.licencia = data.licencia || defaultData.licencia;
         this.idCounter = data.idCounter || defaultData.idCounter;
         
         this.planDeCuentas = data.planDeCuentas || defaultData.planDeCuentas;
-        this.asientos = data.asientos || defaultData.asientos;
-        this.transacciones = data.transacciones || defaultData.transacciones;
         this.contactos = data.contactos || defaultData.contactos;
         this.productos = data.productos || defaultData.productos;
         this.recurrentes = data.recurrentes || defaultData.recurrentes;
@@ -860,11 +857,13 @@ irAtras() {
         this.ordenesProduccion = data.ordenesProduccion || [];
         this.unidadesMedida = data.unidadesMedida || defaultData.unidadesMedida;
         this.bancoImportado = data.bancoImportado || defaultData.bancoImportado;
+        
+        // ===== CAMBIO CLAVE: IGNORAR DATOS GRANDES EN LA CARGA INICIAL =====
+        // Estos arrays comenzarán vacíos y se llenarán bajo demanda por cada módulo.
+        this.asientos = [];
+        this.transacciones = [];
+        // ================================================================
 
-        // --- INICIO DE LA CORRECCIÓN ---
-        // Se elimina la lógica de seguridad redundante. La fusión anterior ya se encarga de esto.
-        // Si `data.empresa` no tiene `dashboardWidgets`, la propiedad vendrá de `defaultData.empresa`.
-        // Si `data.empresa` tiene `dashboardWidgets: []`, ese será el valor final, que es lo correcto.
         this.verificarYActualizarPlanDeCuentas();
 
         if (!this.empresa.presupuestos) this.empresa.presupuestos = {};
@@ -873,7 +872,7 @@ irAtras() {
         }
         if (!this.empresa.dashboardLayout) this.empresa.dashboardLayout = defaultData.empresa.dashboardLayout;
         if (!this.empresa.periodosContables) this.empresa.periodosContables = {};
-        // --- FIN DE LA CORRECCIÓN ---
+        
     } else {
         Object.assign(this, defaultData);
     }
@@ -1269,13 +1268,17 @@ getPeriodoContableActual() {
         if (!input) return;
 
         input.addEventListener('input', () => this.performGlobalSearch());
-        input.addEventListener('focus', () => this.performGlobalSearch()); // Mostrar resultados si ya hay texto
+        input.addEventListener('focus', () => this.performGlobalSearch());
         
-        // Cierra los resultados si se hace clic fuera
         document.addEventListener('click', (e) => {
-            const searchContainer = input.parentElement;
+            const searchContainer = document.getElementById('global-search-input').parentElement;
+            const notificationContainer = document.getElementById('notification-bell-container');
+
             if (!searchContainer.contains(e.target)) {
                 this.hideGlobalSearchResults();
+            }
+            if (!notificationContainer.contains(e.target)) {
+                document.getElementById('notification-dropdown').classList.add('hidden');
             }
         });
     },
@@ -1527,6 +1530,7 @@ getPeriodoContableActual() {
                 return cell;
             });
             csvRows.push(values.join(','));
+            
         });
 
         const csvString = csvRows.join('\n');
@@ -1566,13 +1570,10 @@ getPeriodoContableActual() {
         const container = document.getElementById('pagination-container');
         if (!container) return;
 
-        // --- INICIO DE LA CORRECCIÓN ---
-        // La barra se muestra siempre que haya al menos 1 item, sin importar el número de páginas.
         if (totalItems === 0) {
-            container.innerHTML = ''; // Limpia el contenedor si no hay items.
+            container.innerHTML = ''; 
             return;
         }
-        // --- FIN DE LA CORRECCIÓN ---
 
         const { currentPage, perPage } = this.getPaginationState(module);
         const totalPages = Math.ceil(totalItems / perPage);
@@ -1592,7 +1593,6 @@ getPeriodoContableActual() {
                 pageButtonsHTML += `<button class="pagination-btn ${isActive ? 'active' : ''}" onclick="ContaApp.goToPage('${module}', ${i})">${i}</button>`;
             }
         } else {
-            // Si solo hay una página, muestra el número 1 como activo y deshabilitado.
             pageButtonsHTML += `<button class="pagination-btn active" disabled>1</button>`;
         }
 
@@ -1609,4 +1609,146 @@ getPeriodoContableActual() {
             </div>
         `;
     },
+
+    // ===== PEGA EL SIGUIENTE BLOQUE DE CÓDIGO AQUÍ =====
+    generateNotifications() {
+        const notifications = [];
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+
+        // Notificaciones de Cuentas por Cobrar
+        this.transacciones.filter(t => t.tipo === 'venta' && (t.estado === 'Pendiente' || t.estado === 'Parcial')).forEach(venta => {
+            if (!venta.fechaVencimiento) return;
+            const vencimiento = new Date(venta.fechaVencimiento + 'T00:00:00');
+            const diffTime = vencimiento.getTime() - hoy.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const cliente = this.findById(this.contactos, venta.contactoId);
+            const saldo = venta.total - (venta.montoPagado || 0);
+
+            if (diffDays < 0) {
+                notifications.push({
+                    id: `venta-vencida-${venta.id}`, type: 'vencimiento', icon: 'fa-file-invoice-dollar', colorClass: 'conta-text-danger',
+                    title: `Factura #${venta.numeroFactura} VENCIDA`,
+                    subtitle: `${cliente.nombre} - Saldo: ${this.formatCurrency(saldo)}`,
+                    onclick: `ContaApp.abrirVistaPreviaFactura(${venta.id})`
+                });
+            } else if (diffDays <= 3) {
+                 notifications.push({
+                    id: `venta-pronta-${venta.id}`, type: 'vencimiento', icon: 'fa-file-invoice-dollar', colorClass: 'conta-text-accent',
+                    title: `Factura #${venta.numeroFactura} vence ${diffDays === 0 ? 'HOY' : `en ${diffDays} días`}`,
+                    subtitle: `${cliente.nombre} - Saldo: ${this.formatCurrency(saldo)}`,
+                    onclick: `ContaApp.abrirVistaPreviaFactura(${venta.id})`
+                });
+            }
+        });
+        
+        // Notificaciones de Cuentas por Pagar (¡NUEVO!)
+        this.transacciones.filter(t => t.tipo === 'gasto' && (t.estado === 'Pendiente' || t.estado === 'Parcial')).forEach(gasto => {
+            if (!gasto.fechaVencimiento) return;
+            const vencimiento = new Date(gasto.fechaVencimiento + 'T00:00:00');
+            const diffTime = vencimiento.getTime() - hoy.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const proveedor = this.findById(this.contactos, gasto.contactoId);
+            const saldo = gasto.total - (gasto.montoPagado || 0);
+
+            if (diffDays < 0) {
+                notifications.push({
+                    id: `gasto-vencido-${gasto.id}`, type: 'vencimiento_pago', icon: 'fa-file-invoice', colorClass: 'conta-text-danger',
+                    title: `Gasto #${gasto.id} VENCIDO`,
+                    subtitle: `${proveedor.nombre} - Saldo: ${this.formatCurrency(saldo)}`,
+                    onclick: `ContaApp.abrirModalHistorialGasto(${gasto.id})`
+                });
+            } else if (diffDays <= 3) {
+                 notifications.push({
+                    id: `gasto-pronto-${gasto.id}`, type: 'vencimiento_pago', icon: 'fa-file-invoice', colorClass: 'conta-text-accent',
+                    title: `Gasto #${gasto.id} vence ${diffDays === 0 ? 'HOY' : `en ${diffDays} días`}`,
+                    subtitle: `${proveedor.nombre} - Saldo: ${this.formatCurrency(saldo)}`,
+                    onclick: `ContaApp.abrirModalHistorialGasto(${gasto.id})`
+                });
+            }
+        });
+
+        // Notificaciones de Stock Bajo
+        this.productos.filter(p => p.tipo === 'producto' && p.stockMinimo > 0 && p.stock <= p.stockMinimo).forEach(producto => {
+            notifications.push({
+                id: `stock-${producto.id}`, type: 'stock_bajo', icon: 'fa-box-open', colorClass: 'conta-text-danger',
+                title: `Stock bajo para: ${producto.nombre}`,
+                subtitle: `Stock actual: ${producto.stock} | Mínimo: ${producto.stockMinimo}`,
+                onclick: `ContaApp.irModulo('inventario', { productoId: ${producto.id} })`
+            });
+        });
+
+        return notifications;
+    },
+
+    renderNotifications() {
+        const notifications = this.generateNotifications();
+        const badge = document.getElementById('notification-badge');
+        const dropdown = document.getElementById('notification-dropdown');
+
+        if (notifications.length > 0) {
+            badge.textContent = notifications.length;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+
+        let dropdownHTML = '<div class="notification-header">Notificaciones</div>';
+        if (notifications.length === 0) {
+            dropdownHTML += '<p class="text-center text-sm text-[var(--color-text-secondary)] p-4">No tienes notificaciones nuevas.</p>';
+        } else {
+            notifications.forEach(n => {
+                dropdownHTML += `
+                    <div class="notification-item" onclick="${n.onclick}; ContaApp.toggleNotificationDropdown();">
+                        <div class="notification-icon ${n.colorClass}"><i class="fa-solid ${n.icon} fa-lg"></i></div>
+                        <div class="notification-content">
+                            <div class="title">${n.title}</div>
+                            <div class="subtitle">${n.subtitle}</div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        dropdown.innerHTML = dropdownHTML;
+    },
+
+    toggleNotificationDropdown() {
+        document.getElementById('notification-dropdown').classList.toggle('hidden');
+    },
+aplicarFiltrosAvanzados(modulo) {
+        const filtrosBasicos = {
+            search: document.getElementById(`${modulo}-search`)?.value || '',
+            startDate: document.getElementById(`${modulo}-start-date`)?.value || '',
+            endDate: document.getElementById(`${modulo}-end-date`)?.value || '',
+        };
+
+        const filtrosAvanzados = {
+            clienteId: document.getElementById('filtro-avanzado-cliente')?.value || '',
+            estado: document.getElementById('filtro-avanzado-estado')?.value || 'Todas',
+            itemId: document.getElementById('filtro-avanzado-item')?.value || '',
+            minTotal: document.getElementById('filtro-avanzado-min-total')?.value || '',
+            maxTotal: document.getElementById('filtro-avanzado-max-total')?.value || '',
+        };
+
+        const params = { ...filtrosBasicos, ...filtrosAvanzados };
+        this.moduleFilters[modulo] = params; // Guardar todos los filtros
+        
+        this.closeModal();
+        this.irModulo(modulo, params);
+    },
+
+    limpiarFiltrosAvanzados(modulo) {
+        // Limpiamos los filtros guardados
+        this.moduleFilters[modulo] = {};
+        
+        // Cerramos el modal
+        this.closeModal();
+        
+        // Recargamos el módulo sin ningún filtro
+        this.irModulo(modulo);
+        this.showToast('Filtros eliminados.', 'info');
+    },
 };
+
+
+

@@ -378,13 +378,27 @@ Object.assign(ContaApp, {
             if (lineas.length === 0) { throw new Error('Debes agregar al menos una línea de gasto válida.'); }
             
             if (esRecurrente) {
-                // Las plantillas recurrentes no son transacciones críticas, pueden usar saveAll()
                 const nuevaPlantilla = { id: this.idCounter++, tipo: 'gasto', contactoId, descripcion, total, items: lineas, frecuencia: 'mensual', ultimoGenerado: null };
                 this.recurrentes.push(nuevaPlantilla);
                 this.saveAll();
             } else {
+                // ===== INICIO DE CÓDIGO MEJORADO =====
+                let fechaVencimiento = null;
+                if (pagoTipo === 'credito') {
+                    // Por defecto, 30 días de crédito para los gastos.
+                    const fechaGasto = new Date(fecha + 'T00:00:00');
+                    fechaGasto.setDate(fechaGasto.getDate() + 30);
+                    fechaVencimiento = fechaGasto.toISOString().slice(0, 10);
+                }
+
                 const estado = pagoTipo === 'credito' ? 'Pendiente' : 'Pagado';
-                const transaccion = { id: this.idCounter++, tipo: 'gasto', fecha, contactoId, descripcion, total, estado, items: lineas, montoPagado: 0, comprobanteDataUrl };
+                const transaccion = { 
+                    id: this.idCounter++, tipo: 'gasto', fecha, fechaVencimiento, 
+                    contactoId, descripcion, total, estado, items: lineas, 
+                    montoPagado: 0, comprobanteDataUrl 
+                };
+                // ===== FIN DE CÓDIGO MEJORADO =====
+
                 this.transacciones.push(transaccion);
 
                 const cuentaCxpId = 210;
@@ -411,16 +425,12 @@ Object.assign(ContaApp, {
                 const asiento = this.crearAsiento(fecha, descripcion, movimientos, transaccion.id);
 
                 if (asiento) {
-                    // --- INICIO DE LA REFACTORIZACIÓN ---
-                    // En lugar de saveAll(), usamos el método específico.
                     await this.repository.actualizarMultiplesDatos({
                         transacciones: this.transacciones,
                         asientos: this.asientos,
                         idCounter: this.idCounter
                     });
-                    // --- FIN DE LA REFACTORIZACIÓN ---
                 } else {
-                    // Si el asiento no se pudo crear, lanzamos un error para detener la operación.
                     throw new Error("No se pudo generar el asiento contable para el gasto.");
                 }
             }

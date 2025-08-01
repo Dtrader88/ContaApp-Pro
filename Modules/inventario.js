@@ -474,13 +474,18 @@ Object.assign(ContaApp, {
             if (id) {
                 const productoOriginal = this.findById(this.productos, id);
                 data.stock = productoOriginal.stock; // El stock no se modifica al editar
-                const productoActualizado = { ...productoOriginal, ...data };
-                
-                await this.repository.actualizarProducto(productoActualizado);
                 Object.assign(productoOriginal, data);
+                
+                await this.repository.actualizarMultiplesDatos({ productos: this.productos });
 
             } else {
                 const nuevoProducto = { id: this.idCounter++, ...data };
+                this.productos.push(nuevoProducto);
+
+                const datosParaGuardar = {
+                    productos: this.productos,
+                    idCounter: this.idCounter
+                };
                 
                 if (nuevoProducto.stock > 0 && nuevoProducto.costo > 0) {
                     const valorInventario = nuevoProducto.stock * nuevoProducto.costo;
@@ -491,20 +496,11 @@ Object.assign(ContaApp, {
                             { cuentaId: 330, debe: 0, haber: valorInventario }
                         ]
                     );
-                    
-                    // Operación compleja: guardar producto y asiento juntos
-                    this.productos.push(nuevoProducto);
-                    await this.repository.actualizarMultiplesDatos({
-                        productos: this.productos,
-                        asientos: this.asientos,
-                        idCounter: this.idCounter
-                    });
-
-                } else {
-                    // Operación simple: solo guardar el nuevo producto
-                    await this.repository.guardarProducto(nuevoProducto);
-                    this.productos.push(nuevoProducto);
+                    // Si se crea un asiento, también debemos persistir el array de asientos.
+                    datosParaGuardar.asientos = this.asientos;
                 }
+                
+                await this.repository.actualizarMultiplesDatos(datosParaGuardar);
             }
 
             this.closeModal();
@@ -514,7 +510,6 @@ Object.assign(ContaApp, {
         } catch (error) {
             console.error("Error al guardar producto:", error);
             this.showToast(`Error al guardar: ${error.message}`, 'error');
-            // NOTA: Si falla, el estado local no se ha modificado o se recargará, manteniendo la consistencia.
         }
     },
     abrirModalAjusteInventario(productoId) {

@@ -1,5 +1,17 @@
 Object.assign(ContaApp, {
     async renderDashboard() {
+        // ===== INICIO DE LA CORRECCIÓN CLAVE =====
+        // Si los arrays de transacciones y asientos están vacíos, significa que es la primera vez que
+        // visitamos un módulo que los necesita. Los cargamos una sola vez.
+        if (this.transacciones.length === 0 && this.asientos.length === 0) {
+            const fullData = await this.repository.getFullData();
+            if (fullData) {
+                this.transacciones = fullData.transacciones || [];
+                this.asientos = fullData.asientos || [];
+            }
+        }
+        // ===== FIN DE LA CORRECCIÓN CLAVE =====
+
         if (!this.empresa.dashboardWidgets) {
             this.empresa.dashboardWidgets = ['ingresos', 'gastos', 'resultadoNeto', 'bancos'];
         }
@@ -33,7 +45,7 @@ Object.assign(ContaApp, {
             this.empresa.quickActionsOrder = this.empresa.quickActionsOrder.filter(key => validActionKeys.includes(key));
         }
 
-        // ===== INICIO DE LA CORRECCIÓN PROFUNDA =====
+        // Esta sección ahora funcionará porque this.asientos ya está poblado.
         const hoy = new Date();
         const finPeriodoActual = hoy.toISOString().slice(0, 10);
         const inicioPeriodoActual = new Date(new Date().setDate(hoy.getDate() - 30)).toISOString().slice(0, 10);
@@ -109,7 +121,6 @@ Object.assign(ContaApp, {
                         </div>
                     </a>`;
         }).join('');
-        // ===== FIN DE LA CORRECCIÓN PROFUNDA =====
         
         const timeRangeSelectorHTML = (chartId, timeRange) => {
             const options = { currentMonth: 'Este Mes', last3months: 'Últ. 3 Meses', last6months: 'Últ. 6 Meses', yearToDate: 'Año Actual' };

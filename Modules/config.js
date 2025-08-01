@@ -396,32 +396,25 @@ renderConfig_Licencia() {
 
         try {
             if (id) {
-                // --- INICIO DE LA REFACTORIZACIÓN (EDITAR) ---
-                // 1. Preparamos el objeto actualizado sin modificar aún el estado local.
+                // Editar: Actualizamos el objeto en el array local primero
                 const contactoOriginal = this.findById(this.contactos, id);
-                const contactoActualizado = { ...contactoOriginal, ...data };
-
-                // 2. Intentamos guardar en el repositorio PRIMERO.
-                await this.repository.actualizarContacto(contactoActualizado);
-                
-                // 3. SOLO SI tiene éxito, actualizamos el estado local.
                 Object.assign(contactoOriginal, data);
-                // --- FIN DE LA REFACTORIZACIÓN (EDITAR) ---
+                
+                // Persistimos solo el array de contactos actualizado
+                await this.repository.actualizarMultiplesDatos({ contactos: this.contactos });
 
             } else {
-                // --- INICIO DE LA REFACTORIZACIÓN (CREAR) ---
-                // 1. Preparamos el nuevo objeto.
+                // Crear: Añadimos el nuevo objeto al array local
                 const nuevoContacto = { id: this.idCounter++, ...data };
-                
-                // 2. Intentamos guardar en el repositorio PRIMERO.
-                await this.repository.guardarContacto(nuevoContacto);
-
-                // 3. SOLO SI tiene éxito, actualizamos el estado local.
                 this.contactos.push(nuevoContacto);
-                // --- FIN DE LA REFACTORIZACIÓN (CREAR) ---
+                
+                // Persistimos el array y el contador actualizado
+                await this.repository.actualizarMultiplesDatos({ 
+                    contactos: this.contactos,
+                    idCounter: this.idCounter
+                });
             }
 
-            // El resto del flujo (UI) se mantiene igual y solo se ejecuta si todo fue bien.
             this.closeModal();
             this.irModulo('config', { submodulo: 'contactos' }); 
             this.showToast(`Contacto ${id ? 'actualizado' : 'creado'} con éxito.`, 'success');
@@ -429,8 +422,8 @@ renderConfig_Licencia() {
         } catch (error) {
             console.error("Error al guardar contacto:", error);
             this.showToast(`Error al guardar: ${error.message}`, 'error');
-            // IMPORTANTE: Si el guardado falla, el estado local no se ha modificado,
-            // por lo que la UI se mantiene consistente con la base de datos.
+            // Si hay un error, lo ideal sería recargar los datos para asegurar consistencia.
+            // Por ahora, el estado local podría quedar desincronizado en caso de fallo.
         }
     },
             eliminarContacto(id) {
@@ -443,11 +436,14 @@ renderConfig_Licencia() {
 
         this.showConfirm('¿Seguro que deseas eliminar este contacto? Esta acción no se puede deshacer.', async () => {
             try {
-                // Primero, eliminamos del repositorio
-                await this.repository.eliminarContacto(id);
+                // Primero, preparamos el nuevo estado local
+                const contactosActualizados = this.contactos.filter(c => c.id !== id);
                 
-                // Si tiene éxito, actualizamos el estado local
-                this.contactos = this.contactos.filter(c => c.id !== id);
+                // Luego, intentamos persistir el cambio en el repositorio
+                await this.repository.actualizarMultiplesDatos({ contactos: contactosActualizados });
+                
+                // Si tiene éxito, actualizamos el estado en memoria de la aplicación
+                this.contactos = contactosActualizados;
                 
                 this.irModulo('config', { submodulo: 'contactos' });
                 this.showToast('Contacto eliminado con éxito.', 'success');
