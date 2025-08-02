@@ -423,77 +423,118 @@ const ROLES = {
 
         document.getElementById('apertura-resumen-container').innerHTML = html;
     },
-        guardarAperturaCompleta() {
-    console.log("Iniciando guardado de apertura...");
+        async guardarAperturaCompleta() {
+    console.log("Iniciando guardado de apertura completo...");
     try {
         const { fechaApertura, bancos, inventario, cxc, cxp, tarjetas, anticipos } = this.aperturaData;
-        
+
+        // --- SECCIÓN DE EMPRESA Y DATOS BÁSICOS ---
+        this.empresa.nombre = this.aperturaData.empresa.nombre;
+
         // --- SECCIÓN DE BANCOS ---
-        try {
-            console.log("Procesando Bancos...", bancos);
-            const cuentaBancoPadre = this.planDeCuentas.find(c => c.id === 110);
-            if (!cuentaBancoPadre) throw new Error("Cuenta padre de Bancos (110) no encontrada.");
-            bancos.forEach(banco => {
-                const newAccount = { id: this.idCounter++, codigo: `${cuentaBancoPadre.codigo}.${this.planDeCuentas.filter(c=>c.parentId === 110).length + 1}`, nombre: banco.nombre, tipo: 'DETALLE', parentId: 110 };
-                this.planDeCuentas.push(newAccount);
-                this.crearAsiento(fechaApertura, `Saldo inicial ${banco.nombre}`, [{ cuentaId: newAccount.id, debe: banco.saldo, haber: 0 }, { cuentaId: 330, debe: 0, haber: banco.saldo }]);
+        const cuentaBancoPadre = this.planDeCuentas.find(c => c.id === 110);
+        if (!cuentaBancoPadre) throw new Error("Cuenta padre de Bancos (110) no encontrada.");
+        bancos.forEach(banco => {
+            if (!banco.nombre || !banco.saldo || banco.saldo <= 0) return;
+            const newAccount = { id: this.idCounter++, codigo: `${cuentaBancoPadre.codigo}.${this.planDeCuentas.filter(c=>c.parentId === 110).length + 1}`, nombre: banco.nombre, tipo: 'DETALLE', parentId: 110 };
+            this.planDeCuentas.push(newAccount);
+            this.crearAsiento(fechaApertura, `Saldo inicial ${banco.nombre}`, [{ cuentaId: newAccount.id, debe: banco.saldo, haber: 0 }, { cuentaId: 330, debe: 0, haber: banco.saldo }]);
+        });
+
+        // --- SECCIÓN DE INVENTARIO ---
+        if (inventario && inventario.length > 0) {
+            inventario.forEach(item => {
+                if (!item.nombre) return;
+                const nuevoProducto = {
+                    id: this.idCounter++,
+                    nombre: item.nombre,
+                    tipo: 'producto',
+                    stock: item.stock,
+                    costo: item.costo,
+                    precio: item.precio,
+                    unidadMedidaId: item.unidadMedidaId,
+                    cuentaIngresoId: 41001, // Venta de Mercancía por defecto
+                    cuentaInventarioId: item.categoriaId
+                };
+                this.productos.push(nuevoProducto);
+                const valorInventario = (item.costo || 0) * (item.stock || 0);
+                if (valorInventario > 0) {
+                    this.crearAsiento(fechaApertura, `Inventario inicial ${item.nombre}`, [
+                        { cuentaId: item.categoriaId, debe: valorInventario, haber: 0 },
+                        { cuentaId: 330, debe: 0, haber: valorInventario }
+                    ]);
+                }
             });
-            console.log("Bancos procesados con éxito.");
-        } catch(e) {
-            console.error("ERROR EN LA SECCIÓN DE BANCOS:", e);
-            this.showToast(`Error procesando bancos: ${e.message}`, 'error');
-            return; // Detener ejecución si falla
         }
-
-        // --- SECCIÓN DE INVENTARIO (PUNTO CRÍTICO) ---
-        try {
-            console.log("Procesando Inventario...", inventario);
-            if (inventario && inventario.length > 0) {
-                inventario.forEach(item => {
-                    console.log("Procesando item:", item.nombre);
-                    let cuentaIngresoIdAsociada;
-                    if (item.categoriaId === 13004) {
-                        cuentaIngresoIdAsociada = 41002;
-                    } else {
-                        cuentaIngresoIdAsociada = 41001;
-                    }
-
-                    const nuevoProducto = {
-                        ...item,
-                        id: this.idCounter++,
-                        tipo: 'producto',
-                        cuentaIngresoId: cuentaIngresoIdAsociada,
-                        cuentaInventarioId: item.categoriaId
-                    };
-                    
-                    this.productos.push(nuevoProducto);
-                    console.log("Producto pusheado:", nuevoProducto.nombre);
-
-                    const valorInventario = item.costo * item.stock;
-                    if (valorInventario > 0) {
-                        this.crearAsiento(fechaApertura, `Inventario inicial ${item.nombre}`, [
-                            { cuentaId: item.categoriaId, debe: valorInventario, haber: 0 },
-                            { cuentaId: 330, debe: 0, haber: valorInventario }
-                        ]);
-                    }
-                });
-            }
-            console.log("Inventario procesado con éxito.");
-        } catch(e) {
-            console.error("ERROR EN LA SECCIÓN DE INVENTARIO:", e);
-            this.showToast(`Error procesando inventario: ${e.message}`, 'error');
-            return;
-        }
-
-        // --- Guardado Final ---
-        console.log("Todos los pasos previos completados. Llamando a saveAll()...");
-        console.log("Estado final de this.productos antes de guardar:", JSON.stringify(this.productos));
         
-        this.saveAll();
+        // --- SECCIÓN DE CUENTAS POR COBRAR (CxC) ---
+        cxc.forEach(factura => {
+            if (!factura.contacto || !factura.monto || factura.monto <= 0) return;
+            let cliente = this.contactos.find(c => c.nombre.toLowerCase() === factura.contacto.toLowerCase() && c.tipo === 'cliente');
+            if (!cliente) {
+                cliente = { id: this.idCounter++, nombre: factura.contacto, tipo: 'cliente' };
+                this.contactos.push(cliente);
+            }
+            const nuevaVenta = {
+                id: this.idCounter++, tipo: 'venta', fecha: factura.fecha, fechaVencimiento: factura.fecha,
+                contactoId: cliente.id, items: [], total: factura.monto, subtotal: factura.monto, impuesto: 0,
+                estado: 'Pendiente', montoPagado: 0, refOriginal: factura.ref
+            };
+            this.transacciones.push(nuevaVenta);
+            this.crearAsiento(fechaApertura, `Saldo inicial CxC - Factura ${factura.ref}`, [{ cuentaId: 120, debe: factura.monto, haber: 0 }, { cuentaId: 330, debe: 0, haber: factura.monto }], nuevaVenta.id);
+        });
+
+        // --- SECCIÓN DE CUENTAS POR PAGAR (CxP) ---
+        cxp.forEach(gasto => {
+            if (!gasto.contacto || !gasto.monto || gasto.monto <= 0) return;
+            let proveedor = this.contactos.find(c => c.nombre.toLowerCase() === gasto.contacto.toLowerCase() && c.tipo === 'proveedor');
+            if (!proveedor) {
+                proveedor = { id: this.idCounter++, nombre: gasto.contacto, tipo: 'proveedor' };
+                this.contactos.push(proveedor);
+            }
+            const nuevoGasto = {
+                id: this.idCounter++, tipo: 'gasto', fecha: gasto.fecha, contactoId: proveedor.id,
+                descripcion: `Saldo inicial - Factura ${gasto.ref}`, total: gasto.monto,
+                items: [{ cuentaId: 610, monto: gasto.monto }], // Asignado a Gastos Generales por defecto
+                estado: 'Pendiente', montoPagado: 0
+            };
+            this.transacciones.push(nuevoGasto);
+            this.crearAsiento(fechaApertura, `Saldo inicial CxP - Factura ${gasto.ref}`, [{ cuentaId: 330, debe: gasto.monto, haber: 0 }, { cuentaId: 210, debe: 0, haber: gasto.monto }], nuevoGasto.id);
+        });
+        
+        // --- SECCIÓN DE TARJETAS DE CRÉDITO ---
+        const cuentaTarjetaPadre = this.planDeCuentas.find(c => c.id === 230);
+        if (!cuentaTarjetaPadre) throw new Error("Cuenta padre de Tarjetas (230) no encontrada.");
+        tarjetas.forEach(tarjeta => {
+            if (!tarjeta.nombre || !tarjeta.saldo || tarjeta.saldo <= 0) return;
+            const newAccount = { id: this.idCounter++, codigo: `${cuentaTarjetaPadre.codigo}.${this.planDeCuentas.filter(c=>c.parentId === 230).length + 1}`, nombre: tarjeta.nombre, tipo: 'DETALLE', parentId: 230 };
+            this.planDeCuentas.push(newAccount);
+            this.crearAsiento(fechaApertura, `Saldo inicial ${tarjeta.nombre}`, [{ cuentaId: 330, debe: tarjeta.saldo, haber: 0 }, { cuentaId: newAccount.id, debe: 0, haber: tarjeta.saldo }]);
+        });
+
+        // --- SECCIÓN DE ANTICIPOS DE CLIENTES ---
+        anticipos.forEach(anticipo => {
+            if (!anticipo.contacto || !anticipo.monto || anticipo.monto <= 0) return;
+            let cliente = this.contactos.find(c => c.nombre.toLowerCase() === anticipo.contacto.toLowerCase() && c.tipo === 'cliente');
+            if (!cliente) {
+                cliente = { id: this.idCounter++, nombre: anticipo.contacto, tipo: 'cliente' };
+                this.contactos.push(cliente);
+            }
+            const nuevoAnticipo = {
+                id: this.idCounter++, tipo: 'anticipo', fecha: fechaApertura,
+                contactoId: cliente.id, total: anticipo.monto, montoAplicado: 0,
+            };
+            this.transacciones.push(nuevoAnticipo);
+            this.crearAsiento(fechaApertura, `Saldo inicial Anticipo de ${cliente.nombre}`, [{ cuentaId: 330, debe: anticipo.monto, haber: 0 }, { cuentaId: 220, debe: 0, haber: anticipo.monto }], nuevoAnticipo.id);
+        });
+
+        // --- GUARDADO FINAL ---
+        await this.saveAll();
         
         this.showToast('¡Configuración completada! Bienvenido.', 'success');
         this.closeModal();
-        this.irModulo('dashboard');
+        // Recargamos la aplicación para asegurar que todo el estado se cargue correctamente
+        window.location.reload();
 
     } catch (error) {
         console.error("Error crítico durante guardarAperturaCompleta:", error);

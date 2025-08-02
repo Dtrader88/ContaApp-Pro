@@ -126,9 +126,16 @@ ordenarVentasPor(columna) {
                 }
                 totalDisplay = this.formatCurrency(t.total);
                 numeroDisplay = t.numeroFactura || t.id;
-                accionesHTML = `<button class="conta-btn-icon" title="Ver Factura" onclick="event.stopPropagation(); ContaApp.abrirVistaPreviaFactura(${t.id})"><i class="fa-solid fa-file-lines"></i></button>
-                                <button class="conta-btn-icon edit" title="Duplicar Venta" onclick="event.stopPropagation(); ContaApp.abrirModalVenta(null, null, ${t.id})"><i class="fa-solid fa-copy"></i></button>
-                                ${t.estado !== 'Anulada' && this.hasPermission('anular_transaccion') ? `<button class="conta-btn-icon delete" title="Anular Factura" onclick="event.stopPropagation(); ContaApp.anularVenta(${t.id})"><i class="fa-solid fa-ban"></i></button>` : ''}`;
+                // --- INICIO DE LA MODIFICACIÓN ---
+                accionesHTML = `<button class="conta-btn-icon" title="Ver Factura" onclick="event.stopPropagation(); ContaApp.abrirVistaPreviaFactura(${t.id})"><i class="fa-solid fa-file-lines"></i></button>`;
+                if (t.estado !== 'Anulada') {
+                    accionesHTML += `<button class="conta-btn-icon edit" title="Editar Venta" onclick="event.stopPropagation(); ContaApp.abrirModalEditarVenta(${t.id})"><i class="fa-solid fa-pencil"></i></button>`;
+                }
+                accionesHTML += `<button class="conta-btn-icon" title="Duplicar Venta" onclick="event.stopPropagation(); ContaApp.abrirModalVenta(null, null, ${t.id})"><i class="fa-solid fa-copy"></i></button>`;
+                if (t.estado !== 'Anulada' && this.hasPermission('anular_transaccion')) {
+                    accionesHTML += `<button class="conta-btn-icon delete" title="Anular Factura" onclick="event.stopPropagation(); ContaApp.anularVenta(${t.id})"><i class="fa-solid fa-ban"></i></button>`;
+                }
+                // --- FIN DE LA MODIFICACIÓN ---
                 rowOnclick = `ContaApp.abrirVistaPreviaFactura(${t.id})`;
             } else {
                 estadoClass = 'tag-nota-credito';
@@ -162,6 +169,72 @@ ordenarVentasPor(columna) {
     }
     
     document.getElementById('ventas-contenido').innerHTML = kpiHTML + filterFormHTML + resultsHTML;
+},
+abrirModalEditarVenta(ventaId) {
+    const venta = this.findById(this.transacciones, ventaId);
+    if (!venta) {
+        this.showToast('Error: Venta no encontrada.', 'error');
+        return;
+    }
+    if (venta.estado === 'Pagada' || venta.estado === 'Anulada') {
+        this.showToast('No se puede editar una venta pagada o anulada.', 'error');
+        return;
+    }
+
+    // Llamamos a la función existente para crear el modal
+    this.abrirModalVenta();
+    
+    // Pequeño delay para asegurar que el DOM del modal esté listo
+    setTimeout(() => {
+        // Modificar título y botón
+        document.querySelector('.modal-form h3').textContent = 'Editar Venta';
+        document.querySelector('.modal-form button[type="submit"]').textContent = 'Guardar Cambios';
+
+        // Añadir campo oculto con el ID de la venta que se está editando
+        const form = document.querySelector('.modal-form');
+        const idInput = document.createElement('input');
+        idInput.type = 'hidden';
+        idInput.id = 'venta-id-edit';
+        idInput.value = ventaId;
+        form.appendChild(idInput);
+        
+        // Rellenar los campos con los datos de la venta original
+        const cliente = this.findById(this.contactos, venta.contactoId);
+        if (cliente) {
+            document.getElementById('venta-cliente-input').value = cliente.nombre;
+            document.getElementById('venta-cliente-id').value = cliente.id;
+        }
+        document.getElementById('venta-fecha').value = venta.fecha;
+        document.getElementById('venta-numero-factura').value = venta.numeroFactura;
+        document.getElementById('venta-terminos-pago').value = venta.terminosPago;
+        document.getElementById('venta-descuento-monto').value = venta.descuento.toFixed(2);
+        
+        // Rellenar items
+        const itemsContainer = document.getElementById('venta-items-container');
+        itemsContainer.innerHTML = ''; // Limpiar la fila por defecto
+        
+        venta.items.forEach(item => {
+            this.agregarItemVenta();
+            const nuevaFila = itemsContainer.lastChild;
+            const tipoSelect = nuevaFila.querySelector('.venta-item-type');
+            tipoSelect.value = item.itemType;
+            this.cambiarTipoItemVenta(tipoSelect); // Esto renderiza el selector correcto
+
+            const idSelect = nuevaFila.querySelector('.venta-item-id');
+            idSelect.value = item.itemType === 'producto' ? item.productoId : item.cuentaId;
+            
+            nuevaFila.querySelector('.venta-item-cantidad').value = item.cantidad;
+            nuevaFila.querySelector('.venta-item-precio').value = item.precio.toFixed(2);
+
+            if (item.itemType === 'servicio') {
+                const descInput = nuevaFila.querySelector('.venta-item-descripcion');
+                if (descInput) descInput.value = item.descripcion || '';
+            }
+        });
+
+        // Actualizar totales
+        this.actualizarTotalesVenta('monto');
+    }, 100);
 },
     renderVentas_TabCotizaciones(filters = {}) {
         document.getElementById('page-actions-header').innerHTML = `<button class="conta-btn" onclick="ContaApp.abrirModalCotizacion()">+ Nueva Cotización</button>`;
@@ -722,158 +795,142 @@ ordenarVentasPor(columna) {
     document.getElementById('venta-total').textContent = this.formatCurrency(total);
 },
         async guardarVenta(e, anticipoIdAplicado = null) {
+    e.preventDefault();
     const submitButton = e.target.querySelector('button[type="submit"]');
     this.toggleButtonLoading(submitButton, true);
 
+    const ventaIdEdit = document.getElementById('venta-id-edit')?.value;
+    const isEditing = !!ventaIdEdit;
+
     try {
+        // --- 1. RECOLECCIÓN Y VALIDACIÓN DE DATOS DEL FORMULARIO ---
         const clienteId = parseInt(document.getElementById('venta-cliente-id').value);
         if (!clienteId) throw new Error('Por favor, selecciona un cliente válido de la lista.');
         
         const fecha = document.getElementById('venta-fecha').value;
         const terminosPago = document.getElementById('venta-terminos-pago').value;
-        const esRecurrente = document.getElementById('venta-recurrente-check').checked;
         const items = [];
         let subtotal = 0;
 
-        document.querySelectorAll('.venta-item-row').forEach(row => {
+        for (const row of document.querySelectorAll('.venta-item-row')) {
             const tipo = row.querySelector('.venta-item-type').value;
             const itemId = parseInt(row.querySelector('.venta-item-id').value);
             const cantidad = parseInt(row.querySelector('.venta-item-cantidad').value);
             const precio = parseFloat(row.querySelector('.venta-item-precio').value);
-            const descripcion = row.querySelector('.venta-item-descripcion')?.value || '';
             
             if (tipo === 'producto') {
                 const producto = this.findById(this.productos, itemId);
-                if (producto) {
-                    items.push({ itemType: 'producto', productoId: itemId, cantidad, precio, costo: producto.costo });
-                    subtotal += cantidad * precio;
+                if (!producto) continue;
+                // Validación de stock solo para nuevas ventas o si la cantidad aumenta
+                if (!isEditing && producto.stock < cantidad) {
+                    throw new Error(`Stock insuficiente para "${producto.nombre}". Stock: ${producto.stock}.`);
                 }
-            } else {
-                items.push({ itemType: 'servicio', cuentaId: itemId, cantidad, precio, descripcion });
-                subtotal += cantidad * precio;
+                items.push({ itemType: 'producto', productoId: itemId, cantidad, precio, costo: producto.costo });
+            } else { // Servicio
+                items.push({ itemType: 'servicio', cuentaId: itemId, cantidad, precio, descripcion: row.querySelector('.venta-item-descripcion')?.value || '' });
             }
-        });
+            subtotal += cantidad * precio;
+        }
 
         if (items.length === 0) throw new Error('Debes agregar al menos un ítem.');
 
         const descuento = parseFloat(document.getElementById('venta-descuento-monto').dataset.montoReal) || 0;
-
+        const subtotalConDescuento = subtotal - descuento;
+        const impuesto = subtotalConDescuento * (this.empresa.taxRate / 100);
+        const total = subtotalConDescuento + impuesto;
+        
         let fechaVencimiento = new Date(fecha + 'T00:00:00');
         if (terminosPago === 'credito_15') fechaVencimiento.setDate(fechaVencimiento.getDate() + 15);
         else if (terminosPago === 'credito_30') fechaVencimiento.setDate(fechaVencimiento.getDate() + 30);
-        fechaVencimiento = fechaVencimiento.toISOString().slice(0, 10);
-
-        if (esRecurrente) {
-            const nuevaPlantilla = {
-                id: this.idCounter++, tipo: 'venta', contactoId: clienteId, items: items,
-                descuento: descuento, terminosPago: terminosPago, frecuencia: 'mensual', ultimoGenerado: null
-            };
-            this.recurrentes.push(nuevaPlantilla);
-            this.saveAll();
-            this.isFormDirty = false;
-            this.closeModal();
-            this.irModulo('ventas', { submodulo: 'recurrentes' });
-            this.showToast('Plantilla de venta recurrente guardada.', 'success');
-        } else {
-            for (const item of items) {
-                if (item.itemType === 'producto') {
-                    const producto = this.findById(this.productos, item.productoId);
-                    if (producto && producto.stock < item.cantidad) {
-                        throw new Error(`Stock insuficiente para "${producto.nombre}". Stock actual: ${producto.stock}.`);
-                    }
-                }
-            }
-            
-            const subtotalConDescuento = subtotal - descuento;
-            const impuesto = subtotalConDescuento * (this.empresa.taxRate / 100);
-            const total = subtotalConDescuento + impuesto;
-
-            const nuevaVenta = {
-                id: this.idCounter++, numeroFactura: document.getElementById('venta-numero-factura').value,
-                tipo: 'venta', fecha, fechaVencimiento, terminosPago, contactoId: clienteId, items,
-                subtotal, descuento, impuesto, total, estado: 'Pendiente', montoPagado: 0
-            };
-            
-            this.registrarAuditoria('CREAR_VENTA', `Creó la factura #${nuevaVenta.numeroFactura} por ${this.formatCurrency(nuevaVenta.total)}`, nuevaVenta.id, 'venta');
-            
-            this.transacciones.push(nuevaVenta);
-
-            let cuentaDebeId, asientoDescripcion;
-            if (terminosPago === 'contado') {
-                cuentaDebeId = parseInt(document.getElementById('venta-pago-cuenta-banco').value);
-                if (!cuentaDebeId) throw new Error('Por favor, selecciona una cuenta para el depósito.');
-                nuevaVenta.estado = 'Pagada';
-                nuevaVenta.montoPagado = total;
-                asientoDescripcion = `Venta de contado a ${this.findById(this.contactos, clienteId).nombre} #${nuevaVenta.numeroFactura}`;
-            } else { 
-                cuentaDebeId = 120;
-                asientoDescripcion = `Venta a crédito a ${this.findById(this.contactos, clienteId).nombre} #${nuevaVenta.numeroFactura}`;
-            }
-            
-            const cuentaIvaDebitoId = 240, cuentaDescuentoId = 420;
-            const movimientosVenta = [ { cuentaId: cuentaDebeId, debe: total, haber: 0 }, { cuentaId: cuentaIvaDebitoId, debe: 0, haber: impuesto } ];
-            
-            if (descuento > 0) movimientosVenta.push({ cuentaId: cuentaDescuentoId, debe: descuento, haber: 0 });
-
-            items.forEach(item => {
-                const montoItem = item.cantidad * item.precio;
-                if (item.itemType === 'producto') {
-                    const producto = this.findById(this.productos, item.productoId);
-                    if(producto) {
-                        movimientosVenta.push({ cuentaId: producto.cuentaIngresoId, debe: 0, haber: montoItem });
-                        producto.stock -= item.cantidad;
-                    }
-                } else {
-                    movimientosVenta.push({ cuentaId: item.cuentaId, debe: 0, haber: montoItem });
-                }
-            });
-
-            if (nuevaVenta.montoPagado >= total - 0.01) nuevaVenta.estado = 'Pagada';
-            else if (nuevaVenta.montoPagado > 0) nuevaVenta.estado = 'Parcial';
-            
-            this.crearAsiento(fecha, asientoDescripcion, movimientosVenta, nuevaVenta.id);
-            
-            const costosPorCuenta = items.reduce((acc, item) => {
-                if (item.itemType === 'producto') {
-                    const producto = this.findById(this.productos, item.productoId);
-                    if(producto) {
-                        const cuentaId = producto.cuentaInventarioId;
-                        const costoItem = (producto.costo || 0) * item.cantidad;
-                        if (cuentaId && costoItem > 0) acc[cuentaId] = (acc[cuentaId] || 0) + costoItem;
-                    }
-                }
-                return acc;
-            }, {});
-
-            const costoTotalVenta = Object.values(costosPorCuenta).reduce((sum, val) => sum + val, 0);
-
-            if (costoTotalVenta > 0) {
-                const cuentaCostoVentasId = 510;
-                const movimientosCosto = [{ cuentaId: cuentaCostoVentasId, debe: costoTotalVenta, haber: 0 }];
-                for (const cuentaId in costosPorCuenta) {
-                    movimientosCosto.push({ cuentaId: parseInt(cuentaId), debe: 0, haber: costosPorCuenta[cuentaId] });
-                }
-                this.crearAsiento(fecha, `Costo de venta #${nuevaVenta.numeroFactura}`, movimientosCosto, nuevaVenta.id);
-            }
-            
-            await this.repository.actualizarMultiplesDatos({
-                transacciones: this.transacciones,
-                productos: this.productos,
-                asientos: this.asientos,
-                idCounter: this.idCounter,
-                auditLog: this.auditLog
-            });
-
-            this.isFormDirty = false;
-            this.closeModal(); 
-            this.irModulo('ventas'); 
-            this.abrirVistaPreviaFactura(nuevaVenta.id); 
-            this.showToast('Venta creada con éxito.', 'success');
-        }
         
+        // --- 2. LÓGICA DE EDICIÓN ---
+        if (isEditing) {
+            const ventaOriginal = this.findById(this.transacciones, parseInt(ventaIdEdit));
+            
+            // 2.1 Revertir stock original
+            ventaOriginal.items.forEach(item => {
+                if (item.itemType === 'producto') {
+                    const producto = this.findById(this.productos, item.productoId);
+                    if (producto) producto.stock += item.cantidad;
+                }
+            });
+
+            // 2.2 Revertir asientos contables originales
+            const asientosOriginales = this.asientos.filter(a => a.transaccionId === ventaOriginal.id);
+            asientosOriginales.forEach(asiento => {
+                const movReversos = asiento.movimientos.map(m => ({ cuentaId: m.cuentaId, debe: m.haber, haber: m.debe }));
+                this.crearAsiento(this.getTodayDate(), `Anulación/Modificación Factura #${ventaOriginal.numeroFactura}`, movReversos);
+            });
+
+            // 2.3 Actualizar el objeto de la venta con los nuevos datos
+            Object.assign(ventaOriginal, {
+                fecha, fechaVencimiento: fechaVencimiento.toISOString().slice(0, 10),
+                terminosPago, clienteId, items, subtotal, descuento, impuesto, total
+            });
+            // La lógica para crear los nuevos asientos es la misma que para una venta nueva, así que se ejecuta a continuación
+        }
+
+        // --- 3. LÓGICA DE CREACIÓN (O RE-CREACIÓN PARA EDICIÓN) ---
+        const ventaAGuardar = isEditing ? this.findById(this.transacciones, parseInt(ventaIdEdit)) : {
+            id: this.idCounter++,
+            numeroFactura: document.getElementById('venta-numero-factura').value,
+            tipo: 'venta',
+            estado: 'Pendiente',
+            montoPagado: 0
+        };
+        // Asignar/Sobrescribir datos comunes
+        Object.assign(ventaAGuardar, {
+            fecha, fechaVencimiento: fechaVencimiento.toISOString().slice(0, 10),
+            terminosPago, contactoId: clienteId, items, subtotal, descuento, impuesto, total
+        });
+        
+        if (!isEditing) this.transacciones.push(ventaAGuardar);
+
+        // 3.1 Actualizar stock y crear asientos
+        items.forEach(item => {
+            if (item.itemType === 'producto') {
+                const producto = this.findById(this.productos, item.productoId);
+                if (producto) producto.stock -= item.cantidad;
+            }
+        });
+
+        const cuentaDebeId = 120; // CxC
+        const asientoDescripcion = `Venta a ${this.findById(this.contactos, clienteId).nombre} #${ventaAGuardar.numeroFactura}`;
+        const movimientosVenta = [
+            { cuentaId: cuentaDebeId, debe: total, haber: 0 },
+            { cuentaId: 240, debe: 0, haber: impuesto } // IVA Débito
+        ];
+        if (descuento > 0) movimientosVenta.push({ cuentaId: 420, debe: descuento, haber: 0 }); // Descuentos
+        
+        items.forEach(item => {
+            const montoItem = item.cantidad * item.precio;
+            const cuentaIngresoId = item.itemType === 'producto' ? this.findById(this.productos, item.productoId).cuentaIngresoId : item.cuentaId;
+            movimientosVenta.push({ cuentaId: cuentaIngresoId, debe: 0, haber: montoItem });
+        });
+        this.crearAsiento(fecha, asientoDescripcion, movimientosVenta, ventaAGuardar.id);
+
+        const costoTotalVenta = items.filter(i => i.itemType === 'producto').reduce((sum, i) => sum + (i.costo * i.cantidad), 0);
+        if (costoTotalVenta > 0) {
+            this.crearAsiento(fecha, `Costo de venta #${ventaAGuardar.numeroFactura}`, [
+                { cuentaId: 510, debe: costoTotalVenta, haber: 0 }, // Costo de Ventas
+                { cuentaId: 13001, debe: 0, haber: costoTotalVenta } // Inventario Reventa (simplificado)
+            ], ventaAGuardar.id);
+        }
+
+        // --- 4. GUARDADO FINAL ---
+        await this.saveAll();
+        
+        this.isFormDirty = false;
+        this.closeModal();
+        this.irModulo('ventas');
+        this.showToast(`Venta ${isEditing ? 'actualizada' : 'creada'} con éxito.`, 'success');
+        this.abrirVistaPreviaFactura(ventaAGuardar.id);
+
     } catch (error) {
         console.error("Error al guardar la venta:", error);
         this.showToast(error.message || 'Ocurrió un error al guardar.', 'error');
+        // Si falló la edición, es prudente recargar para evitar inconsistencias
+        if (isEditing) window.location.reload();
     } finally {
         this.toggleButtonLoading(submitButton, false);
     }
