@@ -63,6 +63,18 @@ const ROLES = {
         column: 'fecha',
         order: 'desc'
     },  
+    gastosSortState: {
+        column: 'fecha',
+        order: 'desc'
+    },
+    comprasSortState: {
+        column: 'fecha',
+        order: 'desc'
+    },
+    diarioSortState: {
+        column: 'fecha',
+        order: 'desc'
+    },
         hasPermission(permissionKey) {
         if (!this.currentUser || !this.currentUser.rol) {
             return false;
@@ -842,7 +854,8 @@ irAtras() {
             listasMateriales: this.listasMateriales,
             ordenesProduccion: this.ordenesProduccion,
             unidadesMedida: this.unidadesMedida,
-            bancoImportado: this.bancoImportado
+            bancoImportado: this.bancoImportado,
+            auditLog: this.auditLog
         };
         await this.repository.saveAll(dataToSave);
     },
@@ -905,7 +918,8 @@ irAtras() {
             { id: 1, nombre: 'Unidad' }, { id: 2, nombre: 'Caja' }, { id: 3, nombre: 'Kg' },
             { id: 4, nombre: 'Litro' }, { id: 5, nombre: 'Metro' }
         ],
-        bancoImportado: {}
+        bancoImportado: {},
+        auditLog: []
     };
 
     if (dataString) {
@@ -922,15 +936,11 @@ irAtras() {
         this.listasMateriales = data.listasMateriales || [];
         this.ordenesProduccion = data.ordenesProduccion || [];
         this.bancoImportado = data.bancoImportado || defaultData.bancoImportado;
-        
-        // ===== INICIO DE LA CORRECCIÓN CLAVE =====
-        // Se verifica si las unidades de medida existen y tienen contenido. Si no, se usan las por defecto.
-        // Esto corrige el problema para workspaces antiguos que no tenían esta propiedad.
         this.unidadesMedida = (data.unidadesMedida && data.unidadesMedida.length > 0) 
             ? data.unidadesMedida 
             : defaultData.unidadesMedida;
-        // ===== FIN DE LA CORRECCIÓN CLAVE =====
-
+        this.auditLog = data.auditLog || [];
+        
         this.asientos = [];
         this.transacciones = [];
         
@@ -1785,6 +1795,21 @@ getPeriodoContableActual() {
     toggleNotificationDropdown() {
         document.getElementById('notification-dropdown').classList.toggle('hidden');
     },
+    registrarAuditoria(accion, descripcion, entidadId = null, entidadTipo = null) {
+    if (!this.auditLog) {
+        this.auditLog = [];
+    }
+    const logEntry = {
+        id: Date.now(),
+        fecha: new Date().toISOString(),
+        usuarioEmail: this.currentUser.email,
+        accion: accion,
+        descripcion: descripcion,
+        entidadId: entidadId,
+        entidadTipo: entidadTipo
+    };
+    this.auditLog.unshift(logEntry);
+},
 aplicarFiltrosAvanzados(modulo) {
         const filtrosBasicos = {
             search: document.getElementById(`${modulo}-search`)?.value || '',

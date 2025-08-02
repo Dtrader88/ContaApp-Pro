@@ -4,35 +4,35 @@ Object.assign(ContaApp, {
 
 // Módulo: Configuración y Gestión de Datos
         renderConfig(params = {}) {
-        const submodulo = params.submodulo || 'perfil';
+    const submodulo = params.submodulo || 'perfil';
 
-        let html = `
-            <div class="flex gap-2 mb-6 border-b border-[var(--color-border-accent)] flex-wrap">
-                <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'perfil' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'perfil'})">Perfil de la Compañía</button>
-                <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'contactos' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'contactos'})">Contactos</button>
-                <!-- ===== INICIO DE LÍNEA AÑADIDA ===== -->
-                <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'roles' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'roles'})">Roles y Permisos</button>
-                <!-- ===== FIN DE LÍNEA AÑADIDA ===== -->
-                <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'unidades' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'unidades'})">Unidades de Medida</button>
-                <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'licencia' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'licencia'})">Licencia y Activación</button>
-                <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'personalizacion' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'personalizacion'})">Personalización y Datos</button>
-            </div>
-            <div id="config-contenido"></div>
-        `;
-        document.getElementById('config').innerHTML = html;
-        
-        document.getElementById('page-actions-header').innerHTML = '';
+    let html = `
+        <div class="flex gap-2 mb-6 border-b border-[var(--color-border-accent)] flex-wrap">
+            <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'perfil' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'perfil'})">Perfil de la Compañía</button>
+            <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'contactos' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'contactos'})">Contactos</button>
+            <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'roles' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'roles'})">Roles y Permisos</button>
+            <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'auditoria' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'auditoria'})">Auditoría</button>
+            <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'unidades' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'unidades'})">Unidades de Medida</button>
+            <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'licencia' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'licencia'})">Licencia y Activación</button>
+            <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'personalizacion' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'personalizacion'})">Personalización y Datos</button>
+        </div>
+        <div id="config-contenido"></div>
+    `;
+    document.getElementById('config').innerHTML = html;
+    
+    document.getElementById('page-actions-header').innerHTML = '';
 
-        switch (submodulo) {
-            case 'perfil': this.renderConfig_Perfil(); break;
-            case 'contactos': this.renderContactos('config-contenido'); break;
-            case 'roles': this.renderConfig_Roles(); break; // <-- Nueva línea
-            case 'unidades': this.renderConfig_Unidades(); break;
-            case 'licencia': this.renderConfig_Licencia(); break;
-            case 'personalizacion': this.renderConfig_Personalizacion(); break;
-            default: this.renderConfig_Perfil();
-        }
-    },
+    switch (submodulo) {
+        case 'perfil': this.renderConfig_Perfil(); break;
+        case 'contactos': this.renderContactos('config-contenido'); break;
+        case 'roles': this.renderConfig_Roles(); break;
+        case 'auditoria': this.renderConfig_Auditoria(); break;
+        case 'unidades': this.renderConfig_Unidades(); break;
+        case 'licencia': this.renderConfig_Licencia(); break;
+        case 'personalizacion': this.renderConfig_Personalizacion(); break;
+        default: this.renderConfig_Perfil();
+    }
+},
 renderConfig_Licencia() {
         const { cliente, paquete, modulosActivos } = this.licencia || { cliente: 'N/A', paquete: 'N/A', modulosActivos: [] };
         
@@ -747,4 +747,45 @@ renderConfig_Licencia() {
         this.renderConfig_Roles(); // Re-renderiza la vista para mostrar los cambios
         this.showToast('Permisos del rol actualizados con éxito.', 'success');
     },
+    renderConfig_Auditoria() {
+    let html;
+    const auditLog = this.auditLog || [];
+
+    if (auditLog.length === 0) {
+        html = this.generarEstadoVacioHTML('fa-history', 'Sin Registros de Auditoría', 'Aún no se han registrado acciones importantes en el sistema.', 'Ir al Dashboard', "ContaApp.irModulo('dashboard')");
+    } else {
+        const { currentPage, perPage } = this.getPaginationState('auditoria');
+        const startIndex = (currentPage - 1) * perPage;
+        const endIndex = startIndex + perPage;
+        const itemsParaMostrar = auditLog.slice(startIndex, endIndex);
+
+        let tableRows = '';
+        itemsParaMostrar.forEach(log => {
+            const fecha = new Date(log.fecha).toLocaleString();
+            tableRows += `
+                <tr>
+                    <td class="conta-table-td">${fecha}</td>
+                    <td class="conta-table-td">${log.usuarioEmail}</td>
+                    <td class="conta-table-td font-mono text-xs">${log.accion}</td>
+                    <td class="conta-table-td">${log.descripcion}</td>
+                </tr>
+            `;
+        });
+
+        html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
+            <thead>
+                <tr>
+                    <th class="conta-table-th">Fecha y Hora</th>
+                    <th class="conta-table-th">Usuario</th>
+                    <th class="conta-table-th">Acción</th>
+                    <th class="conta-table-th">Descripción</th>
+                </tr>
+            </thead>
+            <tbody>${tableRows}</tbody></table></div>`;
+        
+        this.renderPaginationControls('auditoria', auditLog.length);
+    }
+    
+    document.getElementById('config-contenido').innerHTML = html;
+},
 });

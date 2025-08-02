@@ -128,7 +128,6 @@ export class FirebaseRepository extends DataRepository {
         
         let allTransactions = doc.data().transacciones || [];
         
-        // 1. Aplicar Filtros (lógica en el cliente por ahora, se movería al backend)
         let filteredData = allTransactions.filter(t => {
             if (filters.tipos && !filters.tipos.includes(t.tipo)) {
                 return false;
@@ -139,8 +138,6 @@ export class FirebaseRepository extends DataRepository {
             if (filters.endDate && t.fecha > filters.endDate) {
                 return false;
             }
-
-            // ===== INICIO DE LÓGICA DE FILTROS AVANZADOS =====
             if (filters.clienteId && t.contactoId !== parseInt(filters.clienteId)) {
                 return false;
             }
@@ -162,26 +159,29 @@ export class FirebaseRepository extends DataRepository {
                 );
                 if (!itemEncontrado) return false;
             }
-            // ===== FIN DE LÓGICA DE FILTROS AVANZADOS =====
-
+            
+            // ===== INICIO DE LÓGICA DE BÚSQUEDA MEJORADA =====
             if (filters.search) {
                 const term = filters.search.toLowerCase();
-                const cliente = ContaApp.findById(doc.data().contactos || [], t.contactoId);
-                const numeroDoc = t.numeroFactura || t.numeroNota || '';
-                const matchesCliente = cliente && cliente.nombre.toLowerCase().includes(term);
+                const contacto = ContaApp.findById(doc.data().contactos || [], t.contactoId);
+                const numeroDoc = t.numeroFactura || t.numeroNota || t.id.toString() || '';
+                
+                const matchesContacto = contacto && contacto.nombre.toLowerCase().includes(term);
                 const matchesNumero = numeroDoc.toLowerCase().includes(term);
-                if (!matchesCliente && !matchesNumero) return false;
+                const matchesDescripcion = t.descripcion && t.descripcion.toLowerCase().includes(term);
+
+                if (!matchesContacto && !matchesNumero && !matchesDescripcion) return false;
             }
+            // ===== FIN DE LÓGICA DE BÚSQUEDA MEJORADA =====
 
             return true;
         });
 
         const totalItems = filteredData.length;
 
-        // 2. Aplicar Ordenamiento
         filteredData.sort((a, b) => {
             let valA, valB;
-            if (sort.column === 'cliente') {
+            if (sort.column === 'contacto') { // Genérico para cliente o proveedor
                 valA = ContaApp.findById(doc.data().contactos || [], a.contactoId)?.nombre || '';
                 valB = ContaApp.findById(doc.data().contactos || [], b.contactoId)?.nombre || '';
             } else {
@@ -195,7 +195,6 @@ export class FirebaseRepository extends DataRepository {
             }
         });
         
-        // 3. Aplicar Paginación
         const startIndex = (page - 1) * perPage;
         const endIndex = startIndex + perPage;
         const paginatedData = filteredData.slice(startIndex, endIndex);
@@ -218,6 +217,53 @@ export class FirebaseRepository extends DataRepository {
             console.error("Error al cargar datos completos de Firestore:", error);
             return null;
         }
+    }
+    async getPaginatedAsientos(params) {
+        const { page = 1, perPage = 20, filters = {}, sort = { column: 'fecha', order: 'desc' } } = params;
+        console.log("Solicitando asientos paginados con:", params);
+
+        const workspaceId = await this._getWorkspaceId();
+        if (!workspaceId) return { data: [], totalItems: 0 };
+        
+        const docRef = this.db.collection("workspaces").doc(workspaceId);
+        const doc = await docRef.get();
+        if (!doc.exists) return { data: [], totalItems: 0 };
+        
+        let allAsientos = doc.data().asientos || [];
+        
+        let filteredData = allAsientos.filter(a => {
+            if (filters.startDate && a.fecha < filters.startDate) {
+                return false;
+            }
+            if (filters.endDate && a.fecha > filters.endDate) {
+                return false;
+            }
+            if (filters.search) {
+                const term = filters.search.toLowerCase();
+                const matchesId = a.id.toString().includes(term);
+                const matchesDescripcion = a.descripcion.toLowerCase().includes(term);
+                if (!matchesId && !matchesDescripcion) return false;
+            }
+            return true;
+        });
+
+        const totalItems = filteredData.length;
+
+        filteredData.sort((a, b) => {
+            const valA = a[sort.column];
+            const valB = b[sort.column];
+            if (typeof valA === 'string') {
+                return sort.order === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            } else {
+                return sort.order === 'asc' ? (valA || 0) - (valB || 0) : (valB || 0) - (valA || 0);
+            }
+        });
+        
+        const startIndex = (page - 1) * perPage;
+        const endIndex = startIndex + perPage;
+        const paginatedData = filteredData.slice(startIndex, endIndex);
+
+        return { data: paginatedData, totalItems };
     }
     // NOTA: getDatosDashboard se mantiene aquí por ahora, ya que contiene lógica de negocio
     // que eventualmente vivirá en el backend, no en el repositorio genérico.

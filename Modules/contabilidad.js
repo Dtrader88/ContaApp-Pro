@@ -313,86 +313,84 @@ Object.assign(ContaApp, {
     },
 
     // Módulo: Diario General
-            renderDiarioGeneral(filters = {}) {
-        document.getElementById('page-actions-header').innerHTML = `<div class="flex flex-wrap gap-2">
-            <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarDiarioCSV()"><i class="fa-solid fa-file-csv me-2"></i>Exportar CSV</button>
-            <button class="conta-btn conta-btn-accent" onclick="ContaApp.abrirModalReclasificarApertura()">Reclasificar Saldo</button>
-            <button class="conta-btn" onclick="ContaApp.abrirModalAsientoManual()">+ Asiento Manual</button>
-        </div>`;
-        
-        let asientos = [...this.asientos];
+            async renderDiarioGeneral(filters = {}) {
+    document.getElementById('page-actions-header').innerHTML = `<div class="flex flex-wrap gap-2">
+        <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarDiarioCSV()"><i class="fa-solid fa-file-csv me-2"></i>Exportar CSV</button>
+        <button class="conta-btn conta-btn-accent" onclick="ContaApp.abrirModalReclasificarApertura()">Reclasificar Saldo</button>
+        <button class="conta-btn" onclick="ContaApp.abrirModalAsientoManual()">+ Asiento Manual</button>
+    </div>`;
+    
+    const filterFormHTML = `<div class="conta-card p-3 mb-4">
+        <form onsubmit="event.preventDefault(); ContaApp.filtrarLista('diario-general');" class="flex flex-wrap items-end gap-3">
+            <div>
+                <label class="text-xs font-semibold">Buscar por Descripción o #</label>
+                <input type="search" id="diario-general-search" class="conta-input md:w-72" value="${filters.search || ''}">
+            </div>
+            <div>
+                <label class="text-xs font-semibold">Desde</label>
+                <input type="date" id="diario-general-start-date" class="conta-input" value="${filters.startDate || ''}">
+            </div>
+            <div>
+                <label class="text-xs font-semibold">Hasta</label>
+                <input type="date" id="diario-general-end-date" class="conta-input" value="${filters.endDate || ''}">
+            </div>
+            <button type="submit" class="conta-btn">Filtrar</button>
+        </form>
+    </div>`;
 
-        if (filters.search) {
-            const searchTerm = filters.search.toLowerCase();
-            asientos = asientos.filter(a => a.descripcion.toLowerCase().includes(searchTerm) || a.id.toString().includes(searchTerm));
-        }
-        if (filters.startDate) asientos = asientos.filter(a => a.fecha >= filters.startDate);
-        if (filters.endDate) asientos = asientos.filter(a => a.fecha <= filters.endDate);
-        
-        let html = `<div class="conta-card p-3 mb-4">
-            <form onsubmit="event.preventDefault(); ContaApp.filtrarLista('diario-general');" class="flex flex-wrap items-end gap-3">
-                <div>
-                    <label class="text-xs font-semibold">Buscar por Descripción o #</label>
-                    <input type="search" id="diario-general-search" class="conta-input md:w-72" value="${filters.search || ''}">
-                </div>
-                <div>
-                    <label class="text-xs font-semibold">Desde</label>
-                    <input type="date" id="diario-general-start-date" class="conta-input" value="${filters.startDate || ''}">
-                </div>
-                <div>
-                    <label class="text-xs font-semibold">Hasta</label>
-                    <input type="date" id="diario-general-end-date" class="conta-input" value="${filters.endDate || ''}">
-                </div>
-                <button type="submit" class="conta-btn">Filtrar</button>
-            </form>
-        </div>`;
+    const { currentPage, perPage } = this.getPaginationState('diario-general');
+    const { column, order } = this.diarioSortState;
 
-        if (asientos.length === 0) {
-            html += `<div class="conta-card text-center p-8 text-[var(--color-text-secondary)]">No hay asientos que coincidan con los filtros.</div>`;
-        } else {
-            const { currentPage, perPage } = this.getPaginationState('diario-general');
-            const startIndex = (currentPage - 1) * perPage;
-            const endIndex = startIndex + perPage;
-            asientos.sort((a,b) => new Date(b.fecha) - new Date(b.fecha) || b.id - a.id);
-            const itemsParaMostrar = asientos.slice(startIndex, endIndex);
+    const { data: itemsParaMostrar, totalItems } = await this.repository.getPaginatedAsientos({
+        page: currentPage,
+        perPage: perPage,
+        filters: {
+            search: filters.search,
+            startDate: filters.startDate,
+            endDate: filters.endDate
+        },
+        sort: { column, order }
+    });
 
-            itemsParaMostrar.forEach(asiento => {
-                html += `<div class="conta-card mb-4">
-                    <div class="flex justify-between items-center border-b border-[var(--color-border-accent)] pb-2 mb-2">
-                        <div>
-                            <span class="font-bold">Asiento #${asiento.id}</span> 
-                            <span class="text-sm text-[var(--color-text-secondary)]">(${asiento.fecha})</span>
-                        </div>
-                        <div class="flex items-center gap-4">
-                            <div class="text-sm">${asiento.descripcion}</div>
-                            ${!asiento.transaccionId ? `
-                                <button class="conta-btn-icon edit" title="Editar Asiento Manual" onclick="ContaApp.abrirModalEditarAsiento(${asiento.id})"><i class="fa-solid fa-pencil"></i></button>
-                            ` : ''}
-                        </div>
+    let resultsHTML;
+    if (totalItems === 0) {
+        resultsHTML = `<div class="conta-card text-center p-8 text-[var(--color-text-secondary)]">No hay asientos que coincidan con los filtros.</div>`;
+    } else {
+        let asientosHTML = '';
+        itemsParaMostrar.forEach(asiento => {
+            asientosHTML += `<div class="conta-card mb-4">
+                <div class="flex justify-between items-center border-b border-[var(--color-border-accent)] pb-2 mb-2">
+                    <div>
+                        <span class="font-bold">Asiento #${asiento.id}</span> 
+                        <span class="text-sm text-[var(--color-text-secondary)]">(${asiento.fecha})</span>
                     </div>
-<table class="min-w-full text-sm conta-table-zebra"><thead><tr>
-    <th class="conta-table-th">Código</th><th class="conta-table-th">Cuenta</th>
-    <th class="conta-table-th text-right">Debe</th><th class="conta-table-th text-right">Haber</th>
-</tr></thead><tbody>`;
-                asiento.movimientos.forEach(mov => {
-                    const cuenta = this.findById(this.planDeCuentas, mov.cuentaId);
-                    html += `<tr>
-                        <td class="conta-table-td font-mono">${cuenta?.codigo || 'N/A'}</td>
-                        <td class="conta-table-td">${cuenta?.nombre || 'N/A'}</td>
-                        <td class="conta-table-td text-right font-mono">${mov.debe > 0 ? this.formatCurrency(mov.debe) : ''}</td>
-                        <td class="conta-table-td text-right font-mono">${mov.haber > 0 ? this.formatCurrency(mov.haber) : ''}</td>
-                    </tr>`;
-                });
-                html += `</tbody></table></div>`;
+                    <div class="flex items-center gap-4">
+                        <div class="text-sm">${asiento.descripcion}</div>
+                        ${!asiento.transaccionId ? `
+                            <button class="conta-btn-icon edit" title="Editar Asiento Manual" onclick="ContaApp.abrirModalEditarAsiento(${asiento.id})"><i class="fa-solid fa-pencil"></i></button>
+                        ` : ''}
+                    </div>
+                </div>
+                <table class="min-w-full text-sm conta-table-zebra"><thead><tr>
+                    <th class="conta-table-th">Código</th><th class="conta-table-th">Cuenta</th>
+                    <th class="conta-table-th text-right">Debe</th><th class="conta-table-th text-right">Haber</th>
+                </tr></thead><tbody>`;
+            asiento.movimientos.forEach(mov => {
+                const cuenta = this.findById(this.planDeCuentas, mov.cuentaId);
+                asientosHTML += `<tr>
+                    <td class="conta-table-td font-mono">${cuenta?.codigo || 'N/A'}</td>
+                    <td class="conta-table-td">${cuenta?.nombre || 'N/A'}</td>
+                    <td class="conta-table-td text-right font-mono">${mov.debe > 0 ? this.formatCurrency(mov.debe) : ''}</td>
+                    <td class="conta-table-td text-right font-mono">${mov.haber > 0 ? this.formatCurrency(mov.haber) : ''}</td>
+                </tr>`;
             });
-            
-            this.renderPaginationControls('diario-general', asientos.length);
-        }
-        document.getElementById('diario-general').innerHTML = html;
-        if(filters.search) document.getElementById('diario-general-search').value = filters.search;
-        if(filters.startDate) document.getElementById('diario-general-start-date').value = filters.startDate;
-        if(filters.endDate) document.getElementById('diario-general-end-date').value = filters.endDate;
-    },
+            asientosHTML += `</tbody></table></div>`;
+        });
+        resultsHTML = asientosHTML;
+        this.renderPaginationControls('diario-general', totalItems);
+    }
+    document.getElementById('diario-general').innerHTML = filterFormHTML + resultsHTML;
+},
     abrirModalEditarAsiento(asientoId) {
         const asiento = this.findById(this.asientos, asientoId);
         if (!asiento || asiento.transaccionId) {
@@ -742,5 +740,14 @@ reabrirPeriodoAnterior() {
             this.showToast(`Período ${periodoAnterior} ha sido reabierto.`, 'success');
         }
     });
+},
+ordenarDiarioPor(columna) {
+    if (this.diarioSortState.column === columna) {
+        this.diarioSortState.order = this.diarioSortState.order === 'asc' ? 'desc' : 'asc';
+    } else {
+        this.diarioSortState.column = columna;
+        this.diarioSortState.order = 'desc'; // Por defecto, es mejor ver los últimos asientos
+    }
+    this.irModulo('diario-general');
 },
 });

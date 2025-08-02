@@ -230,96 +230,122 @@ getAgingData(tipoContacto, fechaReporte) {
     }
 },
 
-        renderCXC_TabEstadoCuenta(params = {}) {
-    document.getElementById('page-title-header').innerText = `Cuentas por Cobrar`;
-    document.getElementById('page-actions-header').innerHTML = `
-        <div class="flex gap-2 flex-wrap">
-            <button class="conta-btn conta-btn-success" onclick="ContaApp.procesarSeleccionDePago('cliente')"><i class="fa-solid fa-hand-holding-dollar me-2"></i>Registrar Cobro</button>
-            <button class="conta-btn" onclick="ContaApp.abrirModalVenta()">+ Nueva Venta</button>
-        </div>`;
+        async renderCXC_TabEstadoCuenta(params = {}) {
+        document.getElementById('page-title-header').innerText = `Cuentas por Cobrar`;
+        document.getElementById('page-actions-header').innerHTML = `
+            <div class="flex gap-2 flex-wrap">
+                <button class="conta-btn conta-btn-success" onclick="ContaApp.procesarSeleccionDePago('cliente')"><i class="fa-solid fa-hand-holding-dollar me-2"></i>Registrar Cobro</button>
+                <button class="conta-btn" onclick="ContaApp.abrirModalVenta()">+ Nueva Venta</button>
+            </div>`;
 
-    const searchTerm = params.search ? params.search.trim().toLowerCase() : '';
-    const clienteEncontrado = searchTerm ? this.contactos.find(c => c.tipo === 'cliente' && c.nombre.toLowerCase().includes(searchTerm)) : null;
+        const searchTerm = params.search ? params.search.trim().toLowerCase() : '';
+        const clienteEncontrado = searchTerm ? this.contactos.find(c => c.tipo === 'cliente' && c.nombre.toLowerCase().includes(searchTerm)) : null;
 
-    if (clienteEncontrado) {
-        this.irModulo('cxc', { clienteId: clienteEncontrado.id });
-        return; 
-    }
+        if (clienteEncontrado) {
+            this.irModulo('cxc', { clienteId: clienteEncontrado.id });
+            return; 
+        }
 
-    let html = `
-        <div class="conta-card p-3 mb-4">
-            <form onsubmit="event.preventDefault(); ContaApp.filtrarLista('cxc');" class="flex items-end gap-3">
-                <div>
-                    <label class="text-xs font-semibold">Buscar por Cliente para ver Estado de Cuenta individual</label>
-                    <input type="search" id="cxc-search" class="conta-input w-full md:w-80" value="${searchTerm}" placeholder="Escribe nombre del cliente...">
-                </div>
-                <button type="submit" class="conta-btn">Buscar</button>
-                ${searchTerm ? `<button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.irModulo('cxc')">Ver Todas</button>` : ''}
-            </form>
-        </div>`;
+        let html = `
+            <div class="conta-card p-3 mb-4">
+                <form onsubmit="event.preventDefault(); ContaApp.filtrarLista('cxc');" class="flex items-end gap-3">
+                    <div>
+                        <label class="text-xs font-semibold">Buscar por Cliente para ver Estado de Cuenta individual</label>
+                        <input type="search" id="cxc-search" class="conta-input w-full md:w-80" value="${searchTerm}" placeholder="Escribe nombre del cliente...">
+                    </div>
+                    <button type="submit" class="conta-btn">Buscar</button>
+                    ${searchTerm ? `<button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.irModulo('cxc')">Ver Todas</button>` : ''}
+                </form>
+            </div>`;
 
-    const agingData = this.getAgingData('cliente', this.getTodayDate());
-
-    if (agingData.facturas.length === 0) {
-        html += this.generarEstadoVacioHTML('fa-file-invoice-dollar', '¡Todo al día!', 'No tienes cuentas por cobrar pendientes. ¡Excelente trabajo!', '+ Crear Nueva Venta', "ContaApp.irModulo('ventas', {action: 'new'})");
-    } else {
+        // ===== INICIO DE LOS CAMBIOS CLAVE =====
         const { currentPage, perPage } = this.getPaginationState('cxc');
-        const startIndex = (currentPage - 1) * perPage;
-        const endIndex = startIndex + perPage;
-        const itemsParaMostrar = agingData.facturas.slice(startIndex, endIndex);
+        // El reporte de antigüedad siempre se ordena por fecha de vencimiento.
+        const sortOptions = { column: 'fechaVencimiento', order: 'asc' };
 
-        let tableRowsHTML = '';
-        itemsParaMostrar.forEach(factura => {
-            const cliente = this.findById(this.contactos, factura.contactoId);
-            const saldo = factura.total - (factura.montoPagado || 0);
-            
-            let descripcionMostrada = 'Varios ítems...';
-            if (factura.items && factura.items.length > 0) {
-                const primerItem = factura.items[0];
-                if (primerItem.itemType === 'producto') {
-                    descripcionMostrada = this.findById(this.productos, primerItem.productoId)?.nombre || 'Producto no encontrado';
-                } else {
-                    descripcionMostrada = this.findById(this.planDeCuentas, primerItem.cuentaId)?.nombre || 'Servicio no encontrado';
-                }
-                if (factura.items.length > 1) {
-                    descripcionMostrada += '...';
-                }
-            }
-
-            tableRowsHTML += `<tr class="cursor-pointer hover:bg-[var(--color-bg-accent)]" onclick="ContaApp.abrirModalHistorialFactura(${factura.id})">
-                <td class="conta-table-td text-center" onclick="event.stopPropagation();"><input type="checkbox" class="cxc-factura-check" data-factura-id="${factura.id}"></td>
-                <td class="conta-table-td">${factura.fecha}</td>
-                <td class="conta-table-td font-bold">${cliente?.nombre || 'N/A'}</td>
-                <td class="conta-table-td font-mono">${factura.numeroFactura || factura.id}</td>
-                <td class="conta-table-td text-sm text-[var(--color-text-secondary)] italic">${descripcionMostrada}</td>
-                <td class="conta-table-td text-right font-mono">${factura.agingBucket === 'current' ? this.formatCurrency(saldo) : ''}</td>
-                <td class="conta-table-td text-right font-mono">${factura.agingBucket === 'd1_30' ? this.formatCurrency(saldo) : ''}</td>
-                <td class="conta-table-td text-right font-mono">${factura.agingBucket === 'd31_60' ? this.formatCurrency(saldo) : ''}</td>
-                <td class="conta-table-td text-right font-mono">${factura.agingBucket === 'd61_90' ? this.formatCurrency(saldo) : ''}</td>
-                <td class="conta-table-td text-right font-mono">${factura.agingBucket === 'd91_plus' ? this.formatCurrency(saldo) : ''}</td>
-                <td class="conta-table-td text-right font-mono font-bold">${this.formatCurrency(saldo)}</td>
-            </tr>`;
+        // 1. Llamada asíncrona al repositorio para obtener solo las facturas pendientes
+        const { data: facturasPendientes, totalItems } = await this.repository.getPaginatedTransactions({
+            page: currentPage,
+            perPage: perPage,
+            filters: {
+                tipos: ['venta'],
+                estado: 'Pendiente' // ¡Filtramos directamente por estado! (Aunque el filtro de estado también acepta Parcial)
+            },
+            sort: sortOptions
         });
 
-        html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
-            <thead><tr>
-                <th class="conta-table-th w-10"><input type="checkbox" onchange="ContaApp.toggleAllCheckboxes(this, 'cxc-factura-check')"></th>
-                <th class="conta-table-th">Fecha</th>
-                <th class="conta-table-th">Cliente</th>
-                <th class="conta-table-th">Factura #</th>
-                <th class="conta-table-th">Descripción</th>
-                <th class="conta-table-th text-right">No Vencido</th>
-                <th class="conta-table-th text-right">1-30 Días</th>
-                <th class="conta-table-th text-right">31-60 Días</th>
-                <th class="conta-table-th text-right">61-90 Días</th>
-                <th class="conta-table-th text-right">> 90 Días</th>
-                <th class="conta-table-th text-right">Total Pendiente</th>
-            </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
-        
-        this.renderPaginationControls('cxc', agingData.facturas.length);
-    }
-    document.getElementById('cxc-contenido').innerHTML = html;
-},
+        // Calculamos los buckets de antigüedad solo para los items de la página actual
+        const hoy = new Date();
+        hoy.setHours(23, 59, 59, 999);
+        facturasPendientes.forEach(factura => {
+            const fechaFactura = new Date(factura.fechaVencimiento + 'T00:00:00');
+            const diffTime = hoy.getTime() - fechaFactura.getTime();
+            const diasVencido = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+            
+            if (diasVencido <= 0) factura.agingBucket = 'current';
+            else if (diasVencido <= 30) factura.agingBucket = 'd1_30';
+            else if (diasVencido <= 60) factura.agingBucket = 'd31_60';
+            else if (diasVencido <= 90) factura.agingBucket = 'd61_90';
+            else factura.agingBucket = 'd91_plus';
+        });
+        // ===== FIN DE LOS CAMBIOS CLAVE =====
+
+
+        if (totalItems === 0) {
+            html += this.generarEstadoVacioHTML('fa-file-invoice-dollar', '¡Todo al día!', 'No tienes cuentas por cobrar pendientes. ¡Excelente trabajo!', '+ Crear Nueva Venta', "ContaApp.irModulo('ventas', {action: 'new'})");
+        } else {
+            let tableRowsHTML = '';
+            facturasPendientes.forEach(factura => {
+                const cliente = this.findById(this.contactos, factura.contactoId);
+                const saldo = factura.total - (factura.montoPagado || 0);
+                
+                let descripcionMostrada = 'Varios ítems...';
+                if (factura.items && factura.items.length > 0) {
+                    const primerItem = factura.items[0];
+                    if (primerItem.itemType === 'producto') {
+                        descripcionMostrada = this.findById(this.productos, primerItem.productoId)?.nombre || 'Producto no encontrado';
+                    } else {
+                        descripcionMostrada = this.findById(this.planDeCuentas, primerItem.cuentaId)?.nombre || 'Servicio no encontrado';
+                    }
+                    if (factura.items.length > 1) {
+                        descripcionMostrada += '...';
+                    }
+                }
+
+                tableRowsHTML += `<tr class="cursor-pointer hover:bg-[var(--color-bg-accent)]" onclick="ContaApp.abrirModalHistorialFactura(${factura.id})">
+                    <td class="conta-table-td text-center" onclick="event.stopPropagation();"><input type="checkbox" class="cxc-factura-check" data-factura-id="${factura.id}"></td>
+                    <td class="conta-table-td">${factura.fecha}</td>
+                    <td class="conta-table-td font-bold">${cliente?.nombre || 'N/A'}</td>
+                    <td class="conta-table-td font-mono">${factura.numeroFactura || factura.id}</td>
+                    <td class="conta-table-td text-sm text-[var(--color-text-secondary)] italic">${descripcionMostrada}</td>
+                    <td class="conta-table-td text-right font-mono">${factura.agingBucket === 'current' ? this.formatCurrency(saldo) : ''}</td>
+                    <td class="conta-table-td text-right font-mono">${factura.agingBucket === 'd1_30' ? this.formatCurrency(saldo) : ''}</td>
+                    <td class="conta-table-td text-right font-mono">${factura.agingBucket === 'd31_60' ? this.formatCurrency(saldo) : ''}</td>
+                    <td class="conta-table-td text-right font-mono">${factura.agingBucket === 'd61_90' ? this.formatCurrency(saldo) : ''}</td>
+                    <td class="conta-table-td text-right font-mono">${factura.agingBucket === 'd91_plus' ? this.formatCurrency(saldo) : ''}</td>
+                    <td class="conta-table-td text-right font-mono font-bold">${this.formatCurrency(saldo)}</td>
+                </tr>`;
+            });
+
+            html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
+                <thead><tr>
+                    <th class="conta-table-th w-10"><input type="checkbox" onchange="ContaApp.toggleAllCheckboxes(this, 'cxc-factura-check')"></th>
+                    <th class="conta-table-th">Fecha</th>
+                    <th class="conta-table-th">Cliente</th>
+                    <th class="conta-table-th">Factura #</th>
+                    <th class="conta-table-th">Descripción</th>
+                    <th class="conta-table-th text-right">No Vencido</th>
+                    <th class="conta-table-th text-right">1-30 Días</th>
+                    <th class="conta-table-th text-right">31-60 Días</th>
+                    <th class="conta-table-th text-right">61-90 Días</th>
+                    <th class="conta-table-th text-right">> 90 Días</th>
+                    <th class="conta-table-th text-right">Total Pendiente</th>
+                </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
+            
+            this.renderPaginationControls('cxc', totalItems);
+        }
+        document.getElementById('cxc-contenido').innerHTML = html;
+    },
         renderCXC_TabAging(params = {}) {
         const filtroAntiguedad = params.filtroAntiguedad || 'Todos';
 

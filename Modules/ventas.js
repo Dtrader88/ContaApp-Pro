@@ -283,7 +283,7 @@ ordenarVentasPor(columna) {
                     subtotal, descuento: (plantilla.descuento || 0), impuesto, total,
                     estado: 'Pendiente', montoPagado: 0
                 };
-
+                this.registrarAuditoria('CREAR_VENTA', `Creó la factura #${nuevaVenta.numeroFactura} por ${this.formatCurrency(nuevaVenta.total)}`, nuevaVenta.id, 'venta');
                 const cuentaDebeId = 120; // Siempre a crédito
                 const asientoDescripcion = `Venta recurrente a ${this.findById(this.contactos, plantilla.contactoId).nombre} #${nuevaVenta.numeroFactura}`;
                 const cuentaIvaDebitoId = 240, cuentaCostoVentasId = 501, cuentaInventarioId = 130, cuentaDescuentoId = 420;
@@ -722,232 +722,223 @@ ordenarVentasPor(columna) {
     document.getElementById('venta-total').textContent = this.formatCurrency(total);
 },
         async guardarVenta(e, anticipoIdAplicado = null) {
-        e.preventDefault();
-        const submitButton = e.target.querySelector('button[type="submit"]');
-        this.toggleButtonLoading(submitButton, true);
+    const submitButton = e.target.querySelector('button[type="submit"]');
+    this.toggleButtonLoading(submitButton, true);
 
-        try {
-            const clienteId = parseInt(document.getElementById('venta-cliente-id').value);
-            if (!clienteId) throw new Error('Por favor, selecciona un cliente válido de la lista.');
+    try {
+        const clienteId = parseInt(document.getElementById('venta-cliente-id').value);
+        if (!clienteId) throw new Error('Por favor, selecciona un cliente válido de la lista.');
+        
+        const fecha = document.getElementById('venta-fecha').value;
+        const terminosPago = document.getElementById('venta-terminos-pago').value;
+        const esRecurrente = document.getElementById('venta-recurrente-check').checked;
+        const items = [];
+        let subtotal = 0;
+
+        document.querySelectorAll('.venta-item-row').forEach(row => {
+            const tipo = row.querySelector('.venta-item-type').value;
+            const itemId = parseInt(row.querySelector('.venta-item-id').value);
+            const cantidad = parseInt(row.querySelector('.venta-item-cantidad').value);
+            const precio = parseFloat(row.querySelector('.venta-item-precio').value);
+            const descripcion = row.querySelector('.venta-item-descripcion')?.value || '';
             
-            const fecha = document.getElementById('venta-fecha').value;
-            const terminosPago = document.getElementById('venta-terminos-pago').value;
-            const esRecurrente = document.getElementById('venta-recurrente-check').checked;
-            const items = [];
-            let subtotal = 0;
+            if (tipo === 'producto') {
+                const producto = this.findById(this.productos, itemId);
+                if (producto) {
+                    items.push({ itemType: 'producto', productoId: itemId, cantidad, precio, costo: producto.costo });
+                    subtotal += cantidad * precio;
+                }
+            } else {
+                items.push({ itemType: 'servicio', cuentaId: itemId, cantidad, precio, descripcion });
+                subtotal += cantidad * precio;
+            }
+        });
 
-            document.querySelectorAll('.venta-item-row').forEach(row => {
-                const tipo = row.querySelector('.venta-item-type').value;
-                const itemId = parseInt(row.querySelector('.venta-item-id').value);
-                const cantidad = parseInt(row.querySelector('.venta-item-cantidad').value);
-                const precio = parseFloat(row.querySelector('.venta-item-precio').value);
-                const descripcion = row.querySelector('.venta-item-descripcion')?.value || '';
-                
-                if (tipo === 'producto') {
-                    const producto = this.findById(this.productos, itemId);
-                    if (producto) {
-                        items.push({ itemType: 'producto', productoId: itemId, cantidad, precio, costo: producto.costo });
-                        subtotal += cantidad * precio;
+        if (items.length === 0) throw new Error('Debes agregar al menos un ítem.');
+
+        const descuento = parseFloat(document.getElementById('venta-descuento-monto').dataset.montoReal) || 0;
+
+        let fechaVencimiento = new Date(fecha + 'T00:00:00');
+        if (terminosPago === 'credito_15') fechaVencimiento.setDate(fechaVencimiento.getDate() + 15);
+        else if (terminosPago === 'credito_30') fechaVencimiento.setDate(fechaVencimiento.getDate() + 30);
+        fechaVencimiento = fechaVencimiento.toISOString().slice(0, 10);
+
+        if (esRecurrente) {
+            const nuevaPlantilla = {
+                id: this.idCounter++, tipo: 'venta', contactoId: clienteId, items: items,
+                descuento: descuento, terminosPago: terminosPago, frecuencia: 'mensual', ultimoGenerado: null
+            };
+            this.recurrentes.push(nuevaPlantilla);
+            this.saveAll();
+            this.isFormDirty = false;
+            this.closeModal();
+            this.irModulo('ventas', { submodulo: 'recurrentes' });
+            this.showToast('Plantilla de venta recurrente guardada.', 'success');
+        } else {
+            for (const item of items) {
+                if (item.itemType === 'producto') {
+                    const producto = this.findById(this.productos, item.productoId);
+                    if (producto && producto.stock < item.cantidad) {
+                        throw new Error(`Stock insuficiente para "${producto.nombre}". Stock actual: ${producto.stock}.`);
+                    }
+                }
+            }
+            
+            const subtotalConDescuento = subtotal - descuento;
+            const impuesto = subtotalConDescuento * (this.empresa.taxRate / 100);
+            const total = subtotalConDescuento + impuesto;
+
+            const nuevaVenta = {
+                id: this.idCounter++, numeroFactura: document.getElementById('venta-numero-factura').value,
+                tipo: 'venta', fecha, fechaVencimiento, terminosPago, contactoId: clienteId, items,
+                subtotal, descuento, impuesto, total, estado: 'Pendiente', montoPagado: 0
+            };
+            
+            this.registrarAuditoria('CREAR_VENTA', `Creó la factura #${nuevaVenta.numeroFactura} por ${this.formatCurrency(nuevaVenta.total)}`, nuevaVenta.id, 'venta');
+            
+            this.transacciones.push(nuevaVenta);
+
+            let cuentaDebeId, asientoDescripcion;
+            if (terminosPago === 'contado') {
+                cuentaDebeId = parseInt(document.getElementById('venta-pago-cuenta-banco').value);
+                if (!cuentaDebeId) throw new Error('Por favor, selecciona una cuenta para el depósito.');
+                nuevaVenta.estado = 'Pagada';
+                nuevaVenta.montoPagado = total;
+                asientoDescripcion = `Venta de contado a ${this.findById(this.contactos, clienteId).nombre} #${nuevaVenta.numeroFactura}`;
+            } else { 
+                cuentaDebeId = 120;
+                asientoDescripcion = `Venta a crédito a ${this.findById(this.contactos, clienteId).nombre} #${nuevaVenta.numeroFactura}`;
+            }
+            
+            const cuentaIvaDebitoId = 240, cuentaDescuentoId = 420;
+            const movimientosVenta = [ { cuentaId: cuentaDebeId, debe: total, haber: 0 }, { cuentaId: cuentaIvaDebitoId, debe: 0, haber: impuesto } ];
+            
+            if (descuento > 0) movimientosVenta.push({ cuentaId: cuentaDescuentoId, debe: descuento, haber: 0 });
+
+            items.forEach(item => {
+                const montoItem = item.cantidad * item.precio;
+                if (item.itemType === 'producto') {
+                    const producto = this.findById(this.productos, item.productoId);
+                    if(producto) {
+                        movimientosVenta.push({ cuentaId: producto.cuentaIngresoId, debe: 0, haber: montoItem });
+                        producto.stock -= item.cantidad;
                     }
                 } else {
-                    items.push({ itemType: 'servicio', cuentaId: itemId, cantidad, precio, descripcion });
-                    subtotal += cantidad * precio;
+                    movimientosVenta.push({ cuentaId: item.cuentaId, debe: 0, haber: montoItem });
                 }
             });
 
-            if (items.length === 0) throw new Error('Debes agregar al menos un ítem.');
-
-            const descuento = parseFloat(document.getElementById('venta-descuento-monto').dataset.montoReal) || 0;
-
-            let fechaVencimiento = new Date(fecha + 'T00:00:00');
-            if (terminosPago === 'credito_15') fechaVencimiento.setDate(fechaVencimiento.getDate() + 15);
-            else if (terminosPago === 'credito_30') fechaVencimiento.setDate(fechaVencimiento.getDate() + 30);
-            fechaVencimiento = fechaVencimiento.toISOString().slice(0, 10);
-
-            if (esRecurrente) {
-                // La lógica de recurrentes no genera asientos inmediatos, por lo que puede usar saveAll()
-                const nuevaPlantilla = {
-                    id: this.idCounter++, tipo: 'venta', contactoId: clienteId, items: items,
-                    descuento: descuento, terminosPago: terminosPago, frecuencia: 'mensual', ultimoGenerado: null
-                };
-                this.recurrentes.push(nuevaPlantilla);
-                this.saveAll(); // Guardado simple para plantillas
-                this.isFormDirty = false;
-                this.closeModal();
-                this.irModulo('ventas', { submodulo: 'recurrentes' });
-                this.showToast('Plantilla de venta recurrente guardada.', 'success');
-            } else {
-                for (const item of items) {
-                    if (item.itemType === 'producto') {
-                        const producto = this.findById(this.productos, item.productoId);
-                        if (producto && producto.stock < item.cantidad) {
-                            throw new Error(`Stock insuficiente para "${producto.nombre}". Stock actual: ${producto.stock}.`);
-                        }
+            if (nuevaVenta.montoPagado >= total - 0.01) nuevaVenta.estado = 'Pagada';
+            else if (nuevaVenta.montoPagado > 0) nuevaVenta.estado = 'Parcial';
+            
+            this.crearAsiento(fecha, asientoDescripcion, movimientosVenta, nuevaVenta.id);
+            
+            const costosPorCuenta = items.reduce((acc, item) => {
+                if (item.itemType === 'producto') {
+                    const producto = this.findById(this.productos, item.productoId);
+                    if(producto) {
+                        const cuentaId = producto.cuentaInventarioId;
+                        const costoItem = (producto.costo || 0) * item.cantidad;
+                        if (cuentaId && costoItem > 0) acc[cuentaId] = (acc[cuentaId] || 0) + costoItem;
                     }
                 }
-                
-                const subtotalConDescuento = subtotal - descuento;
-                const impuesto = subtotalConDescuento * (this.empresa.taxRate / 100);
-                const total = subtotalConDescuento + impuesto;
+                return acc;
+            }, {});
 
-                const nuevaVenta = {
-                    id: this.idCounter++, numeroFactura: document.getElementById('venta-numero-factura').value,
-                    tipo: 'venta', fecha, fechaVencimiento, terminosPago, contactoId: clienteId, items,
-                    subtotal, descuento, impuesto, total, estado: 'Pendiente', montoPagado: 0
-                };
+            const costoTotalVenta = Object.values(costosPorCuenta).reduce((sum, val) => sum + val, 0);
 
-                // --- INICIO DE LA REFACTORIZACIÓN ---
-                // 1. Actualizamos el estado local (arrays en memoria)
-                this.transacciones.push(nuevaVenta);
-                // La función crearAsiento actualiza this.asientos y this.productos (stock) internamente
-
-                let cuentaDebeId, asientoDescripcion;
-                if (terminosPago === 'contado') {
-                    cuentaDebeId = parseInt(document.getElementById('venta-pago-cuenta-banco').value);
-                    if (!cuentaDebeId) throw new Error('Por favor, selecciona una cuenta para el depósito.');
-                    nuevaVenta.estado = 'Pagada';
-                    nuevaVenta.montoPagado = total;
-                    asientoDescripcion = `Venta de contado a ${this.findById(this.contactos, clienteId).nombre} #${nuevaVenta.numeroFactura}`;
-                } else { 
-                    cuentaDebeId = 120;
-                    asientoDescripcion = `Venta a crédito a ${this.findById(this.contactos, clienteId).nombre} #${nuevaVenta.numeroFactura}`;
+            if (costoTotalVenta > 0) {
+                const cuentaCostoVentasId = 510;
+                const movimientosCosto = [{ cuentaId: cuentaCostoVentasId, debe: costoTotalVenta, haber: 0 }];
+                for (const cuentaId in costosPorCuenta) {
+                    movimientosCosto.push({ cuentaId: parseInt(cuentaId), debe: 0, haber: costosPorCuenta[cuentaId] });
                 }
-                
-                const cuentaIvaDebitoId = 240, cuentaDescuentoId = 420;
-                const movimientosVenta = [ { cuentaId: cuentaDebeId, debe: total, haber: 0 }, { cuentaId: cuentaIvaDebitoId, debe: 0, haber: impuesto } ];
-                
-                if (descuento > 0) movimientosVenta.push({ cuentaId: cuentaDescuentoId, debe: descuento, haber: 0 });
-
-                items.forEach(item => {
-                    const montoItem = item.cantidad * item.precio;
-                    if (item.itemType === 'producto') {
-                        const producto = this.findById(this.productos, item.productoId);
-                        if(producto) {
-                            movimientosVenta.push({ cuentaId: producto.cuentaIngresoId, debe: 0, haber: montoItem });
-                            producto.stock -= item.cantidad; // Modificación de stock
-                        }
-                    } else {
-                        movimientosVenta.push({ cuentaId: item.cuentaId, debe: 0, haber: montoItem });
-                    }
-                });
-                
-                // ... (Lógica de anticipos y estado se mantiene igual) ...
-
-                if (nuevaVenta.montoPagado >= total - 0.01) nuevaVenta.estado = 'Pagada';
-                else if (nuevaVenta.montoPagado > 0) nuevaVenta.estado = 'Parcial';
-                
-                this.crearAsiento(fecha, asientoDescripcion, movimientosVenta, nuevaVenta.id);
-                
-                const costosPorCuenta = items.reduce((acc, item) => {
-                    if (item.itemType === 'producto') {
-                        const producto = this.findById(this.productos, item.productoId);
-                        if(producto) {
-                            const cuentaId = producto.cuentaInventarioId;
-                            const costoItem = (producto.costo || 0) * item.cantidad;
-                            if (cuentaId && costoItem > 0) acc[cuentaId] = (acc[cuentaId] || 0) + costoItem;
-                        }
-                    }
-                    return acc;
-                }, {});
-
-                const costoTotalVenta = Object.values(costosPorCuenta).reduce((sum, val) => sum + val, 0);
-
-                if (costoTotalVenta > 0) {
-                    const cuentaCostoVentasId = 510;
-                    const movimientosCosto = [{ cuentaId: cuentaCostoVentasId, debe: costoTotalVenta, haber: 0 }];
-                    for (const cuentaId in costosPorCuenta) {
-                        movimientosCosto.push({ cuentaId: parseInt(cuentaId), debe: 0, haber: costosPorCuenta[cuentaId] });
-                    }
-                    this.crearAsiento(fecha, `Costo de venta #${nuevaVenta.numeroFactura}`, movimientosCosto, nuevaVenta.id);
-                }
-                
-                // 2. Persistimos todos los cambios con el nuevo método del repositorio
-                await this.repository.actualizarMultiplesDatos({
-                    transacciones: this.transacciones,
-                    productos: this.productos,
-                    asientos: this.asientos,
-                    idCounter: this.idCounter // También guardamos el contador actualizado
-                });
-
-                this.isFormDirty = false;
-                this.closeModal(); 
-                this.irModulo('ventas'); 
-                this.abrirVistaPreviaFactura(nuevaVenta.id); 
-                this.showToast('Venta creada con éxito.', 'success');
-                // --- FIN DE LA REFACTORIZACIÓN ---
+                this.crearAsiento(fecha, `Costo de venta #${nuevaVenta.numeroFactura}`, movimientosCosto, nuevaVenta.id);
             }
             
-        } catch (error) {
-            console.error("Error al guardar la venta:", error);
-            this.showToast(error.message || 'Ocurrió un error al guardar.', 'error');
-        } finally {
-            this.toggleButtonLoading(submitButton, false);
+            await this.repository.actualizarMultiplesDatos({
+                transacciones: this.transacciones,
+                productos: this.productos,
+                asientos: this.asientos,
+                idCounter: this.idCounter,
+                auditLog: this.auditLog
+            });
+
+            this.isFormDirty = false;
+            this.closeModal(); 
+            this.irModulo('ventas'); 
+            this.abrirVistaPreviaFactura(nuevaVenta.id); 
+            this.showToast('Venta creada con éxito.', 'success');
         }
-    },
+        
+    } catch (error) {
+        console.error("Error al guardar la venta:", error);
+        this.showToast(error.message || 'Ocurrió un error al guardar.', 'error');
+    } finally {
+        this.toggleButtonLoading(submitButton, false);
+    }
+},
     
         anularVenta(ventaId) {
-        const venta = this.findById(this.transacciones, ventaId);
-        if (!venta) return;
+    const venta = this.findById(this.transacciones, ventaId);
+    if (!venta) return;
 
-        if (venta.estado === 'Anulada') {
-            this.showToast('Esta factura ya ha sido anulada.', 'info');
-            return;
-        }
+    if (venta.estado === 'Anulada') {
+        this.showToast('Esta factura ya ha sido anulada.', 'info');
+        return;
+    }
 
-        this.showConfirm(
-            `¿Seguro que deseas anular la Factura #${venta.numeroFactura}? Esta acción revertirá el asiento contable y devolverá los productos al stock. Esta acción no se puede deshacer.`,
-            async () => { // <-- Se convierte la función callback en async
-                try {
-                    // 1. Revertir el stock de los productos
-                    venta.items.forEach(item => {
-                        if (item.itemType === 'producto') {
-                            const producto = this.findById(this.productos, item.productoId);
-                            if (producto) {
-                                producto.stock += item.cantidad;
-                            }
+    this.showConfirm(
+        `¿Seguro que deseas anular la Factura #${venta.numeroFactura}? Esta acción revertirá el asiento contable y devolverá los productos al stock. Esta acción no se puede deshacer.`,
+        async () => {
+            try {
+                venta.items.forEach(item => {
+                    if (item.itemType === 'producto') {
+                        const producto = this.findById(this.productos, item.productoId);
+                        if (producto) {
+                            producto.stock += item.cantidad;
                         }
-                    });
+                    }
+                });
 
-                    // 2. Crear el asiento contable de anulación
-                    const asientosOriginales = this.asientos.filter(a => a.transaccionId === venta.id);
-                    const fechaAnulacion = this.getTodayDate();
+                const asientosOriginales = this.asientos.filter(a => a.transaccionId === venta.id);
+                const fechaAnulacion = this.getTodayDate();
 
-                    asientosOriginales.forEach(asientoOriginal => {
-                        const movimientosReversos = asientoOriginal.movimientos.map(mov => ({
-                            cuentaId: mov.cuentaId,
-                            debe: mov.haber, // Se invierten debe y haber
-                            haber: mov.debe
-                        }));
-                        
-                        this.crearAsiento(
-                            fechaAnulacion,
-                            `Anulación de Factura #${venta.numeroFactura}`,
-                            movimientosReversos
-                        );
-                    });
+                asientosOriginales.forEach(asientoOriginal => {
+                    const movimientosReversos = asientoOriginal.movimientos.map(mov => ({
+                        cuentaId: mov.cuentaId,
+                        debe: mov.haber,
+                        haber: mov.debe
+                    }));
                     
-                    // 3. Actualizar el estado de la factura
-                    venta.estado = 'Anulada';
+                    this.crearAsiento(
+                        fechaAnulacion,
+                        `Anulación de Factura #${venta.numeroFactura}`,
+                        movimientosReversos
+                    );
+                });
+                
+                venta.estado = 'Anulada';
 
-                    // --- INICIO DE LA REFACTORIZACIÓN ---
-                    // 4. Guardar todos los cambios de forma atómica
-                    await this.repository.actualizarMultiplesDatos({
-                        productos: this.productos,
-                        transacciones: this.transacciones,
-                        asientos: this.asientos
-                    });
-                    // --- FIN DE LA REFACTORIZACIÓN ---
+                this.registrarAuditoria('ANULAR_VENTA', `Anuló la factura #${venta.numeroFactura}`, venta.id, 'venta');
 
-                    this.irModulo('ventas');
-                    this.showToast('Factura anulada correctamente.', 'success');
+                await this.repository.actualizarMultiplesDatos({
+                    productos: this.productos,
+                    transacciones: this.transacciones,
+                    asientos: this.asientos,
+                    auditLog: this.auditLog
+                });
 
-                } catch (error) {
-                    console.error("Error al anular la venta:", error);
-                    this.showToast(`Error al anular: ${error.message}`, 'error');
-                }
+                this.irModulo('ventas');
+                this.showToast('Factura anulada correctamente.', 'success');
+
+            } catch (error) {
+                console.error("Error al anular la venta:", error);
+                this.showToast(`Error al anular: ${error.message}`, 'error');
             }
-        );
-    },
+        }
+    );
+},
     abrirModalNotaCredito() {
         const modalHTML = `
             <h3 class="conta-title mb-4">Nueva Nota de Crédito</h3>

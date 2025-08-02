@@ -2,25 +2,34 @@
 
 Object.assign(ContaApp, {
 
-    renderCompras(params = {}) {
+    async renderCompras(params = {}) {
     document.getElementById('page-actions-header').innerHTML = `<button class="conta-btn" onclick="ContaApp.abrirModalNuevaCompra()">+ Nueva Compra</button>`;
 
-    const compras = this.transacciones.filter(t => t.tipo === 'compra_inventario');
-    
+    const { currentPage, perPage } = this.getPaginationState('compras');
+    const { column, order } = this.comprasSortState;
+
+    const { data: itemsParaMostrar, totalItems } = await this.repository.getPaginatedTransactions({
+        page: currentPage,
+        perPage: perPage,
+        filters: {
+            tipos: ['compra_inventario'],
+            // En el futuro, podríamos añadir filtros avanzados aquí
+        },
+        sort: { column, order }
+    });
+
     let html;
-    if (compras.length === 0) {
+    if (totalItems === 0) {
         html = this.generarEstadoVacioHTML(
             'fa-shopping-basket', 'Aún no tienes compras de inventario',
             'Usa este módulo para registrar la compra de mercancía para reventa o materias primas.',
             '+ Registrar Primera Compra', "ContaApp.abrirModalNuevaCompra()"
         );
     } else {
-        const { currentPage, perPage } = this.getPaginationState('compras');
-        const startIndex = (currentPage - 1) * perPage;
-        const endIndex = startIndex + perPage;
-
-        compras.sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
-        const itemsParaMostrar = compras.slice(startIndex, endIndex);
+        const generarEncabezado = (nombreColumna, clave) => {
+            let icono = this.comprasSortState.column === clave ? (this.comprasSortState.order === 'asc' ? '<i class="fa-solid fa-arrow-up ml-2"></i>' : '<i class="fa-solid fa-arrow-down ml-2"></i>') : '';
+            return `<th class="conta-table-th cursor-pointer" onclick="ContaApp.ordenarComprasPor('${clave}')">${nombreColumna} ${icono}</th>`;
+        };
 
         let tableRows = '';
         itemsParaMostrar.forEach(compra => {
@@ -36,7 +45,7 @@ Object.assign(ContaApp, {
             if (compra.comprobanteDataUrl) {
                 accionesHTML += `<button class="conta-btn-icon" title="Ver Comprobante Adjunto" onclick="event.stopPropagation(); ContaApp.abrirVistaPreviaComprobanteCompra(${compra.id})"><i class="fa-solid fa-paperclip"></i></button>`;
             }
-            if (!isAnulada) {
+            if (!isAnulada && this.hasPermission('anular_transaccion')) {
                 accionesHTML += `<button class="conta-btn-icon delete" title="Anular Compra" onclick="event.stopPropagation(); ContaApp.anularCompra(${compra.id})"><i class="fa-solid fa-ban"></i></button>`;
             }
 
@@ -56,18 +65,18 @@ Object.assign(ContaApp, {
         html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
             <thead>
                 <tr>
-                    <th class="conta-table-th">Fecha</th>
-                    <th class="conta-table-th">Referencia #</th>
-                    <th class="conta-table-th">Proveedor</th>
-                    <th class="conta-table-th">Descripción</th>
-                    <th class="conta-table-th text-right">Total</th>
-                    <th class="conta-table-th">Estado</th>
+                    ${generarEncabezado('Fecha', 'fecha')}
+                    ${generarEncabezado('Referencia #', 'referencia')}
+                    ${generarEncabezado('Proveedor', 'contacto')}
+                    ${generarEncabezado('Descripción', 'descripcion')}
+                    ${generarEncabezado('Total', 'total')}
+                    ${generarEncabezado('Estado', 'estado')}
                     <th class="conta-table-th text-center">Acciones</th>
                 </tr>
             </thead>
             <tbody>${tableRows}</tbody></table></div>`;
         
-        this.renderPaginationControls('compras', compras.length);
+        this.renderPaginationControls('compras', totalItems);
     }
     
     document.getElementById('compras').innerHTML = html;
@@ -596,5 +605,13 @@ Object.assign(ContaApp, {
         unidadSelect.value = 1; // Seleccionamos 'Unidad' por defecto
     }
 },
-
+ordenarComprasPor(columna) {
+    if (this.comprasSortState.column === columna) {
+        this.comprasSortState.order = this.comprasSortState.order === 'asc' ? 'desc' : 'asc';
+    } else {
+        this.comprasSortState.column = columna;
+        this.comprasSortState.order = 'asc';
+    }
+    this.irModulo('compras');
+},
 });
