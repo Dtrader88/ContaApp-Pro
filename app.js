@@ -982,8 +982,12 @@ irAtras() {
             : defaultData.unidadesMedida;
         this.auditLog = data.auditLog || [];
         
-        this.asientos = [];
-        this.transacciones = [];
+        // --- INICIO DE LA CORRECCIÓN ---
+        // Se asegura de que los asientos y transacciones se carguen desde los datos,
+        // en lugar de ser reiniciados a un arreglo vacío.
+        this.asientos = data.asientos || [];
+        this.transacciones = data.transacciones || [];
+        // --- FIN DE LA CORRECCIÓN ---
         
         this.verificarYActualizarPlanDeCuentas();
 
@@ -1212,10 +1216,10 @@ getPeriodoContableActual() {
         asiento.movimientos.forEach(mov => {
             const cuenta = planCopia.find(c => c.id === mov.cuentaId);
             if (cuenta) {
-                // --- INICIO DE LA CORRECCIÓN ---
-                // Se añade el grupo '6' (Gastos) a la lista de cuentas de naturaleza deudora.
+                // ==================== INICIO DE LA CORRECCIÓN CLAVE ====================
+                // Asegurarse de que los Gastos (código '6') se traten como deudores.
                 const esDeudora = ['1', '5', '6'].includes(cuenta.codigo[0]);
-                // --- FIN DE LA CORRECCIÓN ---
+                // ===================== FIN DE LA CORRECCIÓN CLAVE =====================
                 cuenta.saldo += esDeudora ? (mov.debe - mov.haber) : (mov.haber - mov.debe);
             }
         });
