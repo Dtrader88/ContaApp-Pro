@@ -100,21 +100,26 @@ export class FirebaseRepository extends DataRepository {
     }
     
     async actualizarMultiplesDatos(datosParaActualizar) {
-        console.log(`Actualizando múltiples datos en Firestore...`, datosParaActualizar);
-        const workspaceId = await this._getWorkspaceId();
-        if (!workspaceId) throw new Error("Workspace no encontrado.");
+    console.log(`Actualizando múltiples datos en Firestore...`, datosParaActualizar);
+    const workspaceId = await this._getWorkspaceId();
+    if (!workspaceId) throw new Error("Workspace no encontrado.");
 
-        const docRef = this.db.collection("workspaces").doc(workspaceId);
+    const docRef = this.db.collection("workspaces").doc(workspaceId);
 
-        try {
-            // Usamos .set con merge:true que es equivalente a un update, pero crea el documento si no existe.
-            await docRef.set(datosParaActualizar, { merge: true });
-            console.log("Múltiples datos actualizados con éxito.");
-        } catch (error) {
-            console.error("Error al actualizar múltiples datos:", error);
-            throw error;
-        }
+    try {
+        // --- INICIO DE LA CORRECIÓN ---
+        // Sanitizamos los datos antes de enviarlos para eliminar cualquier valor 'undefined'.
+        const datosSanitizados = this._sanitizeData(datosParaActualizar);
+        // --- FIN DE LA CORRECCIÓN ---
+
+        // Usamos .set con merge:true que es equivalente a un update, pero con los datos ya limpios.
+        await docRef.set(datosSanitizados, { merge: true });
+        console.log("Múltiples datos actualizados con éxito.");
+    } catch (error) {
+        console.error("Error al actualizar múltiples datos:", error);
+        throw error;
     }
+}
     async getPaginatedTransactions(params) {
         const { page = 1, perPage = 20, filters = {}, sort = { column: 'fecha', order: 'desc' } } = params;
         console.log("Solicitando transacciones paginadas con:", params);

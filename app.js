@@ -72,9 +72,9 @@ const ROLES = {
         order: 'desc'
     },
     diarioSortState: {
-        column: 'fecha',
-        order: 'desc'
-    },
+    column: 'id',
+    order: 'desc'
+},
         hasPermission(permissionKey) {
         if (!this.currentUser || !this.currentUser.rol) {
             return false;

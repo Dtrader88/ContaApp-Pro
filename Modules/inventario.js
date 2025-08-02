@@ -169,101 +169,59 @@ Object.assign(ContaApp, {
         return;
     }
 
-    // Cambiamos el título y acciones de la página
     document.getElementById('page-title-header').innerText = `Kardex de: ${producto.nombre}`;
     document.getElementById('page-actions-header').innerHTML = `
         <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarReporteEstilizadoPDF('Kardex - ${producto.nombre}', 'reporte-kardex-area')">Imprimir PDF</button>
     `;
 
-    // --- INICIO DE LA LÓGICA COMPLETA DEL KARDEX ---
-    // 1. Recolectar todos los movimientos relevantes
+    // 1. Recolectar todos los movimientos
     let movimientos = [];
-
-    // Compras de este producto
-    this.transacciones.filter(t => t.tipo === 'compra_inventario').forEach(compra => {
-        (compra.items || []).forEach(item => {
-            if (item.productoId === productoId) {
-                movimientos.push({
-                    fecha: compra.fecha,
-                    detalle: `Compra s/f #${compra.referencia || compra.id}`,
-                    entrada: item.cantidad,
-                    salida: 0,
-                    costoUnitario: item.costoUnitario
-                });
-            }
-        });
-    });
-    
-    // Ventas de este producto
-    this.transacciones.filter(t => t.tipo === 'venta' && t.estado !== 'Anulada').forEach(venta => {
-        (venta.items || []).forEach(item => {
-            if (item.itemType === 'producto' && item.productoId === productoId) {
-                movimientos.push({
-                    fecha: venta.fecha,
-                    detalle: `Venta s/f #${venta.numeroFactura || venta.id}`,
-                    entrada: 0,
-                    salida: item.cantidad,
-                    costoUnitario: item.costo // Costo al momento de la venta
-                });
-            }
-        });
-    });
-    
-    // Ajustes de inventario
-    this.transacciones.filter(t => t.tipo === 'ajuste_inventario' && t.productoId === productoId).forEach(ajuste => {
-         movimientos.push({
-            fecha: ajuste.fecha,
-            detalle: `Ajuste: ${ajuste.descripcion}`,
-            entrada: ajuste.tipoAjuste === 'entrada' ? ajuste.cantidad : 0,
-            salida: ajuste.tipoAjuste === 'salida' ? ajuste.cantidad : 0,
-            costoUnitario: ajuste.costo
-        });
+    this.transacciones.forEach(t => {
+        if (t.tipo === 'compra_inventario' && t.estado !== 'Anulada') {
+            (t.items || []).forEach(item => {
+                if (item.productoId === productoId) movimientos.push({ fecha: t.fecha, detalle: `Compra s/f #${t.referencia || t.id}`, entrada: item.cantidad, salida: 0, costoUnitario: item.costoUnitario, asientoId: this.asientos.find(a => a.transaccionId === t.id)?.id });
+            });
+        } else if (t.tipo === 'venta' && t.estado !== 'Anulada') {
+            (t.items || []).forEach(item => {
+                if (item.itemType === 'producto' && item.productoId === productoId) movimientos.push({ fecha: t.fecha, detalle: `Venta s/f #${t.numeroFactura || t.id}`, entrada: 0, salida: item.cantidad, costoUnitario: item.costo, asientoId: this.asientos.find(a => a.transaccionId === t.id && a.descripcion.includes('Costo de venta'))?.id });
+            });
+        } else if (t.tipo === 'ajuste_inventario' && t.productoId === productoId) {
+             movimientos.push({ fecha: t.fecha, detalle: `Ajuste: ${t.descripcion}`, entrada: t.tipoAjuste === 'entrada' ? t.cantidad : 0, salida: t.tipoAjuste === 'salida' ? t.cantidad : 0, costoUnitario: t.costo, asientoId: this.asientos.find(a => a.transaccionId === t.id)?.id });
+        }
     });
 
-    // Órdenes de Producción (Consumo como materia prima)
-    (this.ordenesProduccion || []).filter(op => op.estado === 'Completada').forEach(op => {
-        (op.componentes || []).forEach(comp => {
-            if (comp.productoId === productoId) {
-                movimientos.push({
-                    fecha: op.fecha,
-                    detalle: `Consumo en OP #${op.id}: ${op.descripcion}`,
-                    entrada: 0,
-                    salida: comp.cantidad,
-                    costoUnitario: producto.costo // Usamos el costo promedio actual para el consumo
-                });
-            }
-        });
-    });
-
-    // Órdenes de Producción (Creación como producto terminado)
-    (this.ordenesProduccion || []).filter(op => op.estado === 'Completada' && op.productoTerminadoId === productoId).forEach(op => {
-        const costoUnitarioProduccion = op.cantidadProducida > 0 ? op.costoTotal / op.cantidadProducida : 0;
-        movimientos.push({
-            fecha: op.fecha,
-            detalle: `Producción Terminada OP #${op.id}: ${op.descripcion}`,
-            entrada: op.cantidadProducida,
-            salida: 0,
-            costoUnitario: costoUnitarioProduccion
-        });
-    });
-
-    // 2. Ordenar todos los movimientos por fecha
+    // 2. Ordenar cronológicamente
     movimientos.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
-    // 3. Construir la tabla del Kardex
-    let saldoCorriente = 0;
-    let valorCorriente = 0;
-    let costoPromedio = 0;
+    // 3. Calcular Saldo Inicial trabajando hacia atrás desde el stock actual
+    const stockActual = producto.stock || 0;
+    const cambioNeto = movimientos.reduce((acc, mov) => acc + mov.entrada - mov.salida, 0);
+    const saldoInicial = stockActual - cambioNeto;
+    
+    // 4. Construir la tabla del Kardex
+    let saldoCorriente = saldoInicial;
+    let valorCorriente = saldoInicial * (producto.costo || 0); // Asumimos un costo promedio para el valor inicial
+    let costoPromedio = producto.costo || 0;
 
-    let filasHTML = movimientos.map(mov => {
+    let filasHTML = `
+        <tr class="bg-[var(--color-bg-accent)] font-bold">
+            <td class="conta-table-td" colspan="2">SALDO INICIAL</td>
+            <td class="conta-table-td text-right font-mono"></td>
+            <td class="conta-table-td text-right font-mono"></td>
+            <td class="conta-table-td text-right font-mono">${saldoInicial}</td>
+            <td class="conta-table-td text-right font-mono"></td>
+            <td class="conta-table-td text-right font-mono">${this.formatCurrency(valorCorriente)}</td>
+        </tr>`;
+
+    movimientos.forEach(mov => {
         const totalEntrada = mov.entrada * mov.costoUnitario;
-        const totalSalida = mov.salida * costoPromedio; // Salidas se valoran al costo promedio actual
+        const totalSalida = mov.salida * costoPromedio;
         
         valorCorriente += totalEntrada - totalSalida;
         saldoCorriente += mov.entrada - mov.salida;
         costoPromedio = saldoCorriente > 0 ? valorCorriente / saldoCorriente : 0;
         
-        return `
+        filasHTML += `
             <tr>
                 <td class="conta-table-td">${mov.fecha}</td>
                 <td class="conta-table-td">${mov.detalle}</td>
@@ -274,7 +232,7 @@ Object.assign(ContaApp, {
                 <td class="conta-table-td text-right font-mono">${this.formatCurrency(valorCorriente)}</td>
             </tr>
         `;
-    }).join('');
+    });
 
     const html = `
         <div class="conta-card overflow-auto" id="reporte-kardex-area">
