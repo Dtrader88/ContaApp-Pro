@@ -296,28 +296,28 @@ Object.assign(ContaApp, {
     this.abrirModalGasto(null, gastoId);
 },
     agregarItemGasto() {
-        const container = document.getElementById('gasto-items-container');
-        
-        // --- INICIO DE LA CORRECCIÓN ---
-        // Se corrige el filtro para que apunte al grupo de GASTOS (código 600) en lugar de COSTOS (código 500).
-        const cuentasGastoOptions = this.planDeCuentas
-            .filter(c => c.tipo === 'DETALLE' && c.codigo.startsWith('6'))
-            .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }))
-            .map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`)
-            .join('');
-        // --- FIN DE LA CORRECCIÓN ---
+    const container = document.getElementById('gasto-items-container');
+    
+    // --- INICIO DE LA CORRECCIÓN ---
+    // Se corrige el filtro para que apunte al grupo de GASTOS (código 600) en lugar de COSTOS (código 500).
+    const cuentasGastoOptions = this.planDeCuentas
+        .filter(c => c.tipo === 'DETALLE' && c.codigo.startsWith('6'))
+        .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }))
+        .map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`)
+        .join('');
+    // --- FIN DE LA CORRECCIÓN ---
 
-        const itemHTML = `
-            <div class="grid grid-cols-12 gap-2 items-center dynamic-row gasto-item-row">
-                <div class="gasto-item-inputs-container col-span-11 grid grid-cols-10 gap-2 items-center">
-                    <select class="col-span-7 p-2 gasto-item-cuenta" onchange="ContaApp.handleGastoItemChange(this)">${cuentasGastoOptions}</select>
-                    <input type="number" step="0.01" min="0" placeholder="Monto" class="col-span-3 p-2 text-right gasto-item-monto" oninput="ContaApp.actualizarTotalesGasto()">
-                </div>
-                <button type="button" class="col-span-1 conta-btn-icon delete" onclick="this.closest('.gasto-item-row').remove(); ContaApp.actualizarTotalesGasto();">🗑️</button>
+    const itemHTML = `
+        <div class="grid grid-cols-12 gap-2 items-center dynamic-row gasto-item-row">
+            <div class="gasto-item-inputs-container col-span-11 grid grid-cols-10 gap-2 items-center">
+                <select class="col-span-7 p-2 gasto-item-cuenta" onchange="ContaApp.handleGastoItemChange(this)">${cuentasGastoOptions}</select>
+                <input type="number" step="0.01" min="0" placeholder="Monto" class="col-span-3 p-2 text-right gasto-item-monto" oninput="ContaApp.actualizarTotalesGasto()">
             </div>
-        `;
-        container.insertAdjacentHTML('beforeend', itemHTML);
-    },
+            <button type="button" class="col-span-1 conta-btn-icon delete" onclick="this.closest('.gasto-item-row').remove(); ContaApp.actualizarTotalesGasto();">🗑️</button>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', itemHTML);
+},
         async guardarGasto(e) {
     e.preventDefault();
     const submitButton = e.target.querySelector('button[type="submit"]');

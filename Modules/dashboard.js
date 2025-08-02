@@ -1,9 +1,9 @@
 Object.assign(ContaApp, {
     async renderDashboard() {
-    // NOTA: Ya no se cargan los datos aquí. La función ahora confía en que
-    // this.transacciones y this.asientos fueron cargados correctamente por ContaApp.init().
+    // NOTA: El bloque que cargaba "fullData" desde el repositorio ha sido eliminado.
+    // La función ahora confía en que this.asientos y this.transacciones ya están cargados.
 
-    // Lógica de cálculo de KPIs
+    // Lógica de cálculo de KPIs (Corregida en el paso anterior)
     const hoy = new Date();
     const finPeriodoActual = hoy.toISOString().slice(0, 10);
     const inicioPeriodoActual = new Date(new Date().setDate(hoy.getDate() - 29)).toISOString().slice(0, 10);
@@ -33,7 +33,7 @@ Object.assign(ContaApp, {
         'settings': { label: 'Ajustes', icon: 'fa-cog', color: 'accent', onclick: "ContaApp.irModulo('config')" },
         'new_transfer': { label: 'Transferencia', icon: 'fa-exchange-alt', color: 'success', onclick: "ContaApp.abrirModalTransferencia()" },
     };
-
+    
     if (!this.empresa.dashboardWidgets) this.empresa.dashboardWidgets = ['ingresos', 'gastos', 'resultadoNeto', 'bancos'];
     if (!this.empresa.dashboardContentWidgets || !this.empresa.dashboardContentWidgets.order) {
         this.empresa.dashboardContentWidgets = {

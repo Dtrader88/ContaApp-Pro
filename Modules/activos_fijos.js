@@ -270,55 +270,57 @@ Object.assign(ContaApp, {
         }
     },
     ejecutarDepreciacionMensual() {
-        this.showConfirm(
-            '¿Deseas registrar la depreciación para el mes actual? Se creará un asiento contable para todos los activos elegibles. Esta acción solo debe realizarse una vez por mes.',
-            () => {
-                let totalDepreciacionDelMes = 0;
-                const hoy = new Date();
-                const fechaAsiento = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().slice(0,10); // Último día del mes actual
+    this.showConfirm(
+        '¿Deseas registrar la depreciación para el mes actual? Se creará un asiento contable para todos los activos elegibles. Esta acción solo debe realizarse una vez por mes.',
+        () => {
+            let totalDepreciacionDelMes = 0;
+            const hoy = new Date();
+            const fechaAsiento = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().slice(0,10); // Último día del mes actual
 
-                const activosADepreciar = this.activosFijos.filter(activo => 
-                    activo.estado === 'Activo' && activo.mesesDepreciados < activo.vidaUtil
-                );
+            const activosADepreciar = this.activosFijos.filter(activo => 
+                activo.estado === 'Activo' && activo.mesesDepreciados < activo.vidaUtil
+            );
 
-                if (activosADepreciar.length === 0) {
-                    this.showToast('No hay activos elegibles para depreciar este mes.', 'info');
-                    return;
-                }
-
-                activosADepreciar.forEach(activo => {
-                    const montoADepreciar = (activo.costo - activo.valorResidual) / activo.vidaUtil;
-                    
-                    activo.depreciacionAcumulada += montoADepreciar;
-                    activo.mesesDepreciados += 1;
-                    totalDepreciacionDelMes += montoADepreciar;
-
-                    if (activo.mesesDepreciados >= activo.vidaUtil) {
-                        activo.estado = 'Depreciado';
-                    }
-                });
-
-                // Crear un único asiento contable consolidado para la depreciación del mes
-                const cuentaGastoDepreciacionId = 51004; // Gasto por Depreciación
-                const cuentaDepAcumuladaId = 15901; // Dep. Acum. Mobiliario y Equipo
-                
-                const asiento = this.crearAsiento(
-                    fechaAsiento,
-                    `Depreciación del mes ${hoy.toLocaleString('es-ES', { month: 'long', year: 'numeric' })}`,
-                    [
-                        { cuentaId: cuentaGastoDepreciacionId, debe: totalDepreciacionDelMes, haber: 0 },
-                        { cuentaId: cuentaDepAcumuladaId, debe: 0, haber: totalDepreciacionDelMes }
-                    ]
-                );
-
-                if (asiento) {
-                    this.saveAll();
-                    this.irModulo('activos-fijos');
-                    this.showToast('Depreciación mensual registrada con éxito.', 'success');
-                }
+            if (activosADepreciar.length === 0) {
+                this.showToast('No hay activos elegibles para depreciar este mes.', 'info');
+                return;
             }
-        );
-    },
+
+            activosADepreciar.forEach(activo => {
+                const montoADepreciar = (activo.costo - activo.valorResidual) / activo.vidaUtil;
+                
+                activo.depreciacionAcumulada += montoADepreciar;
+                activo.mesesDepreciados += 1;
+                totalDepreciacionDelMes += montoADepreciar;
+
+                if (activo.mesesDepreciados >= activo.vidaUtil) {
+                    activo.estado = 'Depreciado';
+                }
+            });
+
+            // --- INICIO DE LA CORRECCIÓN ---
+            // Se actualiza el ID de la cuenta de Gasto por Depreciación de 51004 a 61004.
+            const cuentaGastoDepreciacionId = 61004; // Gasto por Depreciación
+            // --- FIN DE LA CORRECCIÓN ---
+            const cuentaDepAcumuladaId = 15901; // Dep. Acum. Mobiliario y Equipo
+            
+            const asiento = this.crearAsiento(
+                fechaAsiento,
+                `Depreciación del mes ${hoy.toLocaleString('es-ES', { month: 'long', year: 'numeric' })}`,
+                [
+                    { cuentaId: cuentaGastoDepreciacionId, debe: totalDepreciacionDelMes, haber: 0 },
+                    { cuentaId: cuentaDepAcumuladaId, debe: 0, haber: totalDepreciacionDelMes }
+                ]
+            );
+
+            if (asiento) {
+                this.saveAll();
+                this.irModulo('activos-fijos');
+                this.showToast('Depreciación mensual registrada con éxito.', 'success');
+            }
+        }
+    );
+},
     abrirModalDarDeBaja(id) {
         const activo = this.findById(this.activosFijos, id);
         if (!activo) return;
@@ -346,36 +348,39 @@ Object.assign(ContaApp, {
     },
 
         guardarBajaActivo(e, id) {
-        e.preventDefault();
-        const activo = this.findById(this.activosFijos, id);
-        const fechaBaja = document.getElementById('baja-fecha').value;
-        const motivoBaja = document.getElementById('baja-motivo').value;
-        const valorEnLibros = activo.costo - activo.depreciacionAcumulada;
+    e.preventDefault();
+    const activo = this.findById(this.activosFijos, id);
+    const fechaBaja = document.getElementById('baja-fecha').value;
+    const motivoBaja = document.getElementById('baja-motivo').value;
+    const valorEnLibros = activo.costo - activo.depreciacionAcumulada;
 
-        const cuentaActivoId = activo.cuentaId;
-        const cuentaDepAcumuladaId = 15901;
-        const cuentaPerdidaId = 520; // CORRECTO: Usar la cuenta de Pérdida en Venta/Baja de Activos
+    const cuentaActivoId = activo.cuentaId;
+    const cuentaDepAcumuladaId = 15901;
+    // --- INICIO DE LA CORRECCIÓN ---
+    // Se actualiza el ID de la cuenta de Pérdida en Baja de Activos de 520 a 620.
+    const cuentaPerdidaId = 620;
+    // --- FIN DE LA CORRECCIÓN ---
 
-        const asiento = this.crearAsiento(
-            fechaBaja,
-            `Baja de activo fijo: ${activo.nombre} (Motivo: ${motivoBaja})`,
-            [
-                { cuentaId: cuentaDepAcumuladaId, debe: activo.depreciacionAcumulada, haber: 0 },
-                { cuentaId: cuentaPerdidaId, debe: valorEnLibros, haber: 0 },
-                { cuentaId: cuentaActivoId, debe: 0, haber: activo.costo }
-            ]
-        );
+    const asiento = this.crearAsiento(
+        fechaBaja,
+        `Baja de activo fijo: ${activo.nombre} (Motivo: ${motivoBaja})`,
+        [
+            { cuentaId: cuentaDepAcumuladaId, debe: activo.depreciacionAcumulada, haber: 0 },
+            { cuentaId: cuentaPerdidaId, debe: valorEnLibros, haber: 0 },
+            { cuentaId: cuentaActivoId, debe: 0, haber: activo.costo }
+        ]
+    );
 
-        if (asiento) {
-            activo.estado = 'De Baja';
-            activo.fechaBaja = fechaBaja;
-            activo.motivoBaja = motivoBaja; // Guardamos el motivo
-            this.saveAll();
-            this.closeModal();
-            this.irModulo('activos-fijos', { activoId: id });
-            this.showToast('Activo dado de baja con éxito.', 'success');
-        }
-    },
+    if (asiento) {
+        activo.estado = 'De Baja';
+        activo.fechaBaja = fechaBaja;
+        activo.motivoBaja = motivoBaja; // Guardamos el motivo
+        this.saveAll();
+        this.closeModal();
+        this.irModulo('activos-fijos', { activoId: id });
+        this.showToast('Activo dado de baja con éxito.', 'success');
+    }
+},
         getActivosFijosReportData(fechaInicio, fechaFin) {
         const reporte = {
             lineas: [],
