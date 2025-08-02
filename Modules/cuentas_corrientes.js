@@ -19,68 +19,97 @@ getEstadoDeCuenta(contactoId, tipoContacto) {
                 } else if (t.tipo === 'nota_credito') {
                     credito = t.total;
                     detalle = `Nota de Crédito #${t.numeroNota || t.id}`;
-                } else {
-                    return null;
-                }
+                } else { return null; }
             } else { // esProveedor
-                // --- INICIO DE LA CORRECCIÓN: Incluir 'compra_inventario' ---
                 if (t.tipo === 'gasto' || t.tipo === 'compra_inventario') {
-                // --- FIN DE LA CORRECCIÓN ---
                     credito = t.total;
                     detalle = t.descripcion;
                 } else if (t.tipo === 'pago_proveedor') {
                     debito = t.monto;
                     detalle = t.comentario || `Pago Gasto #${t.gastoId}`;
-                } else {
-                    return null;
-                }
+                } else { return null; }
             }
             return { fecha: t.fecha, detalle, debito, credito, transaccionOriginal: t };
         })
         .filter(Boolean)
         .sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
+    // --- INICIO DE LA CORRECCIÓN DE SALDO ---
     estadoDeCuenta.forEach(mov => {
-        saldo += (mov.debito - mov.credito);
+        if (esCliente) {
+            saldo += (mov.debito - mov.credito);
+        } else {
+            saldo += (mov.credito - mov.debito); // Fórmula correcta para pasivos
+        }
         mov.saldo = saldo;
     });
+    // --- FIN DE LA CORRECCIÓN DE SALDO ---
 
     return estadoDeCuenta.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 },
     
     renderEstadoDeCuentaDetalle(contactoId, tipoContacto) {
-        const contacto = this.findById(this.contactos, contactoId);
-        const esCliente = tipoContacto === 'cliente';
-        
-        document.getElementById('page-title-header').innerText = `Estado de Cuenta: ${contacto.nombre}`;
-        
-        // ===== INICIO DE LÓGICA DE PERMISOS =====
-        let accionesHTML = '';
-        if (esCliente && this.hasPermission('registrar_cobros')) {
-            accionesHTML = `<button class="conta-btn conta-btn-success" onclick="ContaApp.procesarSeleccionDePago('cliente')"><i class="fa-solid fa-hand-holding-dollar me-2"></i>Registrar Cobro</button>`;
-        } else if (!esCliente && this.hasPermission('registrar_pagos')) {
-            accionesHTML = `<button class="conta-btn conta-btn-success" onclick="ContaApp.procesarSeleccionDePago('proveedor')"><i class="fa-solid fa-money-bill-wave me-2"></i>Registrar Pago</button>`;
-        }
-        // ===== FIN DE LÓGICA DE PERMISOS =====
-        
-        document.getElementById('page-actions-header').innerHTML = `
-            <div class="flex gap-2">
-                <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarReporteEstilizadoPDF('Estado de Cuenta - ${contacto.nombre}', 'estado-de-cuenta-area')"><i class="fa-solid fa-print me-2"></i>Generar PDF</button>
-                ${accionesHTML}
-            </div>`;
+    const contacto = this.findById(this.contactos, contactoId);
+    const esCliente = tipoContacto === 'cliente';
+    
+    document.getElementById('page-title-header').innerText = `Estado de Cuenta: ${contacto.nombre}`;
+    
+    let accionesHTML = '';
+    if (esCliente && this.hasPermission('registrar_cobros')) {
+        accionesHTML = `<button class="conta-btn conta-btn-success" onclick="ContaApp.procesarSeleccionDePago('cliente')"><i class="fa-solid fa-hand-holding-dollar me-2"></i>Registrar Cobro</button>`;
+    } else if (!esCliente && this.hasPermission('registrar_pagos')) {
+        accionesHTML = `<button class="conta-btn conta-btn-success" onclick="ContaApp.procesarSeleccionDePago('proveedor')"><i class="fa-solid fa-money-bill-wave me-2"></i>Registrar Pago</button>`;
+    }
+    
+    document.getElementById('page-actions-header').innerHTML = `
+        <div class="flex gap-2">
+            <button class="conta-btn conta-btn-accent" onclick="ContaApp.generarEstadoDeCuentaPDF(${contactoId})"><i class="fa-solid fa-print me-2"></i>Generar PDF</button>
+            ${accionesHTML}
+        </div>`;
 
-        // ... El resto de la función (cálculo de KPIs y renderizado de tabla) no cambia ...
-        const transaccionesContacto = this.transacciones.filter(t => t.contactoId === contactoId && t.estado !== 'Anulada');
-        let kpiHTML = '';
-        if (esCliente) {
-            // ... (cálculo de kpi de cliente)
-        } else {
-            // ... (cálculo de kpi de proveedor)
-        }
-        let tablaHTML = `<!-- ... El HTML de la tabla no cambia ... -->`;
-        const containerId = esCliente ? 'cxc-contenido' : 'cxp-contenido';
-        document.getElementById(containerId).innerHTML = kpiHTML + tablaHTML;
-    },
+    const estadoDeCuenta = this.getEstadoDeCuenta(contactoId, tipoContacto);
+    const saldoFinal = estadoDeCuenta.length > 0 ? estadoDeCuenta[0].saldo : 0;
+    
+    let kpiHTML = '';
+    if (esCliente) {
+        const totalFacturado = estadoDeCuenta.reduce((sum, mov) => sum + mov.debito, 0);
+        const totalCobrado = estadoDeCuenta.reduce((sum, mov) => sum + mov.credito, 0);
+        kpiHTML = `<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="conta-card text-center"><div class="text-sm text-[var(--color-text-secondary)]">Total Facturado</div><p class="font-bold text-xl mt-1">${this.formatCurrency(totalFacturado)}</p></div>
+            <div class="conta-card text-center"><div class="text-sm text-[var(--color-text-secondary)]">Total Cobrado</div><p class="font-bold text-xl conta-text-success mt-1">${this.formatCurrency(totalCobrado)}</p></div>
+            <div class="conta-card text-center"><div class="text-sm text-[var(--color-text-secondary)]">Saldo Actual</div><p class="font-bold text-xl conta-text-danger mt-1">${this.formatCurrency(saldoFinal)}</p></div>
+        </div>`;
+    } else {
+        const totalComprado = estadoDeCuenta.reduce((sum, mov) => sum + mov.credito, 0);
+        const totalPagado = estadoDeCuenta.reduce((sum, mov) => sum + mov.debito, 0);
+        kpiHTML = `<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="conta-card text-center"><div class="text-sm text-[var(--color-text-secondary)]">Total Comprado/Gastado</div><p class="font-bold text-xl mt-1">${this.formatCurrency(totalComprado)}</p></div>
+            <div class="conta-card text-center"><div class="text-sm text-[var(--color-text-secondary)]">Total Pagado</div><p class="font-bold text-xl conta-text-success mt-1">${this.formatCurrency(totalPagado)}</p></div>
+            <div class="conta-card text-center"><div class="text-sm text-[var(--color-text-secondary)]">Saldo por Pagar</div><p class="font-bold text-xl conta-text-danger mt-1">${this.formatCurrency(saldoFinal)}</p></div>
+        </div>`;
+    }
+    
+    let tableRows = '';
+    estadoDeCuenta.forEach(mov => {
+        tableRows += `<tr class="border-t">
+            <td class="py-2 px-3">${mov.fecha}</td>
+            <td class="py-2 px-3">${mov.detalle}</td>
+            <td class="py-2 px-3 text-right font-mono">${mov.debito > 0 ? this.formatCurrency(mov.debito) : ''}</td>
+            <td class="py-2 px-3 text-right font-mono">${mov.credito > 0 ? this.formatCurrency(mov.credito) : ''}</td>
+            <td class="py-2 px-3 text-right font-mono font-bold">${this.formatCurrency(mov.saldo)}</td>
+        </tr>`;
+    });
+    
+    const tablaHTML = `<div class="conta-card overflow-auto"><table class="w-full text-sm">
+        <thead><tr>
+            <th class="conta-table-th">Fecha</th><th class="conta-table-th">Detalle</th>
+            <th class="conta-table-th text-right">Débito</th><th class="conta-table-th text-right">Crédito</th>
+            <th class="conta-table-th text-right">Saldo</th>
+        </tr></thead><tbody>${tableRows}</tbody></table></div>`;
+    
+    const containerId = esCliente ? 'cxc-contenido' : 'cxp-contenido';
+    document.getElementById(containerId).innerHTML = kpiHTML + tablaHTML;
+},
 
   /**
      * Función genérica para calcular datos de antigüedad de saldos.
@@ -1948,5 +1977,128 @@ renderAnticipos(containerId) {
         </div>
     `;
     this.showModal(modalHTML, '4xl');
+},
+getAgingDataForContact(contactoId, tipoContacto) {
+    const esCliente = tipoContacto === 'cliente';
+    const hoy = new Date(this.getTodayDate() + 'T23:59:59');
+
+    const facturasPendientes = this.transacciones.filter(t => {
+        const esTipoCorrecto = esCliente 
+            ? t.tipo === 'venta' 
+            : (t.tipo === 'gasto' || t.tipo === 'compra_inventario');
+        
+        return t.contactoId === contactoId && 
+               (t.estado === 'Pendiente' || t.estado === 'Parcial') && 
+               esTipoCorrecto;
+    });
+
+    const datosAntiguedad = facturasPendientes.map(factura => {
+        const saldo = (factura.total || 0) - (factura.montoPagado || 0);
+        const fechaFactura = new Date(factura.fecha + 'T00:00:00');
+        const diffTime = hoy.getTime() - fechaFactura.getTime();
+        const diasVencido = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+        
+        let bucket = '';
+        if (diasVencido <= 30) bucket = '0-30';
+        else if (diasVencido <= 60) bucket = '31-60';
+        else if (diasVencido <= 90) bucket = '61-90';
+        else bucket = '90+';
+
+        return {
+            fecha: factura.fecha,
+            numeroFactura: factura.numeroFactura || factura.referencia || factura.id,
+            detalle: factura.descripcion || 'Venta de productos/servicios',
+            saldo: saldo,
+            bucket: bucket
+        };
+    });
+
+    return datosAntiguedad;
+},
+generarEstadoDeCuentaPDF(contactoId) {
+    const contacto = this.findById(this.contactos, contactoId);
+    const { empresa } = this;
+    const esCliente = contacto.tipo === 'cliente';
+
+    const titulo = esCliente ? `Cuentas por Cobrar - ${contacto.nombre}` : `Cuentas por Pagar - ${contacto.nombre}`;
+
+    const generateAndShowPdf = (logoDataUrl = null) => {
+        const doc = new window.jspdf.jsPDF({ orientation: 'landscape' });
+        const accentColor = empresa.pdfColor || '#1877f2';
+
+        // Usamos la función base, pero pasamos el título dinámico
+        const docConHeader = this._generarPDFBase(titulo, logoDataUrl, doc);
+        
+        // Datos del Contacto
+        docConHeader.setFontSize(9);
+        docConHeader.setTextColor('#333333');
+        docConHeader.setFont('helvetica', 'bold');
+        docConHeader.text(esCliente ? 'CLIENTE:' : 'PROVEEDOR:', 15, 60);
+        docConHeader.setFont('helvetica', 'normal');
+        docConHeader.text(contacto.nombre, 15, 65);
+
+        // Tabla de movimientos con antigüedad
+        const datosAntiguedad = this.getAgingDataForContact(contactoId, contacto.tipo);
+        const totales = { '0-30': 0, '31-60': 0, '61-90': 0, '90+': 0, total: 0 };
+
+        const tableData = datosAntiguedad.map(mov => {
+            // Actualizar totales
+            totales[mov.bucket] += mov.saldo;
+            totales.total += mov.saldo;
+
+            return [
+                mov.fecha,
+                mov.numeroFactura,
+                mov.detalle,
+                mov.bucket === '0-30' ? this.formatCurrency(mov.saldo) : '',
+                mov.bucket === '31-60' ? this.formatCurrency(mov.saldo) : '',
+                mov.bucket === '61-90' ? this.formatCurrency(mov.saldo) : '',
+                mov.bucket === '90+' ? this.formatCurrency(mov.saldo) : '',
+                this.formatCurrency(mov.saldo)
+            ];
+        });
+
+        // Fila de totales para el pie de la tabla
+        const footerData = [[
+            { content: 'TOTALES', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } },
+            { content: this.formatCurrency(totales['0-30']), styles: { fontStyle: 'bold', halign: 'right' } },
+            { content: this.formatCurrency(totales['31-60']), styles: { fontStyle: 'bold', halign: 'right' } },
+            { content: this.formatCurrency(totales['61-90']), styles: { fontStyle: 'bold', halign: 'right' } },
+            { content: this.formatCurrency(totales['90+']), styles: { fontStyle: 'bold', halign: 'right' } },
+            { content: this.formatCurrency(totales.total), styles: { fontStyle: 'bold', halign: 'right' } }
+        ]];
+
+        docConHeader.autoTable({
+            head: [['Fecha', 'Factura #', 'Detalle', 'Hasta 30 días', '31-60 días', '61-90 días', '> 90 días', 'Monto Total']],
+            body: tableData,
+            foot: footerData,
+            startY: 75,
+            theme: 'striped',
+            headStyles: { fillColor: accentColor },
+            columnStyles: {
+                3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' },
+                6: { halign: 'right' }, 7: { halign: 'right' }
+            }
+        });
+        
+        ContaApp._displayPDFPreviewInModal(docConHeader, titulo);
+    };
+
+    if (empresa.logo) {
+        try {
+            fetch(empresa.logo)
+                .then(response => response.blob())
+                .then(blob => {
+                    const reader = new FileReader();
+                    reader.onload = () => generateAndShowPdf(reader.result);
+                    reader.readAsDataURL(blob);
+                });
+        } catch (error) {
+            console.error("Error al cargar el logo para el PDF:", error);
+            generateAndShowPdf();
+        }
+    } else {
+        generateAndShowPdf();
+    }
 },
 });

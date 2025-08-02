@@ -52,7 +52,6 @@ Object.assign(ContaApp, {
     },
         renderEstadoResultados(params = {}) {
     const isComparative = !!params.comparative;
-
     const hoy = new Date();
     const primerDiaMesActual = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
     const fechaInicioA = params.fechaInicioA || primerDiaMesActual.toISOString().slice(0, 10);
@@ -78,16 +77,13 @@ Object.assign(ContaApp, {
     });
 
     const ingresos = planCombinado.find(c => c.codigo === '400');
-    const gastos = planCombinado.find(c => c.codigo === '500');
+    // --- INICIO DE LA CORRECCIÓN ---
+    const costos = planCombinado.find(c => c.codigo === '500');
+    const gastos = planCombinado.find(c => c.codigo === '600');
+    const totalCostosYGastos = (costos?.saldoA || 0) + (gastos?.saldoA || 0);
+    const resultadoA = (ingresos?.saldoA || 0) - totalCostosYGastos;
+    // --- FIN DE LA CORRECCIÓN ---
 
-    if (!ingresos || !gastos) {
-        document.getElementById('reporte-contenido').innerHTML = `<div class="conta-card text-center conta-text-danger"><p>Error: Cuentas principales de Ingresos (400) y/o Gastos (500) no encontradas.</p></div>`;
-        return;
-    }
-    
-    const resultadoA = ingresos.saldoA - gastos.saldoA;
-
-    // --- MEJORA VISUAL: Se reestructura el formulario ---
     let html = `<div class="conta-card mb-6">
         <form onsubmit="event.preventDefault(); ContaApp.filtrarReporte('pnl')" class="space-y-4">
             <div class="flex flex-wrap items-end gap-4">
@@ -106,55 +102,41 @@ Object.assign(ContaApp, {
             </div>
             <input type="hidden" id="pnl-is-comparative" value="${isComparative ? 'true' : 'false'}">
         </form>
-    </div>`;
-    // ... El resto de la función (tabla del reporte) se mantiene igual
-    html += `<div class="flex justify-between items-center mb-4"><h2 class="conta-subtitle !mb-0">Estado de Resultados ${isComparative ? 'Comparativo' : ''}</h2>
+    </div>
+    <div class="flex justify-between items-center mb-4"><h2 class="conta-subtitle !mb-0">Estado de Resultados ${isComparative ? 'Comparativo' : ''}</h2>
         <div><button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarReporteEstilizadoPDF('Estado de Resultados', 'reporte-pnl-area')">Vista Previa PDF</button></div>
     </div>
-    <div class="conta-card overflow-auto" id="reporte-pnl-area"><table class="min-w-full">`;
-    
-    html += `<thead><tr><th class="conta-table-th">Descripción</th><th class="conta-table-th text-right">Total</th>`;
-    if (isComparative) {
-        html += `<th class="conta-table-th text-right">Comparativo</th>
-                 <th class="conta-table-th text-right">Variación ($)</th>
-                 <th class="conta-table-th text-right">Variación (%)</th>`;
-    }
-    html += `</tr></thead><tbody>`;
+    <div class="conta-card overflow-auto" id="reporte-pnl-area"><table class="min-w-full">
+        <thead><tr><th class="conta-table-th">Descripción</th><th class="conta-table-th text-right">Total</th>${isComparative ? '<th class="conta-table-th text-right">Comparativo</th><th class="conta-table-th text-right">Variación ($)</th><th class="conta-table-th text-right">Variación (%)</th>' : ''}</tr></thead>
+        <tbody>`;
 
     const renderSection = (cuentaId, plan, level = 0) => {
         const cuenta = plan.find(c => c.id === cuentaId);
+        if (!cuenta) return;
         const isTitleOrControl = cuenta.tipo === 'TITULO' || cuenta.tipo === 'CONTROL';
         const style = isTitleOrControl ? `font-weight: bold;` : ``;
-
-        html += `<tr>
-            <td class="py-2" style="padding-left: ${level * 1.5}rem; ${style}">${cuenta.nombre}</td>
-            <td class="py-2 text-right font-mono" style="${style}">${this.formatCurrency(cuenta.saldoA)}</td>`;
-        
+        html += `<tr><td class="py-2" style="padding-left: ${level * 1.5}rem; ${style}">${cuenta.nombre}</td><td class="py-2 text-right font-mono" style="${style}">${this.formatCurrency(cuenta.saldoA)}</td>`;
         if (isComparative) {
             const variacion = cuenta.saldoA - cuenta.saldoB;
             const variacionPct = cuenta.saldoB !== 0 ? (variacion / Math.abs(cuenta.saldoB)) * 100 : 0;
             const variacionClass = variacion >= 0 ? 'variance-positive' : 'variance-negative';
-            html += `<td class="py-2 text-right font-mono" style="${style}">${this.formatCurrency(cuenta.saldoB)}</td>
-                     <td class="py-2 text-right font-mono ${variacionClass}">${this.formatCurrency(variacion)}</td>
-                     <td class="py-2 text-right font-mono ${variacionClass}">${variacionPct.toFixed(2)}%</td>`;
+            html += `<td class="py-2 text-right font-mono" style="${style}">${this.formatCurrency(cuenta.saldoB)}</td><td class="py-2 text-right font-mono ${variacionClass}">${this.formatCurrency(variacion)}</td><td class="py-2 text-right font-mono ${variacionClass}">${variacionPct.toFixed(2)}%</td>`;
         }
         html += `</tr>`;
         plan.filter(c => c.parentId === cuentaId).sort((a,b) => a.codigo.localeCompare(b.codigo)).forEach(child => renderSection(child.id, plan, level + 1));
     };
     
-    renderSection(ingresos.id, planCombinado);
-    renderSection(gastos.id, planCombinado);
+    if (ingresos) renderSection(ingresos.id, planCombinado);
+    if (costos) renderSection(costos.id, planCombinado);
+    if (gastos) renderSection(gastos.id, planCombinado);
 
     html += `<tr class="border-t-2 border-[var(--color-border-accent)] font-bold text-lg">
-        <td class="py-2">Resultado Neto</td>
-        <td class="py-2 text-right font-mono">${this.formatCurrency(resultadoA)}</td>`;
+        <td class="py-2">Resultado Neto</td><td class="py-2 text-right font-mono">${this.formatCurrency(resultadoA)}</td>`;
     if (isComparative) {
-        const resultadoB = ingresos.saldoB - gastos.saldoB;
+        const resultadoB = (planCombinado.find(c => c.id === 400)?.saldoB || 0) - ((planCombinado.find(c => c.id === 500)?.saldoB || 0) + (planCombinado.find(c => c.id === 600)?.saldoB || 0));
         const resultadoVariacion = resultadoA - resultadoB;
         const resultadoVariacionPct = resultadoB !== 0 ? (resultadoVariacion / Math.abs(resultadoB)) * 100 : 0;
-        html += `<td class="py-2 text-right font-mono">${this.formatCurrency(resultadoB)}</td>
-                 <td class="py-2 text-right font-mono ${resultadoVariacion >= 0 ? 'variance-positive' : 'variance-negative'}">${this.formatCurrency(resultadoVariacion)}</td>
-                 <td class="py-2 text-right font-mono ${resultadoVariacion >= 0 ? 'variance-positive' : 'variance-negative'}">${resultadoVariacionPct.toFixed(2)}%</td>`;
+        html += `<td class="py-2 text-right font-mono">${this.formatCurrency(resultadoB)}</td><td class="py-2 text-right font-mono ${resultadoVariacion >= 0 ? 'variance-positive' : 'variance-negative'}">${this.formatCurrency(resultadoVariacion)}</td><td class="py-2 text-right font-mono ${resultadoVariacion >= 0 ? 'variance-positive' : 'variance-negative'}">${resultadoVariacionPct.toFixed(2)}%</td>`;
     }
     html += `</tr></tbody></table></div>`;
     document.getElementById('reporte-contenido').innerHTML = html;

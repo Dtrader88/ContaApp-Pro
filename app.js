@@ -1884,6 +1884,45 @@ aplicarFiltrosAvanzados(modulo) {
         this.irModulo(modulo);
         this.showToast('Filtros eliminados.', 'info');
     },
+    _generarPDFBase(titulo, logoDataUrl = null, doc = null) {
+    const { jsPDF } = window.jspdf;
+    if (!doc) {
+        doc = new jsPDF(); // Si no se pasa un doc, crea uno nuevo (orientación por defecto)
+    }
+    const { empresa } = this;
+    const accentColor = empresa.pdfColor || '#1877f2';
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Banner superior
+    doc.setFillColor(accentColor);
+    doc.rect(0, 0, pageWidth, 28, 'F');
+    
+    // Logo y Título
+    if (logoDataUrl) doc.addImage(logoDataUrl, 'PNG', 15, 7, 14, 14);
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor('#FFFFFF');
+    doc.text(titulo.toUpperCase(), pageWidth - 15, 18, { align: 'right' });
+
+    // Información de la empresa
+    doc.setFontSize(9);
+    doc.setTextColor('#333333');
+    doc.setFont('helvetica', 'normal');
+    doc.text(empresa.nombre, 15, 40);
+    doc.text(empresa.direccion || '', 15, 45);
+    doc.text(`${empresa.email || ''} | ${empresa.telefono || ''}`, 15, 50);
+
+    // Pie de página
+    const pageCount = doc.internal.getNumberOfPages();
+    for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor('#888888');
+        doc.text(`Página ${i} de ${pageCount}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+    }
+
+    return doc;
+},
 };
 
 

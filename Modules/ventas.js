@@ -1222,228 +1222,119 @@ abrirModalEditarVenta(ventaId) {
         this.showModal(modalHTML, '6xl');
     },
     async generarFacturaPDF(ventaId) {
-        const venta = this.findById(this.transacciones, ventaId);
-        const cliente = this.findById(this.contactos, venta.contactoId);
-        const { empresa } = this;
-        const titulo = `Factura_${venta.numeroFactura || venta.id}`;
+    const venta = this.findById(this.transacciones, ventaId);
+    const cliente = this.findById(this.contactos, venta.contactoId);
+    const { empresa } = this;
+    const titulo = `Factura_${venta.numeroFactura || venta.id}`;
 
-        const generateAndShowPdf = (logoDataUrl = null) => {
-            let pdfDoc;
-            if (empresa.pdfTemplate === 'moderna') {
-                pdfDoc = this._generarFacturaPDF_Moderna(venta, cliente, empresa, logoDataUrl);
-            } else {
-                pdfDoc = this._generarFacturaPDF_Clasica(venta, cliente, empresa, logoDataUrl);
-            }
-            this._displayPDFPreviewInModal(pdfDoc, titulo);
-        };
+    const generateAndShowPdf = (logoDataUrl = null) => {
+        // Ahora las llamadas se hacen a las funciones correctas que sí existen en el objeto
+        const pdfDoc = ContaApp._generarFacturaPDF(venta, cliente, empresa, logoDataUrl);
+        ContaApp._displayPDFPreviewInModal(pdfDoc, titulo);
+    };
 
-        if (empresa.logo) {
-            try {
-                // Usamos un proxy si es necesario o manejamos CORS
-                const response = await fetch(empresa.logo);
-                if (!response.ok) throw new Error(`Network response was not ok: ${response.statusText}`);
-                const blob = await response.blob();
-                const reader = new FileReader();
-                reader.onload = () => {
-                    generateAndShowPdf(reader.result);
-                };
-                reader.onerror = (error) => {
-                    console.error("FileReader error:", error);
-                    this.showToast('Error al leer el logo, se generará el PDF sin él.', 'error');
-                    generateAndShowPdf();
-                };
-                reader.readAsDataURL(blob);
-            } catch (error) {
-                console.error("Error al cargar el logo para el PDF:", error);
-                this.showToast('No se pudo cargar el logo, se generará el PDF sin él.', 'error');
-                generateAndShowPdf();
-            }
-        } else {
+    if (empresa.logo) {
+        try {
+            const response = await fetch(empresa.logo);
+            if (!response.ok) throw new Error('Network response was not ok');
+            const blob = await response.blob();
+            const reader = new FileReader();
+            reader.onload = () => generateAndShowPdf(reader.result);
+            reader.readAsDataURL(blob);
+        } catch (error) {
+            console.error("Error al cargar el logo para el PDF:", error);
+            this.showToast('No se pudo cargar el logo, se generará el PDF sin él.', 'error');
             generateAndShowPdf();
         }
-    },
-        _displayPDFPreviewInModal(pdfDoc, titulo) {
-        const pdfDataUri = pdfDoc.output('datauristring');
-        const previewHTML = `
-            <div class="flex justify-between items-center mb-4 no-print">
-                <h3 class="conta-title !mb-0">Vista Previa: ${titulo}</h3>
-                <div>
-                    <button class="conta-btn conta-btn-small" onclick="this.nextElementSibling.click()"><i class="fa-solid fa-download me-2"></i>Descargar PDF</button>
-                    <a href="${pdfDataUri}" download="${titulo.replace(/ /g, '_')}_${this.empresa.nombre}.pdf" class="hidden"></a>
-                    <button class="conta-btn conta-btn-small conta-btn-accent" onclick="ContaApp.closeModal()">Cerrar</button>
-                </div>
-            </div>
-            <iframe src="${pdfDataUri}" width="100%" height="600px" style="border: none;"></iframe>
-        `;
-        this.showModal(previewHTML, '6xl');
-    },
+    } else {
+        generateAndShowPdf();
+    }
+},
 
-    _generarFacturaPDF_Clasica(venta, cliente, empresa, logoDataUrl) {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-        const accentColor = empresa.pdfColor || '#1877f2';
+_generarFacturaPDF(venta, cliente, empresa, logoDataUrl) {
+    // Usamos la función base de app.js para crear la cabecera y pie de página
+    const doc = this._generarPDFBase(`Factura #${venta.numeroFactura || venta.id}`, logoDataUrl);
+    const accentColor = empresa.pdfColor || '#1877f2';
 
-        // Cabecera
-        if (logoDataUrl) doc.addImage(logoDataUrl, 'PNG', 14, 12, 30, 30);
-        doc.setFontSize(20);
-        doc.setFont('helvetica', 'bold');
-        doc.text(empresa.nombre, 105, 20, { align: 'center' });
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.text(empresa.direccion || '', 105, 26, { align: 'center' });
-        
-        doc.setFontSize(26);
-        doc.setFont('helvetica', 'bold');
-        doc.text('FACTURA', 200, 20, { align: 'right' });
+    // Información del cliente y detalles de la factura
+    doc.setFontSize(9);
+    doc.setTextColor('#333333');
+    doc.setFont('helvetica', 'bold');
+    doc.text('FACTURAR A:', 15, 60);
+    doc.setFont('helvetica', 'normal');
+    doc.text(cliente.nombre, 15, 65);
+    
+    doc.autoTable({
+        body: [
+            ['Fecha:', venta.fecha],
+            ['Vencimiento:', venta.fechaVencimiento || venta.fecha],
+            ['Condiciones:', venta.terminosPago === 'contado' ? 'De Contado' : 'Crédito'],
+        ],
+        startY: 55,
+        margin: { left: 140 },
+        theme: 'plain',
+        styles: { fontSize: 9, cellPadding: 1 },
+    });
 
-        // Detalles de la factura
-        doc.autoTable({
-            body: [
-                ['Factura #:', venta.numeroFactura || venta.id],
-                ['Fecha:', venta.fecha],
-                ['Vencimiento:', venta.fechaVencimiento || venta.fecha],
-            ],
-            startY: 30,
-            margin: { left: 140 },
-            theme: 'plain',
-            styles: { fontSize: 10, cellPadding: 1.5 },
-        });
-
-        // Información del cliente
-        doc.setFontSize(10);
-        doc.setDrawColor(accentColor);
-        doc.line(14, 55, 200, 55);
-        doc.text('FACTURAR A:', 14, 62);
-        doc.setFont('helvetica', 'bold');
-        doc.text(cliente.nombre, 14, 68);
-        
-        // Tabla de ítems
-        const tableData = venta.items.map(item => {
-            const producto = item.itemType === 'producto' ? this.findById(this.productos, item.productoId) : null;
-            const servicio = item.itemType === 'servicio' ? this.findById(this.planDeCuentas, item.cuentaId) : null;
-            const descripcion = producto ? producto.nombre : (servicio ? servicio.nombre : 'Ítem desconocido');
-            return [
-                descripcion,
-                item.cantidad,
-                this.formatCurrency(item.precio),
-                this.formatCurrency(item.cantidad * item.precio)
-            ];
-        });
-
-        doc.autoTable({
-            head: [['Descripción', 'Cantidad', 'Precio Unit.', 'Total']],
-            body: tableData,
-            startY: 75,
-            theme: 'striped',
-            headStyles: { fillColor: accentColor },
-        });
-
-        // Totales
-        const finalY = doc.autoTable.previous.finalY;
-        const totals = [
-            ['Subtotal:', this.formatCurrency(venta.subtotal)],
-            ['Descuento:', `-${this.formatCurrency(venta.descuento || 0)}`],
-            [`Impuesto (${empresa.taxRate}%):`, this.formatCurrency(venta.impuesto)],
-            ['Total:', this.formatCurrency(venta.total)],
-            ['Pagado:', this.formatCurrency(venta.montoPagado || 0)],
-            ['Saldo Pendiente:', this.formatCurrency(venta.total - (venta.montoPagado || 0))]
+    // Tabla de ítems
+    const tableData = venta.items.map(item => {
+        const descripcion = item.itemType === 'producto' 
+            ? this.findById(this.productos, item.productoId).nombre 
+            : this.findById(this.planDeCuentas, item.cuentaId).nombre;
+        return [
+            descripcion,
+            item.cantidad,
+            this.formatCurrency(item.precio),
+            this.formatCurrency(item.cantidad * item.precio)
         ];
-        doc.autoTable({
-            body: totals,
-            startY: finalY + 5,
-            margin: { left: 130 },
-            theme: 'plain',
-            styles: { fontSize: 10, cellPadding: 1.5, halign: 'right' },
-            didParseCell: (data) => {
-                if (data.row.index >= 3) data.cell.styles.fontStyle = 'bold';
-            }
-        });
+    });
 
-        return doc;
-    },
+    doc.autoTable({
+        head: [['Descripción', 'Cantidad', 'Precio Unit.', 'Total']],
+        body: tableData,
+        startY: 75,
+        theme: 'striped',
+        headStyles: { fillColor: accentColor },
+    });
 
-    _generarFacturaPDF_Moderna(venta, cliente, empresa, logoDataUrl) {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-        const accentColor = empresa.pdfColor || '#1877f2';
-        const pageWidth = doc.internal.pageSize.getWidth();
+    // Totales
+    const finalY = doc.autoTable.previous.finalY;
+    const totals = [
+        ['Subtotal:', this.formatCurrency(venta.subtotal)],
+        ['Descuento:', `-${this.formatCurrency(venta.descuento || 0)}`],
+        [`Impuesto (${empresa.taxRate}%):`, this.formatCurrency(venta.impuesto)],
+        [{content: 'TOTAL:', styles: {fontStyle: 'bold'}}, {content: this.formatCurrency(venta.total), styles: {fontStyle: 'bold'}}],
+        ['Pagado:', this.formatCurrency(venta.montoPagado || 0)],
+        [{content: 'SALDO:', styles: {fontStyle: 'bold', fontSize: 11}}, {content: this.formatCurrency(venta.total - (venta.montoPagado || 0)), styles: {fontStyle: 'bold', fontSize: 11}}]
+    ];
+    doc.autoTable({
+        body: totals,
+        startY: finalY + 5,
+        margin: { left: 120 },
+        theme: 'plain',
+        styles: { fontSize: 10, cellPadding: 1.5, halign: 'right' },
+    });
 
-        // Banner superior
-        doc.setFillColor(accentColor);
-        doc.rect(0, 0, pageWidth, 40, 'F');
-        
-        // Logo y título
-        if (logoDataUrl) doc.addImage(logoDataUrl, 'PNG', 15, 8, 24, 24);
-        doc.setFontSize(28);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor('#FFFFFF');
-        doc.text('FACTURA', pageWidth - 15, 25, { align: 'right' });
+    return doc;
+},
 
-        // Información de la empresa y cliente
-        doc.setFontSize(9);
-        doc.setTextColor('#333333');
-        doc.setFont('helvetica', 'bold');
-        doc.text('DE:', 15, 50);
-        doc.text('PARA:', 110, 50);
-        doc.setFont('helvetica', 'normal');
-        doc.text(empresa.nombre, 15, 55);
-        doc.text(empresa.direccion || '', 15, 60);
-        doc.text(cliente.nombre, 110, 55);
-        doc.text(cliente.email || '', 110, 60);
+// ESTA ES LA FUNCIÓN QUE FALTABA
+_displayPDFPreviewInModal(pdfDoc, titulo) {
+    const pdfDataUri = pdfDoc.output('datauristring');
+    const previewHTML = `
+        <div class="flex justify-between items-center mb-4 no-print">
+            <h3 class="conta-title !mb-0">Vista Previa: ${titulo}</h3>
+            <div>
+                <button class="conta-btn conta-btn-small" onclick="this.nextElementSibling.click()"><i class="fa-solid fa-download me-2"></i>Descargar PDF</button>
+                <a href="${pdfDataUri}" download="${titulo.replace(/ /g, '_')}_${this.empresa.nombre}.pdf" class="hidden"></a>
+                <button class="conta-btn conta-btn-small conta-btn-accent" onclick="ContaApp.closeModal()">Cerrar</button>
+            </div>
+        </div>
+        <iframe src="${pdfDataUri}" width="100%" height="600px" style="border: none;"></iframe>
+    `;
+    this.showModal(previewHTML, '6xl');
+},
 
-        // Detalles de la factura
-        doc.autoTable({
-            body: [
-                ['Factura #', venta.numeroFactura || venta.id],
-                ['Fecha', venta.fecha],
-                ['Vencimiento', venta.fechaVencimiento || venta.fecha],
-            ],
-            startY: 70,
-            theme: 'grid',
-            styles: { fontSize: 9, cellPadding: 2, lineWidth: 0.1, lineColor: '#dddddd' },
-            headStyles: { fillColor: '#f8f9fa', textColor: '#333' },
-        });
-
-        // Tabla de ítems
-        const tableData = venta.items.map(item => {
-            const producto = item.itemType === 'producto' ? this.findById(this.productos, item.productoId) : null;
-            const servicio = item.itemType === 'servicio' ? this.findById(this.planDeCuentas, item.cuentaId) : null;
-            return [
-                producto ? producto.nombre : servicio.nombre,
-                item.cantidad,
-                this.formatCurrency(item.precio),
-                this.formatCurrency(item.cantidad * item.precio)
-            ];
-        });
-        doc.autoTable({
-            head: [['Ítem', 'Cant.', 'Precio', 'Total']],
-            body: tableData,
-            startY: doc.autoTable.previous.finalY + 2,
-            theme: 'striped',
-            headStyles: { fillColor: accentColor },
-        });
-
-        // Totales en un recuadro
-        const finalY = doc.autoTable.previous.finalY;
-        const totalX = 120, totalY = finalY + 10;
-        doc.setFillColor('#f8f9fa');
-        doc.setDrawColor('#dddddd');
-        doc.roundedRect(totalX - 5, totalY - 5, 85, 38, 3, 3, 'FD');
-        doc.autoTable({
-            body: [
-                ['Subtotal', this.formatCurrency(venta.subtotal)],
-                ['Descuento', `-${this.formatCurrency(venta.descuento || 0)}`],
-                ['Impuesto', this.formatCurrency(venta.impuesto)],
-                [{content: 'SALDO PENDIENTE', styles: {fontStyle: 'bold', fontSize: 11}} , {content: this.formatCurrency(venta.total - (venta.montoPagado || 0)), styles: {fontStyle: 'bold', fontSize: 11}}]
-            ],
-            startY: totalY,
-            margin: { left: totalX },
-            theme: 'plain',
-            styles: { halign: 'right' }
-        });
-        
-        return doc;
-    },
     exportarVentasCSV() {
         const filters = {
             search: document.getElementById('ventas-search')?.value,

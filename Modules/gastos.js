@@ -25,14 +25,12 @@ Object.assign(ContaApp, {
 },
 
         async renderGastosHistorial(filters = {}) {
-    document.getElementById('page-actions-header').innerHTML = `
-        <div class="flex gap-2 flex-wrap">
-            <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarGastosCSV()"><i class="fa-solid fa-file-csv me-2"></i>Exportar CSV</button>
-            <button class="conta-btn" onclick="ContaApp.abrirModalGasto()">+ Nuevo Gasto</button>
-        </div>`;
+    document.getElementById('page-actions-header').innerHTML = `<div class="flex gap-2 flex-wrap">
+        <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarGastosCSV()"><i class="fa-solid fa-file-csv me-2"></i>Exportar CSV</button>
+        <button class="conta-btn" onclick="ContaApp.abrirModalGasto()">+ Nuevo Gasto</button>
+    </div>`;
     
     const todosLosGastos = this.transacciones.length > 0 ? this.transacciones : (await this.repository.getPaginatedTransactions({ perPage: 10000, filters: { tipos: ['gasto', 'compra_inventario'] } })).data;
-    
     const hoy = new Date();
     const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0,10);
     const gastosDelMes = todosLosGastos.filter(g => g.fecha >= primerDiaMes).reduce((sum, g) => sum + g.total, 0);
@@ -68,25 +66,19 @@ Object.assign(ContaApp, {
             <div class="conta-card kpi-dashboard-card w-64 text-center"><span class="text-xs text-[var(--color-text-secondary)] flex items-center justify-center"><i class="fa-solid fa-tags fa-fw me-2"></i> Categoría Principal</span><p class="font-bold text-xl conta-text-primary mt-1 truncate">${categoriaPrincipal}</p></div>
         </div>
     `;
-    
-    const filterFormHTML = `<div class="conta-card p-3 mb-4">
-        <form onsubmit="event.preventDefault(); ContaApp.filtrarLista('gastos');" class="flex flex-wrap items-end gap-3">
-            <div><label class="text-xs font-semibold">Buscar por Proveedor, Desc. o #</label><input type="search" id="gastos-search" class="conta-input md:w-72" value="${filters.search || ''}"></div>
-            <div><label class="text-xs font-semibold">Desde</label><input type="date" id="gastos-start-date" class="conta-input" value="${filters.startDate || ''}"></div>
-            <div><label class="text-xs font-semibold">Hasta</label><input type="date" id="gastos-end-date" class="conta-input" value="${filters.endDate || ''}"></div>
-            <button type="submit" class="conta-btn">Filtrar</button>
-        </form>
-    </div>`;
+
+    const filterFormHTML = `<div class="conta-card p-3 mb-4"><form onsubmit="event.preventDefault(); ContaApp.filtrarLista('gastos');" class="flex flex-wrap items-end gap-3">
+        <div><label class="text-xs font-semibold">Buscar por Proveedor, Desc. o #</label><input type="search" id="gastos-search" class="conta-input md:w-72" value="${filters.search || ''}"></div>
+        <div><label class="text-xs font-semibold">Desde</label><input type="date" id="gastos-start-date" class="conta-input" value="${filters.startDate || ''}"></div>
+        <div><label class="text-xs font-semibold">Hasta</label><input type="date" id="gastos-end-date" class="conta-input" value="${filters.endDate || ''}"></div>
+        <button type="submit" class="conta-btn">Filtrar</button>
+    </form></div>`;
     
     const { currentPage, perPage } = this.getPaginationState('gastos');
     const { column, order } = this.gastosSortState;
-
     const { data: itemsParaMostrar, totalItems } = await this.repository.getPaginatedTransactions({
         page: currentPage, perPage: perPage,
-        filters: {
-            tipos: ['gasto'], search: filters.search,
-            startDate: filters.startDate, endDate: filters.endDate
-        },
+        filters: { tipos: ['gasto'], search: filters.search, startDate: filters.startDate, endDate: filters.endDate },
         sort: { column, order }
     });
     
@@ -94,18 +86,14 @@ Object.assign(ContaApp, {
     if (totalItems === 0) {
          resultsHTML = `<div class="conta-card text-center p-8 text-[var(--color-text-secondary)]"><i class="fa-solid fa-filter-circle-xmark fa-3x mb-4 opacity-50"></i><h3 class="font-bold text-lg">Sin Resultados</h3><p>No se encontraron gastos que coincidan con los filtros.</p></div>`;
     } else {
-        const generarEncabezado = (nombreColumna, clave) => {
-            let icono = this.gastosSortState.column === clave ? (this.gastosSortState.order === 'asc' ? '<i class="fa-solid fa-arrow-up ml-2"></i>' : '<i class="fa-solid fa-arrow-down ml-2"></i>') : '';
-            return `<th class="conta-table-th cursor-pointer" onclick="ContaApp.ordenarGastosPor('${clave}')">${nombreColumna} ${icono}</th>`;
-        };
-
+        const generarEncabezado = (nombreColumna, clave) => `<th class="conta-table-th cursor-pointer" onclick="ContaApp.ordenarGastosPor('${clave}')">${nombreColumna} ${this.gastosSortState.column === clave ? (this.gastosSortState.order === 'asc' ? '<i class="fa-solid fa-arrow-up ml-2"></i>' : '<i class="fa-solid fa-arrow-down ml-2"></i>') : ''}</th>`;
         let tableRowsHTML = '';
         itemsParaMostrar.forEach(g => {
             const proveedor = this.findById(this.contactos, g.contactoId);
             const estado = g.estado || 'Pendiente';
             let estadoClass = estado === 'Pagado' ? 'tag-success' : (estado === 'Parcial' ? 'tag-accent' : 'tag-warning');
             tableRowsHTML += `<tr class="cursor-pointer" onclick="ContaApp.abrirModalHistorialGasto(${g.id})">
-                <td class="conta-table-td font-mono">${g.id}</td>
+                <td class="conta-table-td font-mono">${g.referencia || g.id}</td>
                 <td class="conta-table-td">${g.fecha}</td>
                 <td class="conta-table-td">${proveedor?.nombre || 'N/A'}</td>
                 <td class="conta-table-td">${g.descripcion}</td>
@@ -113,12 +101,13 @@ Object.assign(ContaApp, {
                 <td class="conta-table-td"><span class="tag ${estadoClass}">${estado}</span></td>
                 <td class="conta-table-td text-center">
                     <button class="conta-btn-icon" title="Ver Detalle" onclick="event.stopPropagation(); ContaApp.abrirModalHistorialGasto(${g.id})"><i class="fa-solid fa-eye"></i></button>
-                    <button class="conta-btn-icon edit" title="Duplicar Gasto" onclick="event.stopPropagation(); ContaApp.abrirModalGasto(${g.id})"><i class="fa-solid fa-copy"></i></button>
+                    <button class="conta-btn-icon edit" title="Editar Gasto" onclick="event.stopPropagation(); ContaApp.abrirModalEditarGasto(${g.id})"><i class="fa-solid fa-pencil"></i></button>
+                    <button class="conta-btn-icon" title="Duplicar Gasto" onclick="event.stopPropagation(); ContaApp.abrirModalGasto(${g.id})"><i class="fa-solid fa-copy"></i></button>
                 </td>
             </tr>`;
         });
         resultsHTML = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
-            ${generarEncabezado('#', 'id')}
+            ${generarEncabezado('Referencia #', 'referencia')}
             ${generarEncabezado('Fecha', 'fecha')}
             ${generarEncabezado('Proveedor', 'contacto')}
             ${generarEncabezado('Descripción', 'descripcion')}
@@ -126,10 +115,8 @@ Object.assign(ContaApp, {
             ${generarEncabezado('Estado', 'estado')}
             <th class="conta-table-th text-center">Acciones</th>
         </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
-        
         this.renderPaginationControls('gastos', totalItems);
     }
-    
     document.getElementById('gastos-contenido').innerHTML = kpiHTML + filterFormHTML + resultsHTML;
 },
     renderGastosRecurrentes() {
@@ -224,86 +211,90 @@ Object.assign(ContaApp, {
             this.showToast('Todos los gastos recurrentes para este mes ya han sido generados.', 'info');
         }
     },
-                    abrirModalGasto(gastoIdDuplicar = null) {
-        const gastoOriginal = gastoIdDuplicar ? this.findById(this.transacciones, gastoIdDuplicar) : null;
+        abrirModalGasto(gastoIdDuplicar = null, gastoIdEditar = null) {
+    const isEditing = gastoIdEditar !== null;
+    const gastoOriginal = isEditing ? this.findById(this.transacciones, gastoIdEditar) : (gastoIdDuplicar ? this.findById(this.transacciones, gastoIdDuplicar) : null);
+    const modalTitle = isEditing ? 'Editar Gasto' : (gastoIdDuplicar ? 'Duplicar Gasto' : 'Nuevo Gasto o Compra');
 
-        const cuentasBancoOptions = this.planDeCuentas.filter(c => c.tipo === 'DETALLE' && (c.codigo.startsWith('110') || c.codigo.startsWith('230')))
-            .map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+    const cuentasBancoOptions = this.planDeCuentas.filter(c => c.tipo === 'DETALLE' && (c.codigo.startsWith('110') || c.codigo.startsWith('230'))).map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+    
+    this.isFormDirty = false;
+    const modalHTML = `<h3 class="conta-title mb-4">${modalTitle}</h3>
+        <form onsubmit="ContaApp.guardarGasto(event)" oninput="ContaApp.isFormDirty = true;" class="modal-form">
+            ${isEditing ? `<input type="hidden" id="gasto-id-edit" value="${gastoIdEditar}">` : ''}
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div><label>Proveedor</label><div class="flex items-center gap-2">
+                    <input list="proveedores-datalist" id="gasto-proveedor-input" class="w-full p-2 mt-1" placeholder="Buscar proveedor...">
+                    <datalist id="proveedores-datalist">${this.contactos.filter(c => c.tipo === 'proveedor').map(c => `<option value="${c.nombre}" data-id="${c.id}"></option>`).join('')}</datalist>
+                    <input type="hidden" id="gasto-proveedor-id">
+                    <button type="button" class="conta-btn conta-btn-small" onclick="ContaApp.abrirSubModalNuevoContacto('proveedor', 'gasto-proveedor-input')">+</button>
+                </div></div>
+                <div><label>Fecha</label><input type="date" id="gasto-fecha" value="${this.getTodayDate()}" class="w-full p-2 mt-1" required></div>
+                <div><label>Referencia / Factura Prov.</label><input type="text" id="gasto-referencia" class="w-full p-2 mt-1" placeholder="Ej: F-54321"></div>
+            </div>
+            <div><label>Descripción General del Gasto</label><input type="text" id="gasto-descripcion" class="w-full p-2 mt-1" required></div>
+            <div class="mt-4"><label>Adjuntar Comprobante (Opcional, máx 1MB)</label><input type="file" id="gasto-comprobante" class="w-full p-2 mt-1 border rounded" accept="image/*,.pdf"></div>
+            <div class="conta-card p-2 md:p-4 mt-4">
+                <h4 class="font-bold mb-2 text-sm">Detalle del Gasto/Compra</h4>
+                <div id="gasto-items-container" class="space-y-3"></div>
+                <button type="button" class="conta-btn conta-btn-small conta-btn-accent mt-2" onclick="ContaApp.agregarItemGasto()">+ Agregar Línea</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 items-start">
+                <div><label>Condición de Pago</label>
+                    <select id="gasto-pago-tipo" class="w-full p-2 mt-1" onchange="document.getElementById('gasto-pago-cuenta-banco-div').style.display = this.value === 'contado' ? 'block' : 'none'"><option value="credito">A crédito (genera Cta. por Pagar)</option><option value="contado">De Contado</option></select>
+                    <div id="gasto-pago-cuenta-banco-div" style="display: none;" class="mt-2"><label>Pagar desde</label><select id="gasto-pago-cuenta-banco" class="w-full p-2 mt-1">${cuentasBancoOptions}</select></div>
+                </div>
+                <div class="space-y-2 text-right">
+                    <div class="flex justify-end items-center gap-2 mb-2"><label for="gasto-recurrente-check" class="text-sm font-medium">Gasto Recurrente</label><input type="checkbox" id="gasto-recurrente-check" class="h-4 w-4"></div>
+                    <div class="flex justify-between font-bold text-xl"><span class="text-[var(--color-text-primary)]">Total:</span> <span id="gasto-total">${this.formatCurrency(0)}</span></div>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-8"><button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button><button type="submit" class="conta-btn">${isEditing ? 'Guardar Cambios' : 'Guardar Gasto'}</button></div>
+        </form>`;
+    this.showModal(modalHTML, '4xl');
+    this.setupDatalistListener('gasto-proveedor-input', 'gasto-proveedor-id', 'proveedores-datalist');
 
-        // --- CAMBIO CLAVE: Se añade oninput al <form> y se resetea el estado al abrir ---
-        this.isFormDirty = false;
-        const modalHTML = `
-            <h3 class="conta-title mb-4">${gastoOriginal ? 'Duplicar Gasto' : 'Nuevo Gasto o Compra'}</h3>
-            <form onsubmit="ContaApp.guardarGasto(event)" oninput="ContaApp.isFormDirty = true;" class="modal-form">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label>Proveedor</label>
-                         <div class="flex items-center gap-2">
-                            <input list="proveedores-datalist" id="gasto-proveedor-input" class="w-full p-2 mt-1 modal-form" placeholder="Escribe para buscar un proveedor...">
-                            <datalist id="proveedores-datalist">
-                                ${this.contactos.filter(c => c.tipo === 'proveedor').map(c => `<option value="${c.nombre}" data-id="${c.id}"></option>`).join('')}
-                            </datalist>
-                            <input type="hidden" id="gasto-proveedor-id">
-                            <button type="button" class="conta-btn conta-btn-small" onclick="ContaApp.abrirSubModalNuevoContacto('proveedor', 'gasto-proveedor-input')">+</button>
-                        </div>
-                    </div>
-                    <div><label>Fecha</label><input type="date" id="gasto-fecha" value="${this.getTodayDate()}" class="w-full p-2 mt-1" required></div>
-                </div>
-                 <div><label>Descripción General del Gasto</label><input type="text" id="gasto-descripcion" class="w-full p-2 mt-1" required></div>
-                
-                <div class="mt-4">
-                    <label>Adjuntar Comprobante (Opcional, máx 1MB)</label>
-                    <input type="file" id="gasto-comprobante" class="w-full p-2 mt-1 border rounded" accept="image/*,.pdf">
-                </div>
-
-                <div class="conta-card p-2 md:p-4 mt-4">
-                    <h4 class="font-bold mb-2 text-sm">Detalle del Gasto/Compra</h4>
-                    <div id="gasto-items-container" class="space-y-3"></div>
-                    <button type="button" class="conta-btn conta-btn-small conta-btn-accent mt-2" onclick="ContaApp.agregarItemGasto()">+ Agregar Línea</button>
-                </div>
-                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 items-start">
-                    <div>
-                        <label>Condición de Pago</label>
-                        <select id="gasto-pago-tipo" class="w-full p-2 mt-1" onchange="document.getElementById('gasto-pago-cuenta-banco-div').style.display = this.value === 'contado' ? 'block' : 'none'"><option value="credito">A crédito (genera Cta. por Pagar)</option><option value="contado">De Contado</option></select>
-                        <div id="gasto-pago-cuenta-banco-div" style="display: none;" class="mt-2"><label>Pagar desde</label><select id="gasto-pago-cuenta-banco" class="w-full p-2 mt-1">${cuentasBancoOptions}</select></div>
-                    </div>
-                     <div class="space-y-2 text-right">
-                        <div class="flex justify-end items-center gap-2 mb-2"><label for="gasto-recurrente-check" class="text-sm font-medium">Gasto Recurrente</label><input type="checkbox" id="gasto-recurrente-check" class="h-4 w-4"></div>
-                        <div class="flex justify-between font-bold text-xl"><span class="text-[var(--color-text-primary)]">Total:</span> <span id="gasto-total">${this.formatCurrency(0)}</span></div>
-                    </div>
-                </div>
-                <div class="flex justify-end gap-2 mt-8"><button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button><button type="submit" class="conta-btn">Guardar Gasto</button></div>
-            </form>
-        `;
-        this.showModal(modalHTML, '4xl');
-        this.setupDatalistListener('gasto-proveedor-input', 'gasto-proveedor-id', 'proveedores-datalist');
-
-        if (gastoOriginal) {
-            const proveedor = this.findById(this.contactos, gastoOriginal.contactoId);
-            if (proveedor) {
-                document.getElementById('gasto-proveedor-input').value = proveedor.nombre;
-                document.getElementById('gasto-proveedor-id').value = proveedor.id;
-            }
-            document.getElementById('gasto-descripcion').value = gastoOriginal.descripcion;
-            const itemsContainer = document.getElementById('gasto-items-container');
-            itemsContainer.innerHTML = '';
-            gastoOriginal.items.forEach(item => {
-                this.agregarItemGasto();
-                const nuevaFila = itemsContainer.lastChild;
-                nuevaFila.querySelector('.gasto-item-cuenta').value = item.cuentaId;
-                nuevaFila.querySelector('.gasto-item-monto').value = item.monto.toFixed(2);
-            });
-            this.actualizarTotalesGasto();
-        } else {
-            this.agregarItemGasto();
+    if (gastoOriginal) {
+        const proveedor = this.findById(this.contactos, gastoOriginal.contactoId);
+        if (proveedor) {
+            document.getElementById('gasto-proveedor-input').value = proveedor.nombre;
+            document.getElementById('gasto-proveedor-id').value = proveedor.id;
         }
-    },
+        document.getElementById('gasto-fecha').value = gastoOriginal.fecha;
+        document.getElementById('gasto-referencia').value = gastoOriginal.referencia || '';
+        document.getElementById('gasto-descripcion').value = gastoOriginal.descripcion;
+        const itemsContainer = document.getElementById('gasto-items-container');
+        itemsContainer.innerHTML = '';
+        gastoOriginal.items.forEach(item => {
+            this.agregarItemGasto();
+            const nuevaFila = itemsContainer.lastChild;
+            nuevaFila.querySelector('.gasto-item-cuenta').value = item.cuentaId;
+            nuevaFila.querySelector('.gasto-item-monto').value = item.monto.toFixed(2);
+        });
+        this.actualizarTotalesGasto();
+    } else {
+        this.agregarItemGasto();
+    }
+},
                 handleGastoItemChange(selectElement) {
         // Esta función ahora no necesita hacer nada, pero la mantenemos
         // por si en el futuro queremos añadir lógica aquí.
         // Lo importante es que ya no intenta cambiar la fila a "modo inventario".
         this.actualizarTotalesGasto();
     },
+    abrirModalEditarGasto(gastoId) {
+    const gasto = this.findById(this.transacciones, gastoId);
+    if (!gasto) {
+        this.showToast('Error: Gasto no encontrado.', 'error');
+        return;
+    }
+    if (gasto.montoPagado > 0 || gasto.estado === 'Anulada') {
+        this.showToast('No se puede editar un gasto que ya tiene pagos o está anulado.', 'error');
+        return;
+    }
+    // Llamamos a la función principal del modal, pasando el ID para editar
+    this.abrirModalGasto(null, gastoId);
+},
     agregarItemGasto() {
         const container = document.getElementById('gasto-items-container');
         
@@ -328,118 +319,73 @@ Object.assign(ContaApp, {
         container.insertAdjacentHTML('beforeend', itemHTML);
     },
         async guardarGasto(e) {
-        e.preventDefault();
-        const submitButton = e.target.querySelector('button[type="submit"]');
-        this.toggleButtonLoading(submitButton, true);
+    e.preventDefault();
+    const submitButton = e.target.querySelector('button[type="submit"]');
+    this.toggleButtonLoading(submitButton, true);
+
+    const gastoIdEdit = document.getElementById('gasto-id-edit')?.value;
+    const isEditing = !!gastoIdEdit;
+
+    try {
+        const contactoId = parseInt(document.getElementById('gasto-proveedor-id').value);
+        if (!contactoId) throw new Error('Debe seleccionar un proveedor válido.');
+
+        const fecha = document.getElementById('gasto-fecha').value;
+        const descripcion = document.getElementById('gasto-descripcion').value;
+        const referencia = document.getElementById('gasto-referencia').value;
+        const pagoTipo = document.getElementById('gasto-pago-tipo').value;
         
-        try {
-            const contactoId = parseInt(document.getElementById('gasto-proveedor-id').value);
-            
-            if (!contactoId || isNaN(contactoId)) {
-                throw new Error('Debe seleccionar un proveedor válido de la lista.');
+        const lineas = [];
+        let total = 0;
+        document.querySelectorAll('.gasto-item-row').forEach(row => {
+            const cuentaId = parseInt(row.querySelector('.gasto-item-cuenta').value);
+            const monto = parseFloat(row.querySelector('.gasto-item-monto').value) || 0;
+            if (!cuentaId || monto <= 0) return;
+            lineas.push({ cuentaId, monto });
+            total += monto;
+        });
+
+        if (lineas.length === 0) throw new Error('Debes agregar al menos una línea de gasto válida.');
+        
+        let gastoParaGuardar;
+        if (isEditing) {
+            gastoParaGuardar = this.findById(this.transacciones, parseInt(gastoIdEdit));
+            const asientoOriginal = this.asientos.find(a => a.transaccionId === gastoParaGuardar.id);
+            if (asientoOriginal) {
+                const movReversos = asientoOriginal.movimientos.map(m => ({ cuentaId: m.cuentaId, debe: m.haber, haber: m.debe }));
+                this.crearAsiento(this.getTodayDate(), `Modificación Gasto #${gastoParaGuardar.id}`, movReversos);
             }
-
-            const fecha = document.getElementById('gasto-fecha').value;
-            const descripcion = document.getElementById('gasto-descripcion').value;
-            const pagoTipo = document.getElementById('gasto-pago-tipo').value;
-            const esRecurrente = document.getElementById('gasto-recurrente-check').checked;
-            const archivoInput = document.getElementById('gasto-comprobante');
-            const archivo = archivoInput.files[0];
-            
-            let comprobanteDataUrl = null;
-            if (archivo) {
-                if (archivo.size > 1024 * 1024) { throw new Error('El archivo es demasiado grande (máx 1MB).'); }
-                comprobanteDataUrl = await new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result);
-                    reader.onerror = error => reject(error);
-                    reader.readAsDataURL(archivo);
-                });
-            }
-            
-            const lineas = [];
-            let total = 0;
-
-            document.querySelectorAll('.gasto-item-row').forEach(row => {
-                const cuentaId = parseInt(row.querySelector('.gasto-item-cuenta').value);
-                const monto = parseFloat(row.querySelector('.gasto-item-monto').value) || 0;
-                if (!cuentaId || monto <= 0) return;
-
-                lineas.push({ cuentaId, monto });
-                total += monto;
-            });
-
-            if (lineas.length === 0) { throw new Error('Debes agregar al menos una línea de gasto válida.'); }
-            
-            if (esRecurrente) {
-                const nuevaPlantilla = { id: this.idCounter++, tipo: 'gasto', contactoId, descripcion, total, items: lineas, frecuencia: 'mensual', ultimoGenerado: null };
-                this.recurrentes.push(nuevaPlantilla);
-                this.saveAll();
-            } else {
-                let fechaVencimiento = null;
-                if (pagoTipo === 'credito') {
-                    const fechaGasto = new Date(fecha + 'T00:00:00');
-                    fechaGasto.setDate(fechaGasto.getDate() + 30);
-                    fechaVencimiento = fechaGasto.toISOString().slice(0, 10);
-                }
-
-                const estado = pagoTipo === 'credito' ? 'Pendiente' : 'Pagado';
-                const transaccion = { 
-                    id: this.idCounter++, tipo: 'gasto', fecha, fechaVencimiento, 
-                    contactoId, descripcion, total, estado, items: lineas, 
-                    montoPagado: 0, comprobanteDataUrl 
-                };
-                
-                this.registrarAuditoria('CREAR_GASTO', `Creó el gasto "${transaccion.descripcion}" por ${this.formatCurrency(transaccion.total)}`, transaccion.id, 'gasto');
-
-                this.transacciones.push(transaccion);
-
-                const cuentaCxpId = 210;
-                const movimientos = [];
-                lineas.forEach(linea => {
-                    movimientos.push({ cuentaId: linea.cuentaId, debe: linea.monto, haber: 0 });
-                });
-                
-                if (pagoTipo === 'credito') {
-                    movimientos.push({ cuentaId: cuentaCxpId, debe: 0, haber: total });
-                } else {
-                    const cuentaBancoId = parseInt(document.getElementById('gasto-pago-cuenta-banco').value);
-                    movimientos.push({ cuentaId: cuentaBancoId, debe: 0, haber: total });
-                    transaccion.montoPagado = total;
-                    
-                    const pagoContado = {
-                        id: this.idCounter++, tipo: 'pago_proveedor', fecha: fecha, contactoId: contactoId,
-                        monto: total, cuentaOrigenId: cuentaBancoId, gastoId: transaccion.id,
-                        comentario: 'Pago de contado al crear el gasto'
-                    };
-                    this.transacciones.push(pagoContado);
-                }
-                
-                const asiento = this.crearAsiento(fecha, descripcion, movimientos, transaccion.id);
-
-                if (asiento) {
-                    await this.repository.actualizarMultiplesDatos({
-                        transacciones: this.transacciones,
-                        asientos: this.asientos,
-                        idCounter: this.idCounter,
-                        auditLog: this.auditLog
-                    });
-                } else {
-                    throw new Error("No se pudo generar el asiento contable para el gasto.");
-                }
-            }
-            
-            this.isFormDirty = false;
-            this.closeModal();
-            this.irModulo('gastos');
-            this.showToast('Gasto guardado con éxito.', 'success');
-
-        } catch (error) {
-            this.showToast(error.message, 'error');
-        } finally {
-            this.toggleButtonLoading(submitButton, false);
+        } else {
+            gastoParaGuardar = {
+                id: this.idCounter++, tipo: 'gasto', estado: 'Pendiente', montoPagado: 0
+            };
+            this.transacciones.push(gastoParaGuardar);
         }
-    },
+
+        Object.assign(gastoParaGuardar, { fecha, contactoId, descripcion, referencia, total, items: lineas });
+
+        const cuentaContrapartidaId = pagoTipo === 'credito' ? 210 : parseInt(document.getElementById('gasto-pago-cuenta-banco').value);
+        const movimientos = [];
+        lineas.forEach(linea => {
+            movimientos.push({ cuentaId: linea.cuentaId, debe: linea.monto, haber: 0 });
+        });
+        movimientos.push({ cuentaId: cuentaContrapartidaId, debe: 0, haber: total });
+        
+        this.crearAsiento(fecha, descripcion, movimientos, gastoParaGuardar.id);
+        
+        await this.saveAll();
+        
+        this.isFormDirty = false;
+        this.closeModal();
+        this.irModulo('gastos');
+        this.showToast(`Gasto ${isEditing ? 'actualizado' : 'guardado'} con éxito.`, 'success');
+
+    } catch (error) {
+        this.showToast(error.message, 'error');
+    } finally {
+        this.toggleButtonLoading(submitButton, false);
+    }
+},
     anularGasto(gastoId) {
         const gasto = this.findById(this.transacciones, gastoId);
         if (!gasto) {
