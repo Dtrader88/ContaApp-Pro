@@ -593,7 +593,6 @@ getAgingData(tipoContacto, fechaReporte) {
         const totalCreditosAplicados = creditosSeleccionados.reduce((sum, c) => sum + c.monto, 0);
         const totalAcreditado = montoPagadoBanco + totalCreditosAplicados;
 
-        // --- INICIO DE LA REFACTORIZACIÓN ---
         try {
             if (montoPagadoBanco > 0) {
                 const pagoRegistrado = {
@@ -601,18 +600,23 @@ getAgingData(tipoContacto, fechaReporte) {
                     monto: montoPagadoBanco, cuentaBancoId: cuentaBancoId, ventaId: ventaId, comentario: comentario
                 };
                 this.transacciones.push(pagoRegistrado);
-                this.crearAsiento(fecha, `Pago Factura #${venta.numeroFactura || venta.id}`, [
+                const asiento = this.crearAsiento(fecha, `Pago Factura #${venta.numeroFactura || venta.id}`, [
                     { cuentaId: cuentaBancoId, debe: montoPagadoBanco, haber: 0 },
                     { cuentaId: cuentaCxcId, debe: 0, haber: montoPagadoBanco }
                 ], pagoRegistrado.id);
+
+                // --- INICIO DE LA MODIFICACIÓN ---
+                if (asiento) {
+                    this._registrarMovimientoBancarioPendiente(cuentaBancoId, fecha, `Cobro Factura #${venta.numeroFactura || venta.id}`, montoPagadoBanco, asiento.id);
+                }
+                // --- FIN DE LA MODIFICACIÓN ---
             }
 
             creditosSeleccionados.forEach(creditoInfo => {
                 const credito = this.findById(this.transacciones, creditoInfo.id);
                 if (credito) {
                     credito.montoAplicado = (credito.montoAplicado || 0) + creditoInfo.monto;
-                    // NOTA PARA BACKEND: La cuenta de contrapartida debe ser validada.
-                    const cuentaContrapartidaId = credito.tipo === 'nota_credito' ? 490 : 220; // 490: Descuentos/Devoluciones, 220: Anticipos
+                    const cuentaContrapartidaId = credito.tipo === 'nota_credito' ? 490 : 220; 
                     this.crearAsiento(fecha, `Aplicación de ${credito.tipo} #${credito.id} a Factura #${venta.numeroFactura}`, [
                         { cuentaId: cuentaContrapartidaId, debe: creditoInfo.monto, haber: 0 },
                         { cuentaId: cuentaCxcId, debe: 0, haber: creditoInfo.monto }
@@ -630,7 +634,8 @@ getAgingData(tipoContacto, fechaReporte) {
             await this.repository.actualizarMultiplesDatos({
                 transacciones: this.transacciones,
                 asientos: this.asientos,
-                idCounter: this.idCounter
+                idCounter: this.idCounter,
+                bancoImportado: this.bancoImportado // Añadimos para guardar
             });
 
             this.closeModal();
@@ -641,7 +646,6 @@ getAgingData(tipoContacto, fechaReporte) {
             console.error("Error al guardar el pago del cliente:", error);
             this.showToast(`Error al guardar: ${error.message}`, 'error');
         }
-        // --- FIN DE LA REFACTORIZACIÓN ---
     },
     toggleAllCheckboxes(source, className) {
         const checkboxes = document.getElementsByClassName(className);
@@ -1340,6 +1344,11 @@ renderAnticipos(containerId) {
             ], pagoRegistrado.id);
 
             if (asiento) {
+                // --- INICIO DE LA MODIFICACIÓN ---
+                // Registramos la salida de dinero en la pestaña de pendientes del banco.
+                this._registrarMovimientoBancarioPendiente(cuentaOrigenId, fecha, `Pago Gasto #${gasto.id}`, -monto, asiento.id);
+                // --- FIN DE LA MODIFICACIÓN ---
+
                 gasto.montoPagado = (gasto.montoPagado || 0) + monto;
                 if (gasto.montoPagado >= gasto.total - 0.01) {
                     gasto.estado = 'Pagado';
@@ -1347,13 +1356,12 @@ renderAnticipos(containerId) {
                     gasto.estado = 'Parcial';
                 }
 
-                // --- INICIO DE LA REFACTORIZACIÓN ---
                 await this.repository.actualizarMultiplesDatos({
                     transacciones: this.transacciones,
                     asientos: this.asientos,
-                    idCounter: this.idCounter
+                    idCounter: this.idCounter,
+                    bancoImportado: this.bancoImportado // Añadimos esto para guardar el nuevo pendiente
                 });
-                // --- FIN DE LA REFACTORIZACIÓN ---
 
                 this.closeModal();
                 this.irModulo('cxp', { proveedorId: gasto.contactoId });

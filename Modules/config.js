@@ -3,13 +3,16 @@
 Object.assign(ContaApp, {
 
 // Módulo: Configuración y Gestión de Datos
-        renderConfig(params = {}) {
+renderConfig(params = {}) {
     const submodulo = params.submodulo || 'perfil';
 
     let html = `
         <div class="flex gap-2 mb-6 border-b border-[var(--color-border-accent)] flex-wrap">
             <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'perfil' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'perfil'})">Perfil de la Compañía</button>
             <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'contactos' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'contactos'})">Contactos</button>
+            <!-- ===== INICIO DE LA MODIFICACIÓN ===== -->
+            <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'centros-costo' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'centros-costo'})">Centros de Costo</button>
+            <!-- ===== FIN DE LA MODIFICACIÓN ===== -->
             <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'roles' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'roles'})">Roles y Permisos</button>
             <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'auditoria' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'auditoria'})">Auditoría</button>
             <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'unidades' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'unidades'})">Unidades de Medida</button>
@@ -25,6 +28,9 @@ Object.assign(ContaApp, {
     switch (submodulo) {
         case 'perfil': this.renderConfig_Perfil(); break;
         case 'contactos': this.renderContactos('config-contenido'); break;
+        // ===== INICIO DE LA MODIFICACIÓN =====
+        case 'centros-costo': this.renderConfig_CentrosDeCosto(); break;
+        // ===== FIN DE LA MODIFICACIÓN =====
         case 'roles': this.renderConfig_Roles(); break;
         case 'auditoria': this.renderConfig_Auditoria(); break;
         case 'unidades': this.renderConfig_Unidades(); break;
@@ -33,6 +39,97 @@ Object.assign(ContaApp, {
         default: this.renderConfig_Perfil();
     }
 },
+
+// ===== INICIO DE CÓDIGO AÑADIDO (4 NUEVAS FUNCIONES) =====
+
+renderConfig_CentrosDeCosto() {
+    document.getElementById('page-actions-header').innerHTML = `<button class="conta-btn" onclick="ContaApp.abrirModalCentroDeCosto()">+ Nuevo Centro de Costo</button>`;
+    
+    if (!this.empresa.centrosDeCosto) {
+        this.empresa.centrosDeCosto = [];
+    }
+    const centrosDeCosto = this.empresa.centrosDeCosto;
+    
+    let html;
+    if (centrosDeCosto.length === 0) {
+        html = this.generarEstadoVacioHTML('fa-store', 'Sin Centros de Costo', 'Crea tu primer centro de costo para empezar a segmentar tu contabilidad (ej: Tienda A, Oficina Principal).', '+ Crear Centro de Costo', "ContaApp.abrirModalCentroDeCosto()");
+    } else {
+        html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
+            <thead><tr>
+                <th class="conta-table-th">Nombre del Centro de Costo</th>
+                <th class="conta-table-th text-center">Acciones</th>
+            </tr></thead>
+            <tbody>`;
+        centrosDeCosto.sort((a,b) => a.nombre.localeCompare(b.nombre)).forEach(cc => {
+            html += `<tr>
+                <td class="conta-table-td font-bold">${cc.nombre}</td>
+                <td class="conta-table-td text-center">
+                    <button class="conta-btn-icon edit" title="Editar" onclick="ContaApp.abrirModalCentroDeCosto(${cc.id})"><i class="fa-solid fa-pencil"></i></button>
+                    <button class="conta-btn-icon delete ml-2" title="Eliminar" onclick="ContaApp.eliminarCentroDeCosto(${cc.id})"><i class="fa-solid fa-trash"></i></button>
+                </td>
+            </tr>`;
+        });
+        html += `</tbody></table></div>`;
+    }
+    document.getElementById('config-contenido').innerHTML = html;
+},
+
+abrirModalCentroDeCosto(id = null) {
+    const centro = id ? this.empresa.centrosDeCosto.find(cc => cc.id === id) : {};
+    const modalHTML = `<h3 class="conta-title mb-4">${id ? 'Editar' : 'Nuevo'} Centro de Costo</h3>
+    <form onsubmit="ContaApp.guardarCentroDeCosto(event, ${id})" class="space-y-4 modal-form">
+        <div>
+            <label>Nombre</label>
+            <input type="text" id="centro-costo-nombre" class="w-full p-2 mt-1" value="${centro.nombre || ''}" placeholder="Ej: Sucursal Norte, Ventas Online" required>
+        </div>
+        <div class="flex justify-end gap-2 mt-6">
+            <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button>
+            <button type="submit" class="conta-btn">${id ? 'Guardar Cambios' : 'Crear'}</button>
+        </div>
+    </form>`;
+    this.showModal(modalHTML, 'xl');
+},
+
+guardarCentroDeCosto(e, id = null) {
+    e.preventDefault();
+    const nombre = document.getElementById('centro-costo-nombre').value;
+    if (!this.empresa.centrosDeCosto) {
+        this.empresa.centrosDeCosto = [];
+    }
+
+    if (id) {
+        const centro = this.empresa.centrosDeCosto.find(cc => cc.id === id);
+        centro.nombre = nombre;
+    } else {
+        this.empresa.centrosDeCosto.push({ id: this.idCounter++, nombre });
+    }
+    this.saveAll();
+    this.closeModal();
+    this.irModulo('config', { submodulo: 'centros-costo' }); 
+    this.showToast(`Centro de Costo ${id ? 'actualizado' : 'creado'} con éxito.`, 'success');
+},
+
+eliminarCentroDeCosto(id) {
+    // Verificamos si algún movimiento de algún asiento está usando este centro de costo
+    const enUso = this.asientos.some(asiento => 
+        asiento.movimientos.some(mov => mov.centroDeCostoId === id)
+    );
+
+    if (enUso) {
+        this.showToast('No se puede eliminar. El centro de costo tiene transacciones asociadas.', 'error');
+        return;
+    }
+
+    this.showConfirm('¿Seguro que deseas eliminar este centro de costo?', () => {
+        this.empresa.centrosDeCosto = this.empresa.centrosDeCosto.filter(cc => cc.id !== id);
+        this.saveAll();
+        this.irModulo('config', { submodulo: 'centros-costo' });
+        this.showToast('Centro de Costo eliminado.', 'success');
+    });
+},
+
+// ===== FIN DE CÓDIGO AÑADIDO =====
+
 renderConfig_Licencia() {
         const { cliente, paquete, modulosActivos } = this.licencia || { cliente: 'N/A', paquete: 'N/A', modulosActivos: [] };
         
@@ -88,12 +185,9 @@ renderConfig_Licencia() {
         }
 
         try {
-            // Decodificar la clave de Base64 a texto plano (JSON)
             const jsonLicencia = atob(clave);
-            // Convertir el texto JSON a un objeto JavaScript
             const nuevaLicencia = JSON.parse(jsonLicencia);
 
-            // Validar que la licencia tiene la estructura mínima esperada
             if (!nuevaLicencia.paquete || !nuevaLicencia.modulosActivos || !Array.isArray(nuevaLicencia.modulosActivos)) {
                 throw new Error("Formato de licencia no válido.");
             }
@@ -110,13 +204,11 @@ renderConfig_Licencia() {
             this.showToast('La clave de licencia no es válida. Por favor, verifica que la has copiado correctamente.', 'error');
         }
     },
-    // Renombramos la antigua función renderConfig
             renderConfig_Perfil() {
         const { nombre, logo, direccion, telefono, email, taxId, taxRate } = this.empresa;
         const configHTML = `
             <div class="conta-card">
                 <h3 class="conta-subtitle">Perfil de la Empresa y Fiscal</h3>
-                <!-- ===== INICIO DE LA MEJORA: Contenedor para limitar el ancho ===== -->
                 <div class="max-w-4xl">
                     <form onsubmit="ContaApp.guardarConfig(event)" class="space-y-4">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -158,7 +250,6 @@ renderConfig_Licencia() {
                         </div>
                     </form>
                 </div>
-                <!-- ===== FIN DE LA MEJORA ===== -->
             </div>
         `;
         document.getElementById('config-contenido').innerHTML = configHTML;
@@ -255,13 +346,10 @@ renderConfig_Licencia() {
             "¿ESTÁS SEGURO? Esta acción borrará TODOS tus datos de la nube (transacciones, clientes, etc.) y no se puede deshacer. Serás redirigido a la pantalla de configuración inicial.",
             async () => {
                 try {
-                    // --- INICIO DE LA CORRECCIÓN ---
-                    // Usamos el workspaceId guardado en el objeto del usuario actual
                     if (!this.currentUser || !this.currentUser.workspaceId) {
                         throw new Error("No se pudo identificar el workspace del usuario a borrar.");
                     }
                     const workspaceId = this.currentUser.workspaceId;
-                    // --- FIN DE LA CORRECCIÓN ---
 
                     console.log(`Borrando documento del workspace: ${workspaceId}`);
                     
@@ -319,7 +407,6 @@ renderConfig_Licencia() {
         });
         event.target.value = null;
     },
-// Módulo: Contactos
             renderContactos(containerId = 'contactos') {
         const container = document.getElementById(containerId);
         if (!container) return;
@@ -389,47 +476,41 @@ renderConfig_Licencia() {
         </form>`;
         this.showModal(modalHTML, 'xl');
     },
-                async guardarContacto(e, id = null) {
-        e.preventDefault();
-        const data = {
-            nombre: document.getElementById('contacto-nombre').value,
-            tipo: document.getElementById('contacto-tipo').value,
-            email: document.getElementById('contacto-email').value,
-            telefono: document.getElementById('contacto-telefono').value
-        };
+        async guardarContacto(e, id = null) {
+    e.preventDefault();
+    const data = {
+        nombre: document.getElementById('contacto-nombre').value,
+        tipo: document.getElementById('contacto-tipo').value,
+        email: document.getElementById('contacto-email').value,
+        telefono: document.getElementById('contacto-telefono').value
+    };
 
-        try {
-            if (id) {
-                // Editar: Actualizamos el objeto en el array local primero
-                const contactoOriginal = this.findById(this.contactos, id);
-                Object.assign(contactoOriginal, data);
-                
-                // Persistimos solo el array de contactos actualizado
-                await this.repository.actualizarMultiplesDatos({ contactos: this.contactos });
-
-            } else {
-                // Crear: Añadimos el nuevo objeto al array local
-                const nuevoContacto = { id: this.idCounter++, ...data };
-                this.contactos.push(nuevoContacto);
-                
-                // Persistimos el array y el contador actualizado
-                await this.repository.actualizarMultiplesDatos({ 
-                    contactos: this.contactos,
-                    idCounter: this.idCounter
-                });
-            }
-
-            this.closeModal();
-            this.irModulo('config', { submodulo: 'contactos' }); 
-            this.showToast(`Contacto ${id ? 'actualizado' : 'creado'} con éxito.`, 'success');
-
-        } catch (error) {
-            console.error("Error al guardar contacto:", error);
-            this.showToast(`Error al guardar: ${error.message}`, 'error');
-            // Si hay un error, lo ideal sería recargar los datos para asegurar consistencia.
-            // Por ahora, el estado local podría quedar desincronizado en caso de fallo.
+    try {
+        if (id) {
+            const contactoOriginal = this.findById(this.contactos, id);
+            Object.assign(contactoOriginal, data);
+            await this.repository.actualizarMultiplesDatos({ contactos: this.contactos });
+        } else {
+            // --- INICIO DE LA MODIFICACIÓN ---
+            // Ya no usamos idCounter, usamos el nuevo generador de UUIDs.
+            const nuevoContacto = { id: this.generarUUID(), ...data };
+            this.contactos.push(nuevoContacto);
+            // Ya no es necesario guardar idCounter en la base de datos.
+            await this.repository.actualizarMultiplesDatos({ 
+                contactos: this.contactos
+            });
+            // --- FIN DE LA MODIFICACIÓN ---
         }
-    },
+
+        this.closeModal();
+        this.irModulo('config', { submodulo: 'contactos' }); 
+        this.showToast(`Contacto ${id ? 'actualizado' : 'creado'} con éxito.`, 'success');
+
+    } catch (error) {
+        console.error("Error al guardar contacto:", error);
+        this.showToast(`Error al guardar: ${error.message}`, 'error');
+    }
+},
             eliminarContacto(id) {
         const tieneTransacciones = this.transacciones.some(t => t.contactoId === id);
 
@@ -440,13 +521,10 @@ renderConfig_Licencia() {
 
         this.showConfirm('¿Seguro que deseas eliminar este contacto? Esta acción no se puede deshacer.', async () => {
             try {
-                // Primero, preparamos el nuevo estado local
                 const contactosActualizados = this.contactos.filter(c => c.id !== id);
                 
-                // Luego, intentamos persistir el cambio en el repositorio
                 await this.repository.actualizarMultiplesDatos({ contactos: contactosActualizados });
                 
-                // Si tiene éxito, actualizamos el estado en memoria de la aplicación
                 this.contactos = contactosActualizados;
                 
                 this.irModulo('config', { submodulo: 'contactos' });
@@ -494,7 +572,6 @@ renderConfig_Licencia() {
              datalist.appendChild(option);
         }
 
-        // Actualizamos el valor del input y disparamos el evento para que se actualice el resto del modal
         input.value = newContact.nombre;
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));

@@ -2,6 +2,30 @@
 
 Object.assign(ContaApp, {
 
+_getSaldosDetalladosPorCentroCosto(cuentaId, fechaInicio, fechaFin) {
+    const saldos = {}; // Usaremos un objeto para agrupar por centro de costo
+
+    this.asientos
+        .filter(a => a.fecha >= fechaInicio && a.fecha <= fechaFin)
+        .forEach(asiento => {
+            asiento.movimientos.forEach(mov => {
+                const cuenta = this.findById(this.planDeCuentas, mov.cuentaId);
+                // Verificamos que el movimiento pertenece a la cuenta de detalle o a una de sus hijas.
+                if (cuenta && (cuenta.id === cuentaId || cuenta.parentId === cuentaId) && mov.centroDeCostoId) {
+                    const centroCosto = this.empresa.centrosDeCosto.find(cc => cc.id === mov.centroDeCostoId);
+                    const nombreCentro = centroCosto ? centroCosto.nombre : 'No asignado';
+                    
+                    if (!saldos[nombreCentro]) {
+                        saldos[nombreCentro] = 0;
+                    }
+                    
+                    const esDeudora = ['1', '5', '6'].includes(String(cuenta.codigo)[0]);
+                    saldos[nombreCentro] += esDeudora ? (mov.debe - mov.haber) : (mov.haber - mov.debe);
+                }
+            });
+        });
+    return Object.entries(saldos).map(([nombre, saldo]) => ({ nombre, saldo })).filter(e => Math.abs(e.saldo) >= 0.01);
+},
   // Módulo de Reportes
         renderReportes(params = {}) {
         const submodulo = params.submodulo || 'pnl';
@@ -57,32 +81,25 @@ Object.assign(ContaApp, {
     const fechaInicioA = params.fechaInicioA || primerDiaMesActual.toISOString().slice(0, 10);
     const fechaFinA = params.fechaFinA || hoy.toISOString().slice(0, 10);
     
-    let fechaInicioB = '', fechaFinB = '';
-    if (isComparative) {
-        const ultimoDiaMesAnterior = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
-        const primerDiaMesAnterior = new Date(ultimoDiaMesAnterior.getFullYear(), ultimoDiaMesAnterior.getMonth(), 1);
-        fechaInicioB = params.fechaInicioB || primerDiaMesAnterior.toISOString().slice(0, 10);
-        fechaFinB = params.fechaFinB || ultimoDiaMesAnterior.toISOString().slice(0, 10);
-    }
+    const centroDeCostoId = params.centroDeCostoId ? parseInt(params.centroDeCostoId) : null;
+    const centrosDeCostoOptions = (this.empresa.centrosDeCosto || [])
+        .map(cc => `<option value="${cc.id}" ${centroDeCostoId === cc.id ? 'selected' : ''}>${cc.nombre}</option>`)
+        .join('');
 
-    const planSaldosA = this.getSaldosPorPeriodo(fechaFinA, fechaInicioA);
-    const planSaldosB = isComparative ? this.getSaldosPorPeriodo(fechaFinB, fechaInicioB) : null;
+    const planSaldosA = this.getSaldosPorPeriodo(fechaFinA, fechaInicioA, centroDeCostoId);
 
     const planCombinado = JSON.parse(JSON.stringify(this.planDeCuentas.map(({saldo, ...rest}) => rest)));
     planCombinado.forEach(c => {
-        c.saldoA = planSaldosA.find(s => s.id === c.id)?.saldo || 0;
-        if (isComparative) {
-            c.saldoB = planSaldosB.find(s => s.id === c.id)?.saldo || 0;
-        }
+        c.saldo = planSaldosA.find(s => s.id === c.id)?.saldo || 0;
     });
 
     const ingresos = planCombinado.find(c => c.codigo === '400');
-    // --- INICIO DE LA CORRECCIÓN ---
     const costos = planCombinado.find(c => c.codigo === '500');
     const gastos = planCombinado.find(c => c.codigo === '600');
-    const totalCostosYGastos = (costos?.saldoA || 0) + (gastos?.saldoA || 0);
-    const resultadoA = (ingresos?.saldoA || 0) - totalCostosYGastos;
-    // --- FIN DE LA CORRECCIÓN ---
+    const resultadoA = (ingresos?.saldo || 0) - ((costos?.saldo || 0) + (gastos?.saldo || 0));
+    
+    const centroDeCostoSeleccionado = centroDeCostoId ? this.empresa.centrosDeCosto.find(cc => cc.id === centroDeCostoId) : null;
+    const tituloReporte = `Estado de Resultados ${centroDeCostoSeleccionado ? `(${centroDeCostoSeleccionado.nombre})` : ''}`;
 
     let html = `<div class="conta-card mb-6">
         <form onsubmit="event.preventDefault(); ContaApp.filtrarReporte('pnl')" class="space-y-4">
@@ -91,39 +108,55 @@ Object.assign(ContaApp, {
                     <div><label for="periodoA-fecha-inicio" class="text-xs font-semibold">Desde</label><input type="date" id="periodoA-fecha-inicio" class="conta-input" value="${fechaInicioA}"></div>
                     <div><label for="periodoA-fecha-fin" class="text-xs font-semibold">Hasta</label><input type="date" id="periodoA-fecha-fin" class="conta-input" value="${fechaFinA}"></div>
                 </div>
-                <div id="comparative-fields" class="p-2 border rounded-lg border-dashed border-[var(--color-border-accent)] flex flex-wrap items-end gap-3 ${isComparative ? '' : 'hidden'}">
-                    <div><label for="periodoB-fecha-inicio" class="text-xs font-semibold">Comparar Desde</label><input type="date" id="periodoB-fecha-inicio" class="conta-input" value="${fechaInicioB}"></div>
-                    <div><label for="periodoB-fecha-fin" class="text-xs font-semibold">Comparar Hasta</label><input type="date" id="periodoB-fecha-fin" class="conta-input" value="${fechaFinB}"></div>
+                <div>
+                    <label for="pnl-centro-costo" class="text-xs font-semibold">Centro de Costo</label>
+                    <select id="pnl-centro-costo" class="conta-input">
+                        <option value="">-- Todos los Centros --</option>
+                        ${centrosDeCostoOptions}
+                    </select>
                 </div>
                 <div class="flex flex-col gap-2">
-                     <button type="button" class="conta-btn conta-btn-accent w-fit" onclick="ContaApp.toggleComparativePnl()">${isComparative ? 'Quitar Comparación' : '[+] Comparar'}</button>
                      <button type="submit" class="conta-btn w-fit">Generar</button>
                 </div>
             </div>
-            <input type="hidden" id="pnl-is-comparative" value="${isComparative ? 'true' : 'false'}">
         </form>
     </div>
-    <div class="flex justify-between items-center mb-4"><h2 class="conta-subtitle !mb-0">Estado de Resultados ${isComparative ? 'Comparativo' : ''}</h2>
-        <div><button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarReporteEstilizadoPDF('Estado de Resultados', 'reporte-pnl-area')">Vista Previa PDF</button></div>
+    <div class="flex justify-between items-center mb-4"><h2 class="conta-subtitle !mb-0">${tituloReporte}</h2>
+        <div><button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarReporteEstilizadoPDF('${tituloReporte}', 'reporte-pnl-area')">Vista Previa PDF</button></div>
     </div>
     <div class="conta-card overflow-auto" id="reporte-pnl-area"><table class="min-w-full">
-        <thead><tr><th class="conta-table-th">Descripción</th><th class="conta-table-th text-right">Total</th>${isComparative ? '<th class="conta-table-th text-right">Comparativo</th><th class="conta-table-th text-right">Variación ($)</th><th class="conta-table-th text-right">Variación (%)</th>' : ''}</tr></thead>
+        <thead><tr><th class="conta-table-th">Descripción</th><th class="conta-table-th text-right">Total</th></tr></thead>
         <tbody>`;
 
     const renderSection = (cuentaId, plan, level = 0) => {
         const cuenta = plan.find(c => c.id === cuentaId);
-        if (!cuenta) return;
+        if (!cuenta || Math.abs(cuenta.saldo) < 0.01) return;
+        
         const isTitleOrControl = cuenta.tipo === 'TITULO' || cuenta.tipo === 'CONTROL';
-        const style = isTitleOrControl ? `font-weight: bold;` : ``;
-        html += `<tr><td class="py-2" style="padding-left: ${level * 1.5}rem; ${style}">${cuenta.nombre}</td><td class="py-2 text-right font-mono" style="${style}">${this.formatCurrency(cuenta.saldoA)}</td>`;
-        if (isComparative) {
-            const variacion = cuenta.saldoA - cuenta.saldoB;
-            const variacionPct = cuenta.saldoB !== 0 ? (variacion / Math.abs(cuenta.saldoB)) * 100 : 0;
-            const variacionClass = variacion >= 0 ? 'variance-positive' : 'variance-negative';
-            html += `<td class="py-2 text-right font-mono" style="${style}">${this.formatCurrency(cuenta.saldoB)}</td><td class="py-2 text-right font-mono ${variacionClass}">${this.formatCurrency(variacion)}</td><td class="py-2 text-right font-mono ${variacionClass}">${variacionPct.toFixed(2)}%</td>`;
+        const style = isTitleOrControl ? 'font-weight: bold;' : '';
+
+        html += `<tr>
+            <td class="py-2" style="padding-left: ${level * 1.5}rem; ${style}">${cuenta.nombre}</td>
+            <td class="py-2 text-right font-mono" style="${style}">${this.formatCurrency(cuenta.saldo)}</td>
+        </tr>`;
+
+        // Si es una cuenta de Control o Detalle Y no estamos filtrando, mostramos el desglose.
+        if ((isTitleOrControl || cuenta.tipo === 'DETALLE') && !centroDeCostoId) {
+            const desglose = this._getSaldosDetalladosPorCentroCosto(cuenta.id, fechaInicioA, fechaFinA);
+            desglose.forEach(item => {
+                html += `<tr class="text-sm text-[var(--color-text-secondary)]">
+                    <td class="py-1" style="padding-left: ${(level + 1) * 1.5}rem;"><i>${item.nombre}</i></td>
+                    <td class="py-1 text-right font-mono"><i>${this.formatCurrency(item.saldo)}</i></td>
+                </tr>`;
+            });
         }
-        html += `</tr>`;
-        plan.filter(c => c.parentId === cuentaId).sort((a,b) => a.codigo.localeCompare(b.codigo)).forEach(child => renderSection(child.id, plan, level + 1));
+        
+        plan.filter(c => c.parentId === cuentaId).sort((a,b) => a.codigo.localeCompare(b.codigo)).forEach(child => {
+            // Para las cuentas hijas, solo las renderizamos si es una cuenta de Título o Control.
+            if(isTitleOrControl) {
+                renderSection(child.id, plan, level + 1);
+            }
+        });
     };
     
     if (ingresos) renderSection(ingresos.id, planCombinado);
@@ -131,14 +164,9 @@ Object.assign(ContaApp, {
     if (gastos) renderSection(gastos.id, planCombinado);
 
     html += `<tr class="border-t-2 border-[var(--color-border-accent)] font-bold text-lg">
-        <td class="py-2">Resultado Neto</td><td class="py-2 text-right font-mono">${this.formatCurrency(resultadoA)}</td>`;
-    if (isComparative) {
-        const resultadoB = (planCombinado.find(c => c.id === 400)?.saldoB || 0) - ((planCombinado.find(c => c.id === 500)?.saldoB || 0) + (planCombinado.find(c => c.id === 600)?.saldoB || 0));
-        const resultadoVariacion = resultadoA - resultadoB;
-        const resultadoVariacionPct = resultadoB !== 0 ? (resultadoVariacion / Math.abs(resultadoB)) * 100 : 0;
-        html += `<td class="py-2 text-right font-mono">${this.formatCurrency(resultadoB)}</td><td class="py-2 text-right font-mono ${resultadoVariacion >= 0 ? 'variance-positive' : 'variance-negative'}">${this.formatCurrency(resultadoVariacion)}</td><td class="py-2 text-right font-mono ${resultadoVariacion >= 0 ? 'variance-positive' : 'variance-negative'}">${resultadoVariacionPct.toFixed(2)}%</td>`;
-    }
-    html += `</tr></tbody></table></div>`;
+        <td class="py-2">Resultado Neto</td><td class="py-2 text-right font-mono">${this.formatCurrency(resultadoA)}</td>
+    </tr></tbody></table></div>`;
+    
     document.getElementById('reporte-contenido').innerHTML = html;
 },
     toggleComparativePnl() {
@@ -163,85 +191,97 @@ Object.assign(ContaApp, {
         this.irModulo('reportes', params);
     },
         renderBalanceGeneral(params = {}) {
-        const fechaFin = params.fechaFin || this.getTodayDate();
-        const planConSaldos = this.getSaldosPorPeriodo(fechaFin);
+    const fechaFin = params.fechaFin || this.getTodayDate();
+    const planConSaldos = this.getSaldosPorPeriodo(fechaFin);
 
-        const activo = planConSaldos.find(c => c.codigo === '100');
-        const pasivo = planConSaldos.find(c => c.codigo === '200');
-        const patrimonio = planConSaldos.find(c => c.codigo === '300');
-        const ingresos = planConSaldos.find(c => c.codigo === '400');
-        const gastos = planConSaldos.find(c => c.codigo === '500');
+    const activo = planConSaldos.find(c => c.codigo === '100');
+    const pasivo = planConSaldos.find(c => c.codigo === '200');
+    const patrimonio = planConSaldos.find(c => c.codigo === '300');
+    const ingresos = planConSaldos.find(c => c.codigo === '400');
+    
+    // --- INICIO DE LA CORRECCIÓN ---
+    const costos = planConSaldos.find(c => c.codigo === '500');
+    const gastos = planConSaldos.find(c => c.codigo === '600');
+    // --- FIN DE LA CORRECCIÓN ---
 
-        if (!activo || !pasivo || !patrimonio) {
-            document.getElementById('reporte-contenido').innerHTML = `<div class="conta-card text-center conta-text-danger"><p>Error: Cuentas principales de Activo (100), Pasivo (200) y/o Patrimonio (300) no encontradas.</p></div>`;
-            return;
-        }
+    if (!activo || !pasivo || !patrimonio) {
+        document.getElementById('reporte-contenido').innerHTML = `<div class="conta-card text-center conta-text-danger"><p>Error: Cuentas principales de Activo (100), Pasivo (200) y/o Patrimonio (300) no encontradas.</p></div>`;
+        return;
+    }
 
-        const resultadoDelPeriodo = (ingresos?.saldo || 0) - (gastos?.saldo || 0);
-        const cuentaResultado = { 
-            id: 9999,
-            codigo: '399', 
-            nombre: 'Resultado del Período', 
-            tipo: 'DETALLE', 
-            parentId: 300, 
-            saldo: resultadoDelPeriodo
-        };
-        planConSaldos.push(cuentaResultado);
+    // --- INICIO DE LA CORRECCIÓN ---
+    // Ahora se incluyen tanto costos como gastos en el cálculo.
+    const resultadoDelPeriodo = (ingresos?.saldo || 0) - ((costos?.saldo || 0) + (gastos?.saldo || 0));
+    // --- FIN DE LA CORRECCIÓN ---
+    
+    const cuentaResultado = { 
+        id: 9999,
+        codigo: '399', 
+        nombre: 'Resultado del Período', 
+        tipo: 'DETALLE', 
+        parentId: 300, 
+        saldo: resultadoDelPeriodo
+    };
+    planConSaldos.push(cuentaResultado);
+    // Asegurarnos de que patrimonio existe antes de sumar
+    if (patrimonio) {
         patrimonio.saldo += resultadoDelPeriodo;
-        const totalPasivoPatrimonio = pasivo.saldo + patrimonio.saldo;
+    }
+    const totalPasivoPatrimonio = (pasivo?.saldo || 0) + (patrimonio?.saldo || 0);
 
-        let html = `<div class="conta-card mb-6">
-            <form onsubmit="event.preventDefault(); ContaApp.filtrarReporte('balance')" class="flex flex-wrap gap-4 items-end">
-                <div>
-                    <label for="reporte-fecha-fin" class="text-sm font-medium">Mostrar balance a la fecha:</label>
-                    <input type="date" id="reporte-fecha-fin" class="p-2 border rounded w-full conta-input" value="${fechaFin}">
-                </div>
-                <button type="submit" class="conta-btn">Filtrar</button>
-            </form>
-        </div>
-        <div class="flex justify-between items-center mb-4"><h2 class="conta-subtitle !mb-0">Balance General</h2>
-            <div><button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarReporteEstilizadoPDF('Balance General', 'reporte-balance-area')">Vista Previa PDF</button></div>
-        </div>
-        <div class="conta-card" id="reporte-balance-area"><div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div><table class="min-w-full" data-export-title="Activos">`;
-        
-        const renderSection = (cuentaId, plan, level = 0) => {
-            const cuenta = plan.find(c => c.id === cuentaId);
-            const isTitleOrControl = cuenta.tipo === 'TITULO' || cuenta.tipo === 'CONTROL';
-             const style = isTitleOrControl ? `color: var(--color-primary); font-weight: bold;` : `color: var(--color-text-primary);`;
+    let html = `<div class="conta-card mb-6">
+        <form onsubmit="event.preventDefault(); ContaApp.filtrarReporte('balance')" class="flex flex-wrap gap-4 items-end">
+            <div>
+                <label for="reporte-fecha-fin" class="text-sm font-medium">Mostrar balance a la fecha:</label>
+                <input type="date" id="reporte-fecha-fin" class="p-2 border rounded w-full conta-input" value="${fechaFin}">
+            </div>
+            <button type="submit" class="conta-btn">Filtrar</button>
+        </form>
+    </div>
+    <div class="flex justify-between items-center mb-4"><h2 class="conta-subtitle !mb-0">Balance General</h2>
+        <div><button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarReporteEstilizadoPDF('Balance General', 'reporte-balance-area')">Vista Previa PDF</button></div>
+    </div>
+    <div class="conta-card" id="reporte-balance-area"><div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div><table class="min-w-full" data-export-title="Activos">`;
+    
+    const renderSection = (cuentaId, plan, level = 0) => {
+        const cuenta = plan.find(c => c.id === cuentaId);
+        if (!cuenta) return; // Añadida verificación de seguridad
+        const isTitleOrControl = cuenta.tipo === 'TITULO' || cuenta.tipo === 'CONTROL';
+         const style = isTitleOrControl ? `color: var(--color-primary); font-weight: bold;` : `color: var(--color-text-primary);`;
 
-            html += `<tr>
-                <td class="py-2" style="padding-left: ${level * 1.5}rem; ${style}">${cuenta.nombre}</td>
-                <td class="py-2 text-right" style="${style}"><span class="font-mono">${this.formatCurrency(cuenta.saldo)}</span></td>
-            </tr>`;
-            plan.filter(c => c.parentId === cuentaId).sort((a,b) => a.codigo.localeCompare(b.codigo, undefined, {numeric: true})).forEach(child => renderSection(child.id, plan, level + 1));
-        };
-        
-        renderSection(activo.id, planConSaldos);
-        html += `<tr class="border-t-2 border-[var(--color-border-accent)]">
-            <td class="py-2 font-extrabold text-lg">Total Activos</td>
-            <td class="py-2 text-right font-mono font-extrabold text-lg">${this.formatCurrency(activo.saldo)}</td>
+        html += `<tr>
+            <td class="py-2" style="padding-left: ${level * 1.5}rem; ${style}">${cuenta.nombre}</td>
+            <td class="py-2 text-right" style="${style}"><span class="font-mono">${this.formatCurrency(cuenta.saldo)}</span></td>
         </tr>`;
+        plan.filter(c => c.parentId === cuentaId).sort((a,b) => a.codigo.localeCompare(b.codigo, undefined, {numeric: true})).forEach(child => renderSection(child.id, plan, level + 1));
+    };
+    
+    if (activo) renderSection(activo.id, planConSaldos);
+    html += `<tr class="border-t-2 border-[var(--color-border-accent)]">
+        <td class="py-2 font-extrabold text-lg">Total Activos</td>
+        <td class="py-2 text-right font-mono font-extrabold text-lg">${this.formatCurrency(activo?.saldo || 0)}</td>
+    </tr>`;
 
-        html += `</table></div><div><table class="min-w-full" data-export-title="Pasivo y Patrimonio">`;
-        renderSection(pasivo.id, planConSaldos);
-        renderSection(patrimonio.id, planConSaldos);
-        html += `<tr class="border-t-2 border-[var(--color-border-accent)]">
-            <td class="py-2 font-extrabold text-lg">Total Pasivo y Patrimonio</td>
-            <td class="py-2 text-right font-mono font-extrabold text-lg">${this.formatCurrency(totalPasivoPatrimonio)}</td>
+    html += `</table></div><div><table class="min-w-full" data-export-title="Pasivo y Patrimonio">`;
+    if (pasivo) renderSection(pasivo.id, planConSaldos);
+    if (patrimonio) renderSection(patrimonio.id, planConSaldos);
+    html += `<tr class="border-t-2 border-[var(--color-border-accent)]">
+        <td class="py-2 font-extrabold text-lg">Total Pasivo y Patrimonio</td>
+        <td class="py-2 text-right font-mono font-extrabold text-lg">${this.formatCurrency(totalPasivoPatrimonio)}</td>
+    </tr>`;
+
+    const diferencia = (activo?.saldo || 0) - totalPasivoPatrimonio;
+    if (Math.abs(diferencia) > 0.01) {
+         html += `<tr class="border-t-2 border-red-500">
+            <td class="py-2 font-bold text-red-600">Descuadre</td>
+            <td class="py-2 text-right font-mono font-bold text-red-600">${this.formatCurrency(diferencia)}</td>
         </tr>`;
-
-        const diferencia = activo.saldo - totalPasivoPatrimonio;
-        if (Math.abs(diferencia) > 0.01) {
-             html += `<tr class="border-t-2 border-red-500">
-                <td class="py-2 font-bold text-red-600">Descuadre</td>
-                <td class="py-2 text-right font-mono font-bold text-red-600">${this.formatCurrency(diferencia)}</td>
-            </tr>`;
-        }
-        
-        html +=`</table></div></div></div>`;
-        document.getElementById('reporte-contenido').innerHTML = html;
-    },
+    }
+    
+    html +=`</table></div></div></div>`;
+    document.getElementById('reporte-contenido').innerHTML = html;
+},
         renderMayorAnalitico(params = {}) {
     const cuentasOptions = this.planDeCuentas.filter(c => c.tipo === 'DETALLE')
         .sort((a,b) => a.codigo.localeCompare(b.codigo, undefined, {numeric: true}))
@@ -327,25 +367,30 @@ Object.assign(ContaApp, {
     },
     
     filtrarReporte(tipo) {
-        if (tipo === 'pnl') {
-            const isComparative = document.getElementById('pnl-is-comparative').value === 'true';
-            const fechaInicioA = document.getElementById('periodoA-fecha-inicio').value;
-            const fechaFinA = document.getElementById('periodoA-fecha-fin').value;
-            let params = { comparative: isComparative, fechaInicioA, fechaFinA };
-            if (isComparative) {
-                params.fechaInicioB = document.getElementById('periodoB-fecha-inicio').value;
-                params.fechaFinB = document.getElementById('periodoB-fecha-fin').value;
-            }
-            this.irModulo('reportes', { submodulo: 'pnl', ...params });
-        } else if (tipo === 'balance') {
-            const fechaFin = document.getElementById('reporte-fecha-fin').value;
-            this.irModulo('reportes', { submodulo: 'balance', fechaFin });
-        } else if (tipo === 'comprobacion') {
-            const fechaInicio = document.getElementById('comprobacion-fecha-inicio').value;
-            const fechaFin = document.getElementById('comprobacion-fecha-fin').value;
-            this.irModulo('reportes', { submodulo: 'comprobacion', fechaInicio, fechaFin });
-        }
-    },
+    if (tipo === 'pnl') {
+        // --- INICIO DE LA MODIFICACIÓN ---
+        const centroDeCostoId = document.getElementById('pnl-centro-costo').value;
+        const fechaInicioA = document.getElementById('periodoA-fecha-inicio').value;
+        const fechaFinA = document.getElementById('periodoA-fecha-fin').value;
+        
+        let params = { 
+            submodulo: 'pnl',
+            fechaInicioA, 
+            fechaFinA,
+            centroDeCostoId 
+        };
+        // --- FIN DE LA MODIFICACIÓN ---
+        this.irModulo('reportes', params);
+
+    } else if (tipo === 'balance') {
+        const fechaFin = document.getElementById('reporte-fecha-fin').value;
+        this.irModulo('reportes', { submodulo: 'balance', fechaFin });
+    } else if (tipo === 'comprobacion') {
+        const fechaInicio = document.getElementById('comprobacion-fecha-inicio').value;
+        const fechaFin = document.getElementById('comprobacion-fecha-fin').value;
+        this.irModulo('reportes', { submodulo: 'comprobacion', fechaInicio, fechaFin });
+    }
+},
     getSaldosYMovimientosPorPeriodo(fechaInicio = null, fechaFin = null) {
         const cuentasResultado = JSON.parse(JSON.stringify(this.planDeCuentas.map(({saldo, ...rest}) => rest)));
         cuentasResultado.forEach(c => {

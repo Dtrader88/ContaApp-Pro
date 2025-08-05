@@ -30,10 +30,15 @@ Object.assign(ContaApp, {
         <button class="conta-btn" onclick="ContaApp.abrirModalGasto()">+ Nuevo Gasto</button>
     </div>`;
     
-    const todosLosGastos = this.transacciones.length > 0 ? this.transacciones : (await this.repository.getPaginatedTransactions({ perPage: 10000, filters: { tipos: ['gasto', 'compra_inventario'] } })).data;
+    // --- INICIO DE LA CORRECCIÓN ---
+    // Filtramos this.transacciones para incluir solo gastos y compras antes de hacer cálculos.
+    const todosLosGastos = this.transacciones.filter(t => t.tipo === 'gasto' || t.tipo === 'compra_inventario');
+    // --- FIN DE LA CORRECCIÓN ---
+
     const hoy = new Date();
     const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0,10);
     const gastosDelMes = todosLosGastos.filter(g => g.fecha >= primerDiaMes).reduce((sum, g) => sum + g.total, 0);
+    
     let proveedorPrincipal = 'N/A';
     if (todosLosGastos.length > 0) {
         const gastosPorProveedor = todosLosGastos.reduce((acc, g) => {
@@ -42,10 +47,11 @@ Object.assign(ContaApp, {
         }, {});
         if (Object.keys(gastosPorProveedor).length > 0) {
             const maxProveedorId = Object.keys(gastosPorProveedor).reduce((a, b) => gastosPorProveedor[a] > gastosPorProveedor[b] ? a : b);
-            const proveedor = this.findById(this.contactos, maxProveedorId);
+            const proveedor = this.findById(this.contactos, parseInt(maxProveedorId));
             if (proveedor) proveedorPrincipal = proveedor.nombre;
         }
     }
+    
     let categoriaPrincipal = 'N/A';
     if (todosLosGastos.length > 0) {
         const gastosPorCategoria = todosLosGastos.flatMap(g => g.items || []).reduce((acc, item) => {
@@ -54,7 +60,7 @@ Object.assign(ContaApp, {
         }, {});
         if (Object.keys(gastosPorCategoria).length > 0) {
             const maxCategoriaId = Object.keys(gastosPorCategoria).reduce((a, b) => gastosPorCategoria[a] > gastosPorCategoria[b] ? a : b);
-            const cuenta = this.findById(this.planDeCuentas, maxCategoriaId);
+            const cuenta = this.findById(this.planDeCuentas, parseInt(maxCategoriaId));
             if (cuenta) categoriaPrincipal = cuenta.nombre;
         }
     }
@@ -276,12 +282,13 @@ Object.assign(ContaApp, {
         this.agregarItemGasto();
     }
 },
-                handleGastoItemChange(selectElement) {
-        // Esta función ahora no necesita hacer nada, pero la mantenemos
-        // por si en el futuro queremos añadir lógica aquí.
-        // Lo importante es que ya no intenta cambiar la fila a "modo inventario".
-        this.actualizarTotalesGasto();
-    },
+    handleGastoItemChange(selectElement) {
+    // Esta función es un placeholder por si en el futuro queremos añadir lógica aquí.
+    // Lo importante es llamar a la función de totales usando el objeto principal "ContaApp".
+    // --- INICIO DE LA CORRECCIÓN ---
+    ContaApp.actualizarTotalGasto();
+    // --- FIN DE LA CORRECCIÓN ---
+},
     abrirModalEditarGasto(gastoId) {
     const gasto = this.findById(this.transacciones, gastoId);
     if (!gasto) {
@@ -298,22 +305,31 @@ Object.assign(ContaApp, {
     agregarItemGasto() {
     const container = document.getElementById('gasto-items-container');
     
-    // --- INICIO DE LA CORRECCIÓN ---
-    // Se corrige el filtro para que apunte al grupo de GASTOS (código 600) en lugar de COSTOS (código 500).
     const cuentasGastoOptions = this.planDeCuentas
         .filter(c => c.tipo === 'DETALLE' && c.codigo.startsWith('6'))
         .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }))
         .map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`)
         .join('');
-    // --- FIN DE LA CORRECCIÓN ---
 
+    const centrosDeCostoOptions = (this.empresa.centrosDeCosto || [])
+        .sort((a,b) => a.nombre.localeCompare(b.nombre))
+        .map(cc => `<option value="${cc.id}">${cc.nombre}</option>`)
+        .join('');
+
+    // Esta es la versión final sin comentarios y con la llamada a la función correcta
     const itemHTML = `
         <div class="grid grid-cols-12 gap-2 items-center dynamic-row gasto-item-row">
-            <div class="gasto-item-inputs-container col-span-11 grid grid-cols-10 gap-2 items-center">
-                <select class="col-span-7 p-2 gasto-item-cuenta" onchange="ContaApp.handleGastoItemChange(this)">${cuentasGastoOptions}</select>
-                <input type="number" step="0.01" min="0" placeholder="Monto" class="col-span-3 p-2 text-right gasto-item-monto" oninput="ContaApp.actualizarTotalesGasto()">
+            <div class="gasto-item-inputs-container col-span-11 grid grid-cols-12 gap-2 items-center">
+                <select class="col-span-5 conta-input gasto-item-cuenta" onchange="ContaApp.handleGastoItemChange(this)">${cuentasGastoOptions}</select>
+                
+                <select class="col-span-4 conta-input gasto-item-centro-costo" required>
+                    <option value="">-- Centro de Costo --</option>
+                    ${centrosDeCostoOptions}
+                </select>
+
+                <input type="number" step="0.01" min="0" placeholder="Monto" class="col-span-3 conta-input text-right gasto-item-monto" oninput="ContaApp.actualizarTotalGasto()">
             </div>
-            <button type="button" class="col-span-1 conta-btn-icon delete" onclick="this.closest('.gasto-item-row').remove(); ContaApp.actualizarTotalesGasto();">🗑️</button>
+            <button type="button" class="col-span-1 conta-btn-icon delete" onclick="this.closest('.gasto-item-row').remove(); ContaApp.actualizarTotalGasto();">🗑️</button>
         </div>
     `;
     container.insertAdjacentHTML('beforeend', itemHTML);
@@ -337,13 +353,25 @@ Object.assign(ContaApp, {
         
         const lineas = [];
         let total = 0;
-        document.querySelectorAll('.gasto-item-row').forEach(row => {
+        const itemRows = document.querySelectorAll('.gasto-item-row');
+        for (const row of itemRows) {
             const cuentaId = parseInt(row.querySelector('.gasto-item-cuenta').value);
             const monto = parseFloat(row.querySelector('.gasto-item-monto').value) || 0;
-            if (!cuentaId || monto <= 0) return;
-            lineas.push({ cuentaId, monto });
+            
+            // --- INICIO DE LA MODIFICACIÓN ---
+            const centroDeCostoId = parseInt(row.querySelector('.gasto-item-centro-costo').value);
+            if (monto > 0 && !centroDeCostoId) {
+                throw new Error('Todas las líneas del gasto con un monto deben tener un Centro de Costo asignado.');
+            }
+            // --- FIN DE LA MODIFICACIÓN ---
+
+            if (!cuentaId || monto <= 0) continue;
+
+            // --- INICIO DE LA MODIFICACIÓN ---
+            lineas.push({ cuentaId, monto, centroDeCostoId });
+            // --- FIN DE LA MODIFICACIÓN ---
             total += monto;
-        });
+        }
 
         if (lineas.length === 0) throw new Error('Debes agregar al menos una línea de gasto válida.');
         
@@ -357,7 +385,7 @@ Object.assign(ContaApp, {
             }
         } else {
             gastoParaGuardar = {
-                id: this.idCounter++, tipo: 'gasto', estado: 'Pendiente', montoPagado: 0
+                id: this.idCounter++, tipo: 'gasto'
             };
             this.transacciones.push(gastoParaGuardar);
         }
@@ -367,11 +395,25 @@ Object.assign(ContaApp, {
         const cuentaContrapartidaId = pagoTipo === 'credito' ? 210 : parseInt(document.getElementById('gasto-pago-cuenta-banco').value);
         const movimientos = [];
         lineas.forEach(linea => {
-            movimientos.push({ cuentaId: linea.cuentaId, debe: linea.monto, haber: 0 });
+            // --- INICIO DE LA MODIFICACIÓN ---
+            // Se añade el centroDeCostoId al objeto del movimiento que irá al asiento contable
+            movimientos.push({ cuentaId: linea.cuentaId, debe: linea.monto, haber: 0, centroDeCostoId: linea.centroDeCostoId });
+            // --- FIN DE LA MODIFICACIÓN ---
         });
         movimientos.push({ cuentaId: cuentaContrapartidaId, debe: 0, haber: total });
         
-        this.crearAsiento(fecha, descripcion, movimientos, gastoParaGuardar.id);
+        const asiento = this.crearAsiento(fecha, descripcion, movimientos, gastoParaGuardar.id);
+
+        if (pagoTipo === 'contado') {
+            gastoParaGuardar.estado = 'Pagado';
+            gastoParaGuardar.montoPagado = total;
+            if (asiento) {
+                this._registrarMovimientoBancarioPendiente(cuentaContrapartidaId, fecha, descripcion, -total, asiento.id);
+            }
+        } else {
+            gastoParaGuardar.estado = 'Pendiente';
+            gastoParaGuardar.montoPagado = 0;
+        }
         
         await this.saveAll();
         
@@ -889,5 +931,12 @@ abrirSubModalNuevoProducto(origen) {
         this.gastosSortState.order = 'asc';
     }
     this.irModulo('gastos');
+},
+actualizarTotalGasto() {
+    let total = 0;
+    document.querySelectorAll('.gasto-item-monto').forEach(input => {
+        total += parseFloat(input.value) || 0;
+    });
+    document.getElementById('gasto-total').textContent = this.formatCurrency(total);
 },
 });
