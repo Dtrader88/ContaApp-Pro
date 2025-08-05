@@ -26,8 +26,16 @@ const ROLES = {
     // Propiedades del estado de la aplicación
     repository: null, 
     empresa: {},
-    idCounter: 1000,
     navigationHistory: [],
+
+    /**
+     * Genera un Identificador Único Universal (UUID).
+     * Delega la creación del UUID al repositorio de datos para mantener la lógica centralizada.
+     * @returns {string} Un UUID v4.
+     */
+    generarUUID() {
+        return this.repository.generarUUID();
+    },
     isFormDirty: false,
     moduleFilters: {},
     planDeCuentas: [],
@@ -1073,24 +1081,35 @@ getPeriodoContableActual() {
             cuenta.saldo = cuentaConSaldo ? cuentaConSaldo.saldo : 0;
         });
     },
-    getSaldosPorPeriodo(fechaFin = null, fechaInicio = null, centroDeCostoId = null) {
+                getSaldosPorPeriodo(fechaFin = null, fechaInicio = null, centroDeCostoId = null) {
     const planCopia = JSON.parse(JSON.stringify(this.planDeCuentas));
     planCopia.forEach(c => c.saldo = 0);
     
-    const asientosFiltrados = this.asientos.filter(a => {
+    // --- INICIO DE LA CORRECCIÓN CLAVE ---
+    let asientosAProcesar = this.asientos;
+
+    // 1. Filtrar asientos por fecha
+    asientosAProcesar = asientosAProcesar.filter(a => {
         if (fechaFin && a.fecha > fechaFin) return false;
         if (fechaInicio && a.fecha < fechaInicio) return false;
         return true;
     });
 
-    asientosFiltrados.forEach(asiento => {
+    // 2. Si se especifica un centro de costo, filtrar los ASIENTOS COMPLETOS
+    if (centroDeCostoId) {
+        asientosAProcesar = asientosAProcesar.filter(asiento => 
+            asiento.movimientos.some(mov => mov.centroDeCostoId === centroDeCostoId)
+        );
+    }
+    // --- FIN DE LA CORRECCIÓN CLAVE ---
+
+    asientosAProcesar.forEach(asiento => {
         asiento.movimientos.forEach(mov => {
-            // --- INICIO DE LA MODIFICACIÓN ---
-            // Si se está filtrando por un centro de costo, y este movimiento no le pertenece, lo ignoramos.
-            if (centroDeCostoId && mov.centroDeCostoId && mov.centroDeCostoId !== centroDeCostoId) {
-                return; // Saltar al siguiente movimiento
+            // Si filtramos, solo nos interesan los movimientos de ese centro.
+            // Los movimientos sin centro (ej. IVA) no se suman al reporte filtrado.
+            if (centroDeCostoId && mov.centroDeCostoId !== centroDeCostoId) {
+                return;
             }
-            // --- FIN DE LA MODIFICACIÓN ---
 
             const cuenta = planCopia.find(c => c.id === mov.cuentaId);
             if (cuenta) {
@@ -1100,6 +1119,7 @@ getPeriodoContableActual() {
         });
     });
 
+    // El resto de la función para totalizar en cuentas de control permanece igual.
     const cuentasPorProcesar = planCopia.filter(c => c.tipo !== 'DETALLE').sort((a,b) => b.codigo.length - a.codigo.length);
     cuentasPorProcesar.forEach(c => c.saldo = 0); 
     

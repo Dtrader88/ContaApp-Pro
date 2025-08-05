@@ -101,7 +101,7 @@ guardarCentroDeCosto(e, id = null) {
         const centro = this.empresa.centrosDeCosto.find(cc => cc.id === id);
         centro.nombre = nombre;
     } else {
-        this.empresa.centrosDeCosto.push({ id: this.idCounter++, nombre });
+        this.empresa.centrosDeCosto.push({ id: this.generarUUID(), nombre });
     }
     this.saveAll();
     this.closeModal();
@@ -476,41 +476,62 @@ renderConfig_Licencia() {
         </form>`;
         this.showModal(modalHTML, 'xl');
     },
-        async guardarContacto(e, id = null) {
-    e.preventDefault();
-    const data = {
-        nombre: document.getElementById('contacto-nombre').value,
-        tipo: document.getElementById('contacto-tipo').value,
-        email: document.getElementById('contacto-email').value,
-        telefono: document.getElementById('contacto-telefono').value
-    };
+            async guardarContacto(e, id = null) {
+        e.preventDefault();
+        const data = {
+            nombre: document.getElementById('contacto-nombre').value,
+            tipo: document.getElementById('contacto-tipo').value,
+            email: document.getElementById('contacto-email').value,
+            telefono: document.getElementById('contacto-telefono').value
+        };
 
-    try {
-        if (id) {
-            const contactoOriginal = this.findById(this.contactos, id);
-            Object.assign(contactoOriginal, data);
-            await this.repository.actualizarMultiplesDatos({ contactos: this.contactos });
-        } else {
-            // --- INICIO DE LA MODIFICACIÓN ---
-            // Ya no usamos idCounter, usamos el nuevo generador de UUIDs.
-            const nuevoContacto = { id: this.generarUUID(), ...data };
-            this.contactos.push(nuevoContacto);
-            // Ya no es necesario guardar idCounter en la base de datos.
-            await this.repository.actualizarMultiplesDatos({ 
-                contactos: this.contactos
-            });
-            // --- FIN DE LA MODIFICACIÓN ---
+        try {
+            if (id) {
+                const contactoOriginal = this.findById(this.contactos, id);
+                Object.assign(contactoOriginal, data);
+                await this.repository.actualizarMultiplesDatos({ contactos: this.contactos });
+            } else {
+                const nuevoContacto = { id: this.generarUUID(), ...data };
+                this.contactos.push(nuevoContacto);
+                await this.repository.actualizarMultiplesDatos({ 
+                    contactos: this.contactos
+                });
+            }
+
+            this.closeModal();
+            this.irModulo('config', { submodulo: 'contactos' }); 
+            this.showToast(`Contacto ${id ? 'actualizado' : 'creado'} con éxito.`, 'success');
+
+        } catch (error) {
+            console.error("Error al guardar contacto:", error);
+            this.showToast(`Error al guardar: ${error.message}`, 'error');
+        }
+    },
+
+    guardarNuevoContactoDesdeSubModal(e, tipo, inputIdToUpdate) {
+        const nombre = document.getElementById('sub-contacto-nombre').value;
+        const newContact = { id: this.generarUUID(), nombre, tipo };
+        this.contactos.push(newContact);
+        this.saveAll();
+
+        const input = document.getElementById(inputIdToUpdate);
+        const datalistId = input.getAttribute('list');
+        const datalist = document.getElementById(datalistId);
+
+        if (datalist) {
+             const option = document.createElement('option');
+             option.value = newContact.nombre;
+             option.setAttribute('data-id', newContact.id);
+             datalist.appendChild(option);
         }
 
-        this.closeModal();
-        this.irModulo('config', { submodulo: 'contactos' }); 
-        this.showToast(`Contacto ${id ? 'actualizado' : 'creado'} con éxito.`, 'success');
-
-    } catch (error) {
-        console.error("Error al guardar contacto:", error);
-        this.showToast(`Error al guardar: ${error.message}`, 'error');
-    }
-},
+        input.value = newContact.nombre;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        
+        this.showToast('Contacto creado.', 'success');
+        document.body.removeChild(document.getElementById('sub-modal-bg'));
+    },
             eliminarContacto(id) {
         const tieneTransacciones = this.transacciones.some(t => t.contactoId === id);
 
@@ -695,14 +716,14 @@ renderConfig_Licencia() {
         this.showModal(modalHTML, 'xl');
     },
 
-    guardarUnidad(e, id = null) {
+        guardarUnidad(e, id = null) {
         e.preventDefault();
         const nombre = document.getElementById('unidad-nombre').value;
         if (id) {
             const unidad = this.findById(this.unidadesMedida, id);
             unidad.nombre = nombre;
         } else {
-            this.unidadesMedida.push({ id: this.idCounter++, nombre });
+            this.unidadesMedida.push({ id: this.generarUUID(), nombre });
         }
         this.saveAll();
         this.closeModal();

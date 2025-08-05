@@ -2,77 +2,79 @@
 
 Object.assign(ContaApp, {
 
-            renderActivosFijos(params = {}) {
-        if (params.activoId) {
-            this.renderActivosFijos_Kardex(params.activoId);
-            return;
-        }
+        renderActivosFijos(params = {}) {
+    if (params.activoId) {
+        this.renderActivosFijos_Kardex(params.activoId);
+        return;
+    }
 
-        document.getElementById('page-actions-header').innerHTML = `
-            <div class="flex gap-2 flex-wrap">
-                <button class="conta-btn conta-btn-accent" onclick="ContaApp.ejecutarDepreciacionMensual()"><i class="fa-solid fa-calculator me-2"></i>Depreciación Mensual</button>
-                <button class="conta-btn conta-btn-accent" onclick="ContaApp.abrirModalReporteActivos()"><i class="fa-solid fa-file-alt me-2"></i>Generar Reporte</button>
-                <button class="conta-btn" onclick="ContaApp.abrirModalActivoFijo()">+ Nueva Compra de Activo</button>
-            </div>`;
+    document.getElementById('page-actions-header').innerHTML = `
+        <div class="flex gap-2 flex-wrap">
+            <button class="conta-btn conta-btn-accent" onclick="ContaApp.ejecutarDepreciacionMensual()"><i class="fa-solid fa-calculator me-2"></i>Depreciación Mensual</button>
+            <button class="conta-btn conta-btn-accent" onclick="ContaApp.abrirModalReporteActivos()"><i class="fa-solid fa-file-alt me-2"></i>Generar Reporte</button>
+            <button class="conta-btn" onclick="ContaApp.abrirModalActivoFijo()">+ Nueva Compra de Activo</button>
+        </div>`;
 
-        let html;
-        if (this.activosFijos.length === 0) {
-            html = this.generarEstadoVacioHTML('fa-building-columns', 'Aún no tienes activos registrados', 'Registra tu primer activo para empezar a gestionar su depreciación.', '+ Registrar Compra de Activo', "ContaApp.abrirModalActivoFijo()");
-        } else {
-            const { currentPage, perPage } = this.getPaginationState('activos-fijos');
-            const startIndex = (currentPage - 1) * perPage;
-            const endIndex = startIndex + perPage;
-            
-            const activosOrdenados = this.activosFijos.sort((a,b) => new Date(b.fechaCompra) - new Date(a.fechaCompra));
-            const itemsParaMostrar = activosOrdenados.slice(startIndex, endIndex);
+    let html;
+    if (this.activosFijos.length === 0) {
+        html = this.generarEstadoVacioHTML('fa-building-columns', 'Aún no tienes activos registrados', 'Registra tu primer activo para empezar a gestionar su depreciación.', '+ Registrar Compra de Activo', "ContaApp.abrirModalActivoFijo()");
+    } else {
+        const { currentPage, perPage } = this.getPaginationState('activos-fijos');
+        const startIndex = (currentPage - 1) * perPage;
+        const endIndex = startIndex + perPage;
 
-            let tableRows = '';
-            itemsParaMostrar.forEach(activo => {
-                const valorEnLibros = activo.costo - activo.depreciacionAcumulada;
-                let estadoClass = 'tag-neutral';
-                if (activo.estado === 'Activo') estadoClass = 'tag-success';
-                if (activo.estado === 'Depreciado') estadoClass = 'tag-accent';
-                if (activo.estado === 'Vendido' || activo.estado === 'De Baja') estadoClass = 'tag-anulada';
+        const activosOrdenados = this.activosFijos.sort((a,b) => new Date(b.fechaCompra) - new Date(a.fechaCompra));
+        const itemsParaMostrar = activosOrdenados.slice(startIndex, endIndex);
 
-                tableRows += `
-                    <tr class="cursor-pointer hover:bg-[var(--color-bg-accent)]" onclick="ContaApp.irModulo('activos-fijos', { activoId: ${activo.id} })">
-                        <td class="conta-table-td font-bold">${activo.nombre}</td>
-                        <td class="conta-table-td">${activo.fechaCompra}</td>
-                        <td class="conta-table-td text-right font-mono">${this.formatCurrency(activo.costo)}</td>
-                        <td class="conta-table-td text-right font-mono">(${this.formatCurrency(activo.depreciacionAcumulada)})</td>
-                        <td class="conta-table-td text-right font-mono font-bold">${this.formatCurrency(valorEnLibros)}</td>
-                        <td class="conta-table-td"><span class="tag ${estadoClass}">${activo.estado}</span></td>
-                        <td class="conta-table-td text-center" onclick="event.stopPropagation()">
-                            ${activo.estado === 'Activo' || activo.estado === 'Depreciado' ? `
-                                <button class="conta-btn-icon edit" title="Editar Nombre/Proveedor" onclick="ContaApp.abrirModalActivoFijo(${activo.id})"><i class="fa-solid fa-pencil"></i></button>
-                                <button class="conta-btn-icon conta-text-primary" title="Registrar Mejora" onclick="ContaApp.abrirModalMejoraActivo(${activo.id})"><i class="fa-solid fa-wrench"></i></button>
-                                <button class="conta-btn-icon conta-text-success" title="Vender Activo" onclick="ContaApp.abrirModalVenderActivo(${activo.id})"><i class="fa-solid fa-dollar-sign"></i></button>
-                                <button class="conta-btn-icon delete" title="Dar de Baja (Pérdida)" onclick="ContaApp.abrirModalDarDeBaja(${activo.id})"><i class="fa-solid fa-trash-can"></i></button>
-                            ` : 'N/A'}
-                        </td>
-                    </tr>
-                `;
-            });
+        let tableRows = '';
+        itemsParaMostrar.forEach(activo => {
+            const valorEnLibros = activo.costo - activo.depreciacionAcumulada;
+            let estadoClass = 'tag-neutral';
+            if (activo.estado === 'Activo') estadoClass = 'tag-success';
+            if (activo.estado === 'Depreciado') estadoClass = 'tag-accent';
+            if (activo.estado === 'Vendido' || activo.estado === 'De Baja') estadoClass = 'tag-anulada';
 
-            html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
-                <thead>
-                    <tr>
-                        <th class="conta-table-th">Activo</th>
-                        <th class="conta-table-th">Fecha Compra</th>
-                        <th class="conta-table-th text-right">Costo</th>
-                        <th class="conta-table-th text-right">Dep. Acum.</th>
-                        <th class="conta-table-th text-right">Valor en Libros</th>
-                        <th class="conta-table-th">Estado</th>
-                        <th class="conta-table-th text-center">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>${tableRows}</tbody></table></div>`;
+            // --- INICIO DE LA CORRECCIÓN ---
+            tableRows += `
+                <tr class="cursor-pointer hover:bg-[var(--color-bg-accent)]" onclick="ContaApp.irModulo('activos-fijos', { activoId: '${activo.id}' })">
+                    <td class="conta-table-td font-bold">${activo.nombre}</td>
+                    <td class="conta-table-td">${activo.fechaCompra}</td>
+                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(activo.costo)}</td>
+                    <td class="conta-table-td text-right font-mono">(${this.formatCurrency(activo.depreciacionAcumulada)})</td>
+                    <td class="conta-table-td text-right font-mono font-bold">${this.formatCurrency(valorEnLibros)}</td>
+                    <td class="conta-table-td"><span class="tag ${estadoClass}">${activo.estado}</span></td>
+                    <td class="conta-table-td text-center" onclick="event.stopPropagation()">
+                        ${activo.estado === 'Activo' || activo.estado === 'Depreciado' ? `
+                            <button class="conta-btn-icon edit" title="Editar Nombre/Proveedor" onclick="ContaApp.abrirModalActivoFijo('${activo.id}')"><i class="fa-solid fa-pencil"></i></button>
+                            <button class="conta-btn-icon conta-text-primary" title="Registrar Mejora" onclick="ContaApp.abrirModalMejoraActivo('${activo.id}')"><i class="fa-solid fa-wrench"></i></button>
+                            <button class="conta-btn-icon conta-text-success" title="Vender Activo" onclick="ContaApp.abrirModalVenderActivo('${activo.id}')"><i class="fa-solid fa-dollar-sign"></i></button>
+                            <button class="conta-btn-icon delete" title="Dar de Baja (Pérdida)" onclick="ContaApp.abrirModalDarDeBaja('${activo.id}')"><i class="fa-solid fa-trash-can"></i></button>
+                        ` : 'N/A'}
+                    </td>
+                </tr>
+            `;
+            // --- FIN DE LA CORRECCIÓN ---
+        });
 
-            this.renderPaginationControls('activos-fijos', this.activosFijos.length);
-        }
-        
-        document.getElementById('activos-fijos').innerHTML = html;
-    },   
+        html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
+            <thead>
+                <tr>
+                    <th class="conta-table-th">Activo</th>
+                    <th class="conta-table-th">Fecha Compra</th>
+                    <th class="conta-table-th text-right">Costo</th>
+                    <th class="conta-table-th text-right">Dep. Acum.</th>
+                    <th class="conta-table-th text-right">Valor en Libros</th>
+                    <th class="conta-table-th">Estado</th>
+                    <th class="conta-table-th text-center">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>${tableRows}</tbody></table></div>`;
+
+        this.renderPaginationControls('activos-fijos', this.activosFijos.length);
+    }
+
+    document.getElementById('activos-fijos').innerHTML = html;
+},   
     renderActivosFijos_Kardex(activoId) {
         const datosKardex = this.getActivoKardexData(activoId);
         if (!datosKardex) {
@@ -118,19 +120,17 @@ Object.assign(ContaApp, {
         `;
         document.getElementById('activos-fijos').innerHTML = htmlReporte;
     }, 
-    abrirModalActivoFijo(id = null) {
+        abrirModalActivoFijo(id = null) {
         const activo = id ? this.findById(this.activosFijos, id) : {};
         const isEditing = id !== null;
 
-        // Opciones para las cuentas de Activos Fijos (ej: Mobiliario, Vehículos)
         const cuentasActivoOptions = this.planDeCuentas
             .filter(c => c.parentId === 150 && c.tipo === 'DETALLE')
             .map(c => `<option value="${c.id}" ${activo.cuentaId === c.id ? 'selected' : ''}>${c.codigo} - ${c.nombre}</option>`)
             .join('');
 
-        // Opciones para pagar (Bancos o a Crédito/CxP)
         const cuentasPagoOptions = this.planDeCuentas
-            .filter(c => c.parentId === 110 && c.tipo === 'DETALLE') // Solo cuentas de banco
+            .filter(c => c.parentId === 110 && c.tipo === 'DETALLE')
             .map(c => `<option value="${c.id}" ${activo.cuentaPagoId === c.id ? 'selected' : ''}>${c.nombre}</option>`)
             .join('');
 
@@ -154,10 +154,14 @@ Object.assign(ContaApp, {
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label>Fecha de Compra</label>
                         <input type="date" id="activo-fecha-compra" class="w-full conta-input mt-1" value="${activo.fechaCompra || this.getTodayDate()}" ${isEditing ? 'disabled' : ''} required>
+                    </div>
+                    <div>
+                        <label>Referencia / Factura #</label>
+                        <input type="text" id="activo-referencia" class="w-full conta-input mt-1" value="${activo.referencia || ''}" placeholder="Ej: F-12345" ${isEditing ? 'disabled' : ''}>
                     </div>
                     <div>
                         <label>Cuenta Contable del Activo</label>
@@ -210,17 +214,20 @@ Object.assign(ContaApp, {
             }
         }
     },
-            guardarActivoFijo(e, id = null) {
-        e.preventDefault();
-        const isEditing = id !== null;
+                    async guardarActivoFijo(e, id = null) {
+    e.preventDefault();
+    const isEditing = id !== null;
+    const submitButton = e.target.querySelector('button[type="submit"]');
+    this.toggleButtonLoading(submitButton, true);
 
+    try {
         if (isEditing) {
             const activo = this.findById(this.activosFijos, id);
             if (activo) {
                 activo.nombre = document.getElementById('activo-nombre').value;
-                activo.proveedorId = parseInt(document.getElementById('activo-proveedor-id').value) || null;
-                
-                this.saveAll();
+                activo.proveedorId = document.getElementById('activo-proveedor-id').value || null;
+                await this.repository.actualizarMultiplesDatos({ activosFijos: this.activosFijos });
+
                 this.closeModal();
                 this.irModulo('activos-fijos');
                 this.showToast('Activo fijo actualizado con éxito.', 'success');
@@ -230,19 +237,20 @@ Object.assign(ContaApp, {
                 nombre: document.getElementById('activo-nombre').value,
                 cuentaId: parseInt(document.getElementById('activo-cuenta-id').value),
                 fechaCompra: document.getElementById('activo-fecha-compra').value,
-                proveedorId: parseInt(document.getElementById('activo-proveedor-id').value),
+                proveedorId: document.getElementById('activo-proveedor-id').value,
+                referencia: document.getElementById('activo-referencia').value,
                 costo: parseFloat(document.getElementById('activo-costo').value),
                 vidaUtil: parseInt(document.getElementById('activo-vida-util').value),
                 valorResidual: parseFloat(document.getElementById('activo-valor-residual').value),
                 cuentaPagoId: parseInt(document.getElementById('activo-pago-id').value)
             };
 
-            if (!data.proveedorId) { this.showToast('Debe seleccionar un proveedor.', 'error'); return; }
-            if (isNaN(data.costo) || isNaN(data.vidaUtil) || isNaN(data.valorResidual)) { this.showToast('Costo, Vida Útil y Valor Residual deben ser números.', 'error'); return; }
-            if (data.costo <= data.valorResidual) { this.showToast('El costo debe ser mayor que el valor residual.', 'error'); return; }
+            if (!data.proveedorId) { throw new Error('Debe seleccionar un proveedor.'); }
+            if (isNaN(data.costo) || isNaN(data.vidaUtil) || isNaN(data.valorResidual)) { throw new Error('Costo, Vida Útil y Valor Residual deben ser números.'); }
+            if (data.costo <= data.valorResidual) { throw new Error('El costo debe ser mayor que el valor residual.'); }
 
             const nuevoActivo = { 
-                id: this.idCounter++, 
+                id: this.generarUUID(),
                 ...data,
                 costoOriginal: data.costo,
                 mejoras: [],
@@ -254,21 +262,35 @@ Object.assign(ContaApp, {
 
             const asiento = this.crearAsiento(
                 data.fechaCompra,
-                `Compra de activo fijo: ${data.nombre}`,
+                `Compra de activo fijo: ${data.nombre} (Ref: ${data.referencia || 'N/A'})`,
                 [
                     { cuentaId: data.cuentaId, debe: data.costo, haber: 0 },
                     { cuentaId: data.cuentaPagoId, debe: 0, haber: data.costo }
-                ]
+                ],
+                nuevoActivo.id
             );
 
             if (asiento) {
-                this.saveAll();
+                await this.repository.actualizarMultiplesDatos({
+                    activosFijos: this.activosFijos,
+                    asientos: this.asientos
+                });
+
                 this.closeModal();
                 this.irModulo('activos-fijos');
                 this.showToast('Compra de activo fijo registrada con éxito.', 'success');
+            } else {
+                this.activosFijos.pop();
+                throw new Error("No se pudo generar el asiento contable para el activo.");
             }
         }
-    },
+    } catch (error) {
+        console.error("Error en guardarActivoFijo:", error);
+        this.showToast(error.message, 'error');
+    } finally {
+        this.toggleButtonLoading(submitButton, false);
+    }
+},
     ejecutarDepreciacionMensual() {
     this.showConfirm(
         '¿Deseas registrar la depreciación para el mes actual? Se creará un asiento contable para todos los activos elegibles. Esta acción solo debe realizarse una vez por mes.',

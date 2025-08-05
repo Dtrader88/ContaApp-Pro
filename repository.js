@@ -328,6 +328,9 @@ export class FirebaseRepository extends DataRepository {
             gastosPeriodoAnterior
         };
     }
+    generarUUID() {
+    return crypto.randomUUID();
+}
 
     _sanitizeData(data) {
         if (data === undefined) return null;

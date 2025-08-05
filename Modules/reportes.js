@@ -3,15 +3,29 @@
 Object.assign(ContaApp, {
 
 _getSaldosDetalladosPorCentroCosto(cuentaId, fechaInicio, fechaFin) {
-    const saldos = {}; // Usaremos un objeto para agrupar por centro de costo
+    const saldos = {}; 
 
     this.asientos
         .filter(a => a.fecha >= fechaInicio && a.fecha <= fechaFin)
         .forEach(asiento => {
             asiento.movimientos.forEach(mov => {
                 const cuenta = this.findById(this.planDeCuentas, mov.cuentaId);
-                // Verificamos que el movimiento pertenece a la cuenta de detalle o a una de sus hijas.
-                if (cuenta && (cuenta.id === cuentaId || cuenta.parentId === cuentaId) && mov.centroDeCostoId) {
+                let cuentaCoincide = false;
+                
+                if (cuenta) {
+                    // Verificamos si el movimiento es de la cuenta principal o de una de sus hijas directas
+                    if (cuenta.id === cuentaId) {
+                        cuentaCoincide = true;
+                    } else {
+                        // Verificamos si el padre del movimiento es la cuenta que estamos desglosando
+                        const cuentaPadre = this.findById(this.planDeCuentas, cuenta.parentId);
+                        if (cuentaPadre && cuentaPadre.id === cuentaId) {
+                            cuentaCoincide = true;
+                        }
+                    }
+                }
+
+                if (cuentaCoincide && mov.centroDeCostoId) {
                     const centroCosto = this.empresa.centrosDeCosto.find(cc => cc.id === mov.centroDeCostoId);
                     const nombreCentro = centroCosto ? centroCosto.nombre : 'No asignado';
                     
@@ -74,7 +88,7 @@ _getSaldosDetalladosPorCentroCosto(cuentaId, fechaInicio, fechaFin) {
         }
         // ===== FIN DE LA MEJORA =====
     },
-        renderEstadoResultados(params = {}) {
+                renderEstadoResultados(params = {}) {
     const isComparative = !!params.comparative;
     const hoy = new Date();
     const primerDiaMesActual = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
@@ -140,8 +154,7 @@ _getSaldosDetalladosPorCentroCosto(cuentaId, fechaInicio, fechaFin) {
             <td class="py-2 text-right font-mono" style="${style}">${this.formatCurrency(cuenta.saldo)}</td>
         </tr>`;
 
-        // Si es una cuenta de Control o Detalle Y no estamos filtrando, mostramos el desglose.
-        if ((isTitleOrControl || cuenta.tipo === 'DETALLE') && !centroDeCostoId) {
+        if (isTitleOrControl && !centroDeCostoId) {
             const desglose = this._getSaldosDetalladosPorCentroCosto(cuenta.id, fechaInicioA, fechaFinA);
             desglose.forEach(item => {
                 html += `<tr class="text-sm text-[var(--color-text-secondary)]">
@@ -152,7 +165,6 @@ _getSaldosDetalladosPorCentroCosto(cuentaId, fechaInicio, fechaFin) {
         }
         
         plan.filter(c => c.parentId === cuentaId).sort((a,b) => a.codigo.localeCompare(b.codigo)).forEach(child => {
-            // Para las cuentas hijas, solo las renderizamos si es una cuenta de Título o Control.
             if(isTitleOrControl) {
                 renderSection(child.id, plan, level + 1);
             }
