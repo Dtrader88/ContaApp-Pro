@@ -436,12 +436,13 @@ Object.assign(ContaApp, {
                 await this.repository.actualizarMultiplesDatos({ productos: this.productos });
 
             } else {
-                const nuevoProducto = { id: this.idCounter++, ...data };
+                // --- CORRECCIÓN APLICADA AQUÍ ---
+                const nuevoProducto = { id: this.generarUUID(), ...data };
                 this.productos.push(nuevoProducto);
 
+                // Ya no es necesario actualizar idCounter para esta operación específica
                 const datosParaGuardar = {
-                    productos: this.productos,
-                    idCounter: this.idCounter
+                    productos: this.productos
                 };
                 
                 if (nuevoProducto.stock > 0 && nuevoProducto.costo > 0) {

@@ -700,7 +700,12 @@ irAtras() {
     },
 
     formatCurrency(value) { return Number(value).toLocaleString('en-US', {style: 'currency', currency: 'USD', minimumFractionDigits: 2}); },
-    findById(array, id) { return array.find(item => item.id === parseInt(id)); },
+    findById(array, id) {
+    // --- MEJORA DE ROBUSTEZ ---
+    // Se cambia la comparación estricta (===) por una flexible (==)
+    // para que coincida con IDs de texto (desde la web) e IDs numéricos (en los datos).
+    return array.find(item => item.id == id);
+},
     getThemeColor(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); },
     showToast(message, type = 'info') {
         const container = document.getElementById('toast-container');
@@ -1015,7 +1020,7 @@ verificarYActualizarPlanDeCuentas() {
     const ultimoPeriodoCerrado = Object.keys(periodosCerrados)
         .filter(p => periodosCerrados[p] === 'cerrado')
         .sort()
-        .pop();
+        .pop(); 
     
     if (!ultimoPeriodoCerrado) {
          return fechaTransaccion; 
@@ -1069,7 +1074,7 @@ getPeriodoContableActual() {
         this.showToast(`Error: Asiento descuadrado. Debe=${this.formatCurrency(totalDebe)}, Haber=${this.formatCurrency(totalHaber)}`, 'error');
         return null;
     }
-    const asiento = { id: this.idCounter++, fecha: fechaContable, descripcion: descripcionFinal, movimientos, transaccionId };
+    const asiento = { id: this.generarUUID(), fecha: fechaContable, descripcion: descripcionFinal, movimientos, transaccionId };
     this.asientos.push(asiento);
     this.actualizarSaldosGlobales();
     return asiento;
@@ -1085,41 +1090,34 @@ getPeriodoContableActual() {
     const planCopia = JSON.parse(JSON.stringify(this.planDeCuentas));
     planCopia.forEach(c => c.saldo = 0);
     
-    // --- INICIO DE LA CORRECCIÓN CLAVE ---
     let asientosAProcesar = this.asientos;
 
-    // 1. Filtrar asientos por fecha
     asientosAProcesar = asientosAProcesar.filter(a => {
         if (fechaFin && a.fecha > fechaFin) return false;
         if (fechaInicio && a.fecha < fechaInicio) return false;
         return true;
     });
 
-    // 2. Si se especifica un centro de costo, filtrar los ASIENTOS COMPLETOS
     if (centroDeCostoId) {
         asientosAProcesar = asientosAProcesar.filter(asiento => 
             asiento.movimientos.some(mov => mov.centroDeCostoId === centroDeCostoId)
         );
     }
-    // --- FIN DE LA CORRECCIÓN CLAVE ---
-
+    
     asientosAProcesar.forEach(asiento => {
         asiento.movimientos.forEach(mov => {
-            // Si filtramos, solo nos interesan los movimientos de ese centro.
-            // Los movimientos sin centro (ej. IVA) no se suman al reporte filtrado.
             if (centroDeCostoId && mov.centroDeCostoId !== centroDeCostoId) {
                 return;
             }
 
             const cuenta = planCopia.find(c => c.id === mov.cuentaId);
             if (cuenta) {
-                const esDeudora = ['1', '5', '6'].includes(cuenta.codigo[0]);
+                const esDeudora = ['1', '5', '6'].includes(String(cuenta.codigo)[0]);
                 cuenta.saldo += esDeudora ? (mov.debe - mov.haber) : (mov.haber - mov.debe);
             }
         });
     });
 
-    // El resto de la función para totalizar en cuentas de control permanece igual.
     const cuentasPorProcesar = planCopia.filter(c => c.tipo !== 'DETALLE').sort((a,b) => b.codigo.length - a.codigo.length);
     cuentasPorProcesar.forEach(c => c.saldo = 0); 
     

@@ -325,8 +325,8 @@ Object.assign(ContaApp, {
 
     try {
         if (tipoSeleccionado === 'reventa' || tipoSeleccionado === 'materia_prima') {
-            const proveedorId = parseInt(document.getElementById('compra-proveedor-id').value);
-            if (!proveedorId || isNaN(proveedorId)) {
+            const proveedorId = document.getElementById('compra-proveedor-id').value;
+            if (!proveedorId) {
                 throw new Error('Debe seleccionar un proveedor válido de la lista.');
             }
 
@@ -353,7 +353,7 @@ Object.assign(ContaApp, {
             const itemRows = document.querySelectorAll('.compra-item-row');
 
             for (const row of itemRows) {
-                let productoId = parseInt(row.querySelector('.compra-item-producto-id').value);
+                let productoId = row.querySelector('.compra-item-producto-id').value;
                 const productoNombre = row.querySelector('.compra-item-producto-input').value.trim();
                 const cantidad = parseFloat(row.querySelector('.compra-item-cantidad').value);
                 const costoUnitario = parseFloat(row.querySelector('.compra-item-costo').value);
@@ -361,13 +361,13 @@ Object.assign(ContaApp, {
 
                 if (!productoNombre || !(cantidad > 0) || !(costoUnitario >= 0)) continue;
 
-                if (isNaN(productoId)) {
+                if (!productoId) { // Se cambió la validación de isNaN a !productoId
                     const productoExistente = this.productos.find(p => p.nombre.toLowerCase() === productoNombre.toLowerCase());
                     if (productoExistente) {
                         productoId = productoExistente.id;
                     } else {
                         const nuevoProducto = {
-                            id: this.idCounter++,
+                            id: this.generarUUID(),
                             nombre: productoNombre,
                             tipo: 'producto',
                             stock: 0,
@@ -388,7 +388,6 @@ Object.assign(ContaApp, {
 
             if (items.length === 0) { throw new Error('Debe añadir al menos un ítem a la compra.'); }
 
-            // NOTA: La lógica de actualización de stock y costo se mantiene localmente primero.
             items.forEach(item => {
                 const producto = this.findById(this.productos, item.productoId);
                 if (producto) {
@@ -404,10 +403,22 @@ Object.assign(ContaApp, {
             const descripcionFinal = descripcion || `Compra de inventario s/f #${referencia || 'N/A'}`;
             
             const nuevaCompra = {
-                id: this.idCounter++, tipo: 'compra_inventario',
+                id: this.generarUUID(), tipo: 'compra_inventario',
                 fecha, contactoId: proveedorId, referencia, descripcion: descripcionFinal,
-                items, total: totalCompra, comprobanteDataUrl, estado: 'Pendiente'
+                items, total: totalCompra, comprobanteDataUrl
             };
+            
+            // --- INICIO DE LA CORRECCIÓN ---
+            // Se añade la lógica para manejar correctamente el pago de contado vs crédito
+            if (cuentaPagoId === 210) { // 210 es Cuentas por Pagar
+                nuevaCompra.estado = 'Pendiente';
+                nuevaCompra.montoPagado = 0;
+            } else {
+                nuevaCompra.estado = 'Pagado';
+                nuevaCompra.montoPagado = totalCompra;
+            }
+            // --- FIN DE LA CORRECCIÓN ---
+
             this.transacciones.push(nuevaCompra);
 
             const asiento = this.crearAsiento(fecha, descripcionFinal,
@@ -415,14 +426,11 @@ Object.assign(ContaApp, {
                 nuevaCompra.id
             );
             
-            // --- INICIO DE LA REFACTORIZACIÓN ---
             if (asiento) {
-                // En lugar de saveAll(), usamos el método específico para persistir todos los cambios.
                 await this.repository.actualizarMultiplesDatos({
                     transacciones: this.transacciones,
-                    productos: this.productos, // Incluimos el array de productos actualizado
-                    asientos: this.asientos,
-                    idCounter: this.idCounter
+                    productos: this.productos,
+                    asientos: this.asientos
                 });
                 
                 this.closeModal();
@@ -432,7 +440,6 @@ Object.assign(ContaApp, {
             } else {
                 throw new Error("No se pudo generar el asiento contable para la compra.");
             }
-            // --- FIN DE LA REFACTORIZACIÓN ---
 
         } else if (tipoSeleccionado === 'activo_fijo') {
             this.closeModal();

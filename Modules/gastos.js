@@ -261,7 +261,11 @@ Object.assign(ContaApp, {
     this.setupDatalistListener('gasto-proveedor-input', 'gasto-proveedor-id', 'proveedores-datalist');
 
     if (gastoOriginal) {
+        // --- INICIO DE LA CORRECCIÓN ---
+        // Se cambió this.findById(this.contactos, parseInt(gastoOriginal.contactoId))
+        // por this.findById(this.contactos, gastoOriginal.contactoId) para manejar IDs de texto.
         const proveedor = this.findById(this.contactos, gastoOriginal.contactoId);
+        // --- FIN DE LA CORRECIÓn ---
         if (proveedor) {
             document.getElementById('gasto-proveedor-input').value = proveedor.nombre;
             document.getElementById('gasto-proveedor-id').value = proveedor.id;
@@ -343,7 +347,7 @@ Object.assign(ContaApp, {
     const isEditing = !!gastoIdEdit;
 
     try {
-        const contactoId = parseInt(document.getElementById('gasto-proveedor-id').value);
+        const contactoId = document.getElementById('gasto-proveedor-id').value;
         if (!contactoId) throw new Error('Debe seleccionar un proveedor válido.');
 
         const fecha = document.getElementById('gasto-fecha').value;
@@ -358,18 +362,17 @@ Object.assign(ContaApp, {
             const cuentaId = parseInt(row.querySelector('.gasto-item-cuenta').value);
             const monto = parseFloat(row.querySelector('.gasto-item-monto').value) || 0;
             
-            // --- INICIO DE LA MODIFICACIÓN ---
-            const centroDeCostoId = parseInt(row.querySelector('.gasto-item-centro-costo').value);
+            // --- INICIO DE LA CORRECCIÓN ---
+            // Se elimina parseInt y se ajusta la validación para IDs de texto.
+            const centroDeCostoId = row.querySelector('.gasto-item-centro-costo').value;
             if (monto > 0 && !centroDeCostoId) {
                 throw new Error('Todas las líneas del gasto con un monto deben tener un Centro de Costo asignado.');
             }
-            // --- FIN DE LA MODIFICACIÓN ---
+            // --- FIN DE LA CORRECCIÓN ---
 
             if (!cuentaId || monto <= 0) continue;
 
-            // --- INICIO DE LA MODIFICACIÓN ---
             lineas.push({ cuentaId, monto, centroDeCostoId });
-            // --- FIN DE LA MODIFICACIÓN ---
             total += monto;
         }
 
@@ -377,7 +380,7 @@ Object.assign(ContaApp, {
         
         let gastoParaGuardar;
         if (isEditing) {
-            gastoParaGuardar = this.findById(this.transacciones, parseInt(gastoIdEdit));
+            gastoParaGuardar = this.findById(this.transacciones, gastoIdEdit);
             const asientoOriginal = this.asientos.find(a => a.transaccionId === gastoParaGuardar.id);
             if (asientoOriginal) {
                 const movReversos = asientoOriginal.movimientos.map(m => ({ cuentaId: m.cuentaId, debe: m.haber, haber: m.debe }));
@@ -385,7 +388,8 @@ Object.assign(ContaApp, {
             }
         } else {
             gastoParaGuardar = {
-                id: this.idCounter++, tipo: 'gasto'
+                id: this.generarUUID(),
+                tipo: 'gasto'
             };
             this.transacciones.push(gastoParaGuardar);
         }
@@ -395,10 +399,7 @@ Object.assign(ContaApp, {
         const cuentaContrapartidaId = pagoTipo === 'credito' ? 210 : parseInt(document.getElementById('gasto-pago-cuenta-banco').value);
         const movimientos = [];
         lineas.forEach(linea => {
-            // --- INICIO DE LA MODIFICACIÓN ---
-            // Se añade el centroDeCostoId al objeto del movimiento que irá al asiento contable
             movimientos.push({ cuentaId: linea.cuentaId, debe: linea.monto, haber: 0, centroDeCostoId: linea.centroDeCostoId });
-            // --- FIN DE LA MODIFICACIÓN ---
         });
         movimientos.push({ cuentaId: cuentaContrapartidaId, debe: 0, haber: total });
         

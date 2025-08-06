@@ -120,46 +120,67 @@ getEstadoDeCuenta(contactoId, tipoContacto) {
 getAgingData(tipoContacto, fechaReporte) {
     const esCliente = tipoContacto === 'cliente';
     
-    // --- INICIO DE LA CORRECCIÓN: Filtro específico para cada tipo ---
     const facturasPendientes = this.transacciones.filter(t => {
         const esPendiente = (t.estado === 'Pendiente' || t.estado === 'Parcial');
         const enFecha = t.fecha <= fechaReporte;
         let esTipoCorrecto = false;
 
         if (esCliente) {
-            // Para Cuentas por Cobrar, solo queremos ventas.
             esTipoCorrecto = t.tipo === 'venta';
         } else {
-            // Para Cuentas por Pagar, queremos gastos Y compras de inventario.
             esTipoCorrecto = (t.tipo === 'gasto' || t.tipo === 'compra_inventario');
         }
         
         return esPendiente && enFecha && esTipoCorrecto;
     });
-    // --- FIN DE LA CORRECCIÓN ---
 
     const hoy = new Date(fechaReporte + 'T23:59:59');
+    
+    const datosAgrupados = facturasPendientes.reduce((acc, factura) => {
+        if (!factura.contactoId) return acc;
 
-    facturasPendientes.forEach(factura => {
-        if (!factura.contactoId) return;
-        const contacto = this.findById(this.contactos, factura.contactoId);
-        if (!contacto) return;
+        // --- INICIO DE LA CORRECCIÓN ---
+        // Se asegura que el objeto para el contacto exista antes de intentar acceder a sus propiedades.
+        if (!acc[factura.contactoId]) {
+            acc[factura.contactoId] = {
+                id: factura.contactoId,
+                contacto: this.findById(this.contactos, factura.contactoId),
+                current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d91_plus: 0, total: 0
+            };
+        }
+        // --- FIN DE LA CORRECCIÓN ---
 
         const saldo = (factura.total || 0) - (factura.montoPagado || 0);
-        if (saldo < 0.01) return;
+        if (saldo < 0.01) return acc;
 
         const fechaFactura = new Date(factura.fecha + 'T00:00:00');
         const diffTime = hoy.getTime() - fechaFactura.getTime();
         const diasVencido = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
         
-        if (diasVencido <= 0) factura.agingBucket = 'current';
-        else if (diasVencido <= 30) factura.agingBucket = 'd1_30';
-        else if (diasVencido <= 60) factura.agingBucket = 'd31_60';
-        else if (diasVencido <= 90) factura.agingBucket = 'd61_90';
-        else factura.agingBucket = 'd91_plus';
-    });
+        let bucket = 'current';
+        if (diasVencido > 90) bucket = 'd91_plus';
+        else if (diasVencido > 60) bucket = 'd61_90';
+        else if (diasVencido > 30) bucket = 'd31_60';
+        else if (diasVencido > 0) bucket = 'd1_30';
+        
+        acc[factura.contactoId][bucket] += saldo;
+        acc[factura.contactoId].total += saldo;
+
+        return acc;
+    }, {});
     
-    return { facturas: facturasPendientes };
+    const contactosConSaldos = Object.values(datosAgrupados);
+    const totales = contactosConSaldos.reduce((acc, c) => {
+        acc.current += c.current;
+        acc.d1_30 += c.d1_30;
+        acc.d31_60 += c.d31_60;
+        acc.d61_90 += c.d61_90;
+        acc.d91_plus += c.d91_plus;
+        acc.total += c.total;
+        return acc;
+    }, { current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d91_plus: 0, total: 0 });
+
+    return { facturas: facturasPendientes, contactos: contactosConSaldos, totales: totales };
 },
 
     /**
@@ -481,68 +502,72 @@ getAgingData(tipoContacto, fechaReporte) {
         this.renderEstadoDeCuentaDetalle(clienteId, 'cliente');
     },
     abrirModalRegistrarPagoCliente(ventaId) {
-        const venta = this.findById(this.transacciones, ventaId);
-        const cliente = this.findById(this.contactos, venta.contactoId);
-        const cuentasBanco = this.planDeCuentas.filter(c => c.tipo === 'DETALLE' && c.parentId === 110).map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
-        const saldoPendiente = (venta.total || 0) - (venta.montoPagado || 0);
+    const venta = this.findById(this.transacciones, ventaId);
+    const cliente = this.findById(this.contactos, venta.contactoId);
+    const cuentasBanco = this.planDeCuentas.filter(c => c.tipo === 'DETALLE' && c.parentId === 110).map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+    const saldoPendiente = (venta.total || 0) - (venta.montoPagado || 0);
 
-        // INICIO DE MEJORA: Buscar créditos disponibles (Notas de Crédito y Anticipos)
-        const creditosDisponibles = this.transacciones.filter(t => 
-            t.contactoId === venta.contactoId &&
-            (t.tipo === 'nota_credito' || t.tipo === 'anticipo') &&
-            (t.total - (t.montoAplicado || 0)) > 0.01
-        );
+    const creditosDisponibles = this.transacciones.filter(t => 
+        t.contactoId === venta.contactoId &&
+        (t.tipo === 'nota_credito' || t.tipo === 'anticipo') &&
+        (t.total - (t.montoAplicado || 0)) > 0.01
+    );
 
-        let creditosHTML = '';
-        if (creditosDisponibles.length > 0) {
-            creditosHTML = `<div class="conta-card-accent mt-6">
-                <h4 class="font-bold text-sm mb-2">Aplicar Créditos Disponibles</h4>
-                <div class="space-y-2 max-h-40 overflow-y-auto pr-2">`;
-            creditosDisponibles.forEach(credito => {
-                const saldoCredito = credito.total - (credito.montoAplicado || 0);
-                const tipoTexto = credito.tipo === 'nota_credito' ? `NC #${credito.numeroNota}` : `Anticipo #${credito.id}`;
-                creditosHTML += `
-                    <div class="flex justify-between items-center text-sm">
-                        <label for="credito-${credito.id}" class="flex items-center">
-                            <input type="checkbox" id="credito-${credito.id}" class="h-4 w-4 mr-2 credito-a-aplicar" value="${saldoCredito}" data-credito-id="${credito.id}" onchange="ContaApp.actualizarTotalesPagoCliente(${saldoPendiente})">
-                            ${tipoTexto} (${credito.fecha})
-                        </label>
-                        <span class="font-mono">${this.formatCurrency(saldoCredito)}</span>
-                    </div>
-                `;
-            });
-            creditosHTML += `</div></div>`;
-        }
-        // FIN DE MEJORA
+    let creditosHTML = '';
+    if (creditosDisponibles.length > 0) {
+        creditosHTML = `<div class="conta-card-accent mt-6">
+            <h4 class="font-bold text-sm mb-2">Aplicar Créditos Disponibles</h4>
+            <div class="space-y-2 max-h-40 overflow-y-auto pr-2">`;
+        creditosDisponibles.forEach(credito => {
+            const saldoCredito = credito.total - (credito.montoAplicado || 0);
+            const tipoTexto = credito.tipo === 'nota_credito' ? `NC #${credito.numeroNota}` : `Anticipo #${credito.id}`;
+            creditosHTML += `
+                <div class="flex justify-between items-center text-sm">
+                    <label for="credito-${credito.id}" class="flex items-center">
+                        <input type="checkbox" id="credito-${credito.id}" class="h-4 w-4 mr-2 credito-a-aplicar" value="${saldoCredito}" data-credito-id="${credito.id}" onchange="ContaApp.actualizarTotalesPagoCliente(${saldoPendiente})">
+                        ${tipoTexto} (${credito.fecha})
+                    </label>
+                    <span class="font-mono">${this.formatCurrency(saldoCredito)}</span>
+                </div>
+            `;
+        });
+        creditosHTML += `</div></div>`;
+    }
 
-        const modalHTML = `<h3 class="conta-title mb-4">Registrar Pago de Cliente</h3>
-        <p class="mb-2"><strong>Cliente:</strong> ${cliente.nombre}</p>
-        <p class="mb-2"><strong>Factura #${venta.refOriginal || venta.numeroFactura || venta.id}</strong></p>
-        <p class="mb-6"><strong>Saldo Pendiente:</strong> <span class="font-bold">${this.formatCurrency(saldoPendiente)}</span></p>
+    const modalHTML = `<h3 class="conta-title mb-4">Registrar Pago de Cliente</h3>
+    <p class="mb-2"><strong>Cliente:</strong> ${cliente.nombre}</p>
+    <p class="mb-2"><strong>Factura #${venta.refOriginal || venta.numeroFactura || venta.id}</strong></p>
+    <p class="mb-6"><strong>Saldo Pendiente:</strong> <span class="font-bold">${this.formatCurrency(saldoPendiente)}</span></p>
+    
+    <form id="pago-cliente-form" class="space-y-4 modal-form">
+        <div>
+            <label>Monto a Pagar (con Banco/Efectivo)</label>
+            <input type="number" step="0.01" id="pago-monto" class="w-full p-2 mt-1" value="${saldoPendiente.toFixed(2)}" max="${saldoPendiente.toFixed(2)}" oninput="ContaApp.actualizarTotalesPagoCliente(${saldoPendiente})" required>
+        </div>
+        <div><label>Depositar en</label><select id="pago-cuenta-banco" class="w-full p-2 mt-1" required>${cuentasBanco}</select></div>
+        <div><label>Fecha del Pago</label><input type="date" id="pago-fecha" value="${this.getTodayDate()}" class="w-full p-2 mt-1" required></div>
+        <div><label>Comentario / Referencia</label><input type="text" id="pago-comentario" class="w-full p-2 mt-1" placeholder="Ej: Cheque #123, Transferencia Zelle, etc."></div>
         
-        <form onsubmit="ContaApp.guardarPagoCliente(event, ${ventaId})" class="space-y-4 modal-form">
-            <div>
-                <label>Monto a Pagar (con Banco/Efectivo)</label>
-                <input type="number" step="0.01" id="pago-monto" class="w-full p-2 mt-1" value="${saldoPendiente.toFixed(2)}" max="${saldoPendiente.toFixed(2)}" oninput="ContaApp.actualizarTotalesPagoCliente(${saldoPendiente})" required>
-            </div>
-            <div><label>Depositar en</label><select id="pago-cuenta-banco" class="w-full p-2 mt-1" required>${cuentasBanco}</select></div>
-            <div><label>Fecha del Pago</label><input type="date" id="pago-fecha" value="${this.getTodayDate()}" class="w-full p-2 mt-1" required></div>
-            <div><label>Comentario / Referencia</label><input type="text" id="pago-comentario" class="w-full p-2 mt-1" placeholder="Ej: Cheque #123, Transferencia Zelle, etc."></div>
-            
-            ${creditosHTML}
+        ${creditosHTML}
 
-            <div class="mt-6 pt-4 border-t border-[var(--color-border-accent)] text-right space-y-2">
-                <div class="flex justify-end items-center gap-4"><span class="text-sm">Monto Pagado:</span> <span class="font-mono">${this.formatCurrency(0)}</span></div>
-                <div class="flex justify-end items-center gap-4"><span class="text-sm">Créditos Aplicados:</span> <span id="pago-total-creditos" class="font-mono">${this.formatCurrency(0)}</span></div>
-                <div class="flex justify-end items-center gap-4 font-bold text-lg"><span class="">Total a Acreditar:</span> <span id="pago-total-acreditado" class="font-mono">${this.formatCurrency(0)}</span></div>
-                <div id="pago-feedback" class="text-sm font-bold h-5"></div>
-            </div>
+        <div class="mt-6 pt-4 border-t border-[var(--color-border-accent)] text-right space-y-2">
+            <div class="flex justify-end items-center gap-4"><span class="text-sm">Monto Pagado:</span> <span class="font-mono">${this.formatCurrency(0)}</span></div>
+            <div class="flex justify-end items-center gap-4"><span class="text-sm">Créditos Aplicados:</span> <span id="pago-total-creditos" class="font-mono">${this.formatCurrency(0)}</span></div>
+            <div class="flex justify-end items-center gap-4 font-bold text-lg"><span class="">Total a Acreditar:</span> <span id="pago-total-acreditado" class="font-mono">${this.formatCurrency(0)}</span></div>
+            <div id="pago-feedback" class="text-sm font-bold h-5"></div>
+        </div>
 
-            <div class="flex justify-end gap-2 mt-6"><button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button><button id="btn-guardar-pago" type="submit" class="conta-btn">Confirmar Pago</button></div>
-        </form>`;
-        this.showModal(modalHTML, '2xl');
-        this.actualizarTotalesPagoCliente(saldoPendiente);
-    },
+        <div class="flex justify-end gap-2 mt-6">
+            <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button>
+            <!-- --- CORRECCIÓN: Se añadieron comillas simples alrededor de ${ventaId} --- -->
+            <button id="btn-guardar-pago" type="button" class="conta-btn" onclick="ContaApp.guardarPagoCliente('${ventaId}')">Confirmar Pago</button>
+        </div>
+    </form>`;
+    this.showModal(modalHTML, '2xl');
+    this.actualizarTotalesPagoCliente(saldoPendiente);
+},
+
+
     actualizarTotalesPagoCliente(saldoPendiente) {
         const montoPagado = parseFloat(document.getElementById('pago-monto').value) || 0;
         let creditosAplicados = 0;
@@ -573,86 +598,81 @@ getAgingData(tipoContacto, fechaReporte) {
             guardarBtn.disabled = false; // Se permite pagar menos
         }
     },
-                        async guardarPagoCliente(e, ventaId) {
-        e.preventDefault();
-        const venta = this.findById(this.transacciones, ventaId);
-        const montoPagadoBanco = parseFloat(document.getElementById('pago-monto').value) || 0;
-        const cuentaBancoId = parseInt(document.getElementById('pago-cuenta-banco').value);
-        const fecha = document.getElementById('pago-fecha').value;
-        const comentario = document.getElementById('pago-comentario').value;
-        const cuentaCxcId = 120;
+        async guardarPagoCliente(ventaId) {
+    // Ya no se necesita e.preventDefault()
+    const venta = this.findById(this.transacciones, ventaId);
+    if (!venta) {
+        this.showToast('Error: No se encontró la venta para registrar el pago.', 'error');
+        return;
+    }
+    const montoPagadoBanco = parseFloat(document.getElementById('pago-monto').value) || 0;
+    const cuentaBancoId = parseInt(document.getElementById('pago-cuenta-banco').value);
+    const fecha = document.getElementById('pago-fecha').value;
+    const comentario = document.getElementById('pago-comentario').value;
+    const cuentaCxcId = 120;
 
-        const creditosSeleccionados = [];
-        document.querySelectorAll('.credito-a-aplicar:checked').forEach(checkbox => {
-            creditosSeleccionados.push({
-                id: parseInt(checkbox.dataset.creditoId),
-                monto: parseFloat(checkbox.value)
-            });
+    const creditosSeleccionados = [];
+    document.querySelectorAll('.credito-a-aplicar:checked').forEach(checkbox => {
+        creditosSeleccionados.push({
+            id: parseInt(checkbox.dataset.creditoId),
+            monto: parseFloat(checkbox.value)
+        });
+    });
+
+    const totalCreditosAplicados = creditosSeleccionados.reduce((sum, c) => sum + c.monto, 0);
+    const totalAcreditado = montoPagadoBanco + totalCreditosAplicados;
+
+    try {
+        if (montoPagadoBanco > 0) {
+            const pagoRegistrado = {
+                id: this.generarUUID(), tipo: 'pago_cliente', fecha: fecha, contactoId: venta.contactoId,
+                monto: montoPagadoBanco, cuentaBancoId: cuentaBancoId, ventaId: ventaId, comentario: comentario
+            };
+            this.transacciones.push(pagoRegistrado);
+            const asiento = this.crearAsiento(fecha, `Pago Factura #${venta.numeroFactura || venta.id}`, [
+                { cuentaId: cuentaBancoId, debe: montoPagadoBanco, haber: 0 },
+                { cuentaId: cuentaCxcId, debe: 0, haber: montoPagadoBanco }
+            ], pagoRegistrado.id);
+
+            if (asiento) {
+                this._registrarMovimientoBancarioPendiente(cuentaBancoId, fecha, `Cobro Factura #${venta.numeroFactura || venta.id}`, montoPagadoBanco, asiento.id);
+            }
+        }
+
+        creditosSeleccionados.forEach(creditoInfo => {
+            const credito = this.findById(this.transacciones, creditoInfo.id);
+            if (credito) {
+                credito.montoAplicado = (credito.montoAplicado || 0) + creditoInfo.monto;
+                const cuentaContrapartidaId = credito.tipo === 'nota_credito' ? 490 : 220; 
+                this.crearAsiento(fecha, `Aplicación de ${credito.tipo} #${credito.id} a Factura #${venta.numeroFactura}`, [
+                    { cuentaId: cuentaContrapartidaId, debe: creditoInfo.monto, haber: 0 },
+                    { cuentaId: cuentaCxcId, debe: 0, haber: creditoInfo.monto }
+                ]);
+            }
         });
 
-        const totalCreditosAplicados = creditosSeleccionados.reduce((sum, c) => sum + c.monto, 0);
-        const totalAcreditado = montoPagadoBanco + totalCreditosAplicados;
-
-        try {
-            if (montoPagadoBanco > 0) {
-                const pagoRegistrado = {
-                    id: this.idCounter++, tipo: 'pago_cliente', fecha: fecha, contactoId: venta.contactoId,
-                    monto: montoPagadoBanco, cuentaBancoId: cuentaBancoId, ventaId: ventaId, comentario: comentario
-                };
-                this.transacciones.push(pagoRegistrado);
-                const asiento = this.crearAsiento(fecha, `Pago Factura #${venta.numeroFactura || venta.id}`, [
-                    { cuentaId: cuentaBancoId, debe: montoPagadoBanco, haber: 0 },
-                    { cuentaId: cuentaCxcId, debe: 0, haber: montoPagadoBanco }
-                ], pagoRegistrado.id);
-
-                // --- INICIO DE LA MODIFICACIÓN ---
-                if (asiento) {
-                    this._registrarMovimientoBancarioPendiente(cuentaBancoId, fecha, `Cobro Factura #${venta.numeroFactura || venta.id}`, montoPagadoBanco, asiento.id);
-                }
-                // --- FIN DE LA MODIFICACIÓN ---
-            }
-
-            creditosSeleccionados.forEach(creditoInfo => {
-                const credito = this.findById(this.transacciones, creditoInfo.id);
-                if (credito) {
-                    credito.montoAplicado = (credito.montoAplicado || 0) + creditoInfo.monto;
-                    const cuentaContrapartidaId = credito.tipo === 'nota_credito' ? 490 : 220; 
-                    this.crearAsiento(fecha, `Aplicación de ${credito.tipo} #${credito.id} a Factura #${venta.numeroFactura}`, [
-                        { cuentaId: cuentaContrapartidaId, debe: creditoInfo.monto, haber: 0 },
-                        { cuentaId: cuentaCxcId, debe: 0, haber: creditoInfo.monto }
-                    ]);
-                }
-            });
-
-            venta.montoPagado = (venta.montoPagado || 0) + totalAcreditado;
-            if (venta.montoPagado >= venta.total - 0.01) {
-                venta.estado = 'Pagada';
-            } else if (venta.montoPagado > 0) {
-                venta.estado = 'Parcial';
-            }
-
-            await this.repository.actualizarMultiplesDatos({
-                transacciones: this.transacciones,
-                asientos: this.asientos,
-                idCounter: this.idCounter,
-                bancoImportado: this.bancoImportado // Añadimos para guardar
-            });
-
-            this.closeModal();
-            this.irModulo('cxc', { clienteId: venta.contactoId });
-            this.showToast('Pago registrado y aplicado con éxito.', 'success');
-
-        } catch (error) {
-            console.error("Error al guardar el pago del cliente:", error);
-            this.showToast(`Error al guardar: ${error.message}`, 'error');
+        venta.montoPagado = (venta.montoPagado || 0) + totalAcreditado;
+        if (venta.montoPagado >= venta.total - 0.01) {
+            venta.estado = 'Pagada';
+        } else if (venta.montoPagado > 0) {
+            venta.estado = 'Parcial';
         }
-    },
-    toggleAllCheckboxes(source, className) {
-        const checkboxes = document.getElementsByClassName(className);
-        for (let i = 0; i < checkboxes.length; i++) {
-            checkboxes[i].checked = source.checked;
-        }
-    },
+
+        await this.repository.actualizarMultiplesDatos({
+            transacciones: this.transacciones,
+            asientos: this.asientos,
+            bancoImportado: this.bancoImportado
+        });
+
+        this.closeModal();
+        this.irModulo('cxc', { clienteId: venta.contactoId });
+        this.showToast('Pago registrado y aplicado con éxito.', 'success');
+
+    } catch (error) {
+        console.error("Error al guardar el pago del cliente:", error);
+        this.showToast(`Error al guardar: ${error.message}`, 'error');
+    }
+},
 
     abrirModalPagoLote(tipoContacto) {
         const checkboxClass = tipoContacto === 'cliente' ? 'cxc-factura-check' : 'cxp-gasto-check';
@@ -825,28 +845,32 @@ getAgingData(tipoContacto, fechaReporte) {
             this.showToast(`Error al guardar: ${error.message}`, 'error');
         }
     },
-    procesarSeleccionDePago(tipoContacto) {
-        const checkboxClass = tipoContacto === 'cliente' ? 'cxc-factura-check' : 'cxp-gasto-check';
-        const facturasSeleccionadas = Array.from(document.querySelectorAll(`.${checkboxClass}:checked`));
+    // Reemplaza la función existente en: modules/cuentas_corrientes.js
 
-        if (facturasSeleccionadas.length === 0) {
-            this.showToast('Debes seleccionar al menos una factura para registrar el pago.', 'info');
-            return;
-        }
+procesarSeleccionDePago(tipoContacto) {
+    const checkboxClass = tipoContacto === 'cliente' ? 'cxc-factura-check' : 'cxp-gasto-check';
+    const facturasSeleccionadas = Array.from(document.querySelectorAll(`.${checkboxClass}:checked`));
 
-        if (facturasSeleccionadas.length === 1) {
-            // Si solo hay una, abrir el modal de pago individual
-            const facturaId = parseInt(facturasSeleccionadas[0].dataset.facturaId);
-            if (tipoContacto === 'cliente') {
-                this.abrirModalRegistrarPagoCliente(facturaId);
-            } else {
-                this.abrirModalRegistrarPagoProveedor(facturaId);
-            }
+    if (facturasSeleccionadas.length === 0) {
+        this.showToast('Debes seleccionar al menos una factura para registrar el pago.', 'info');
+        return;
+    }
+
+    if (facturasSeleccionadas.length === 1) {
+        // --- INICIO DE LA CORRECCIÓN ---
+        // Se cambió ".value" por ".dataset.facturaId" para leer el atributo correcto del checkbox.
+        const facturaId = facturasSeleccionadas[0].dataset.facturaId;
+        // --- FIN DE LA CORRECCIÓN ---
+        
+        if (tipoContacto === 'cliente') {
+            this.abrirModalRegistrarPagoCliente(facturaId);
         } else {
-            // Si hay varias, abrir el modal de pago en lote
-            this.abrirModalPagoLote(tipoContacto);
+            this.abrirModalRegistrarPagoProveedor(facturaId);
         }
-    },
+    } else {
+        this.abrirModalPagoLote(tipoContacto);
+    }
+},
             abrirModalBajaIncobrable(ventaId) {
         const venta = this.findById(this.transacciones, ventaId);
         const cliente = this.findById(this.contactos, venta.contactoId);
@@ -1292,88 +1316,91 @@ renderAnticipos(containerId) {
         this.renderEstadoDeCuentaDetalle(proveedorId, 'proveedor');
     },
         abrirModalRegistrarPagoProveedor(gastoId) {
-        const gasto = this.findById(this.transacciones, gastoId);
-        const proveedor = this.findById(this.contactos, gasto.contactoId);
-        const cuentasPago = this.planDeCuentas.filter(c => c.tipo === 'DETALLE' && (c.codigo.startsWith('110') || c.codigo.startsWith('230')))
-            .map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
-        const saldoPendiente = gasto.total - (gasto.montoPagado || 0);
-        
-        // Calcular la deuda total con este proveedor
-        const totalDeudaProveedor = this.transacciones
-            .filter(t => t.tipo === 'gasto' && t.contactoId === gasto.contactoId && (t.estado === 'Pendiente' || t.estado === 'Parcial'))
-            .reduce((sum, g) => sum + (g.total - (g.montoPagado || 0)), 0);
+    const gasto = this.findById(this.transacciones, gastoId);
+    const proveedor = this.findById(this.contactos, gasto.contactoId);
+    const cuentasPago = this.planDeCuentas.filter(c => c.tipo === 'DETALLE' && (c.codigo.startsWith('110') || c.codigo.startsWith('230')))
+        .map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+    const saldoPendiente = gasto.total - (gasto.montoPagado || 0);
+    
+    const totalDeudaProveedor = this.transacciones
+        .filter(t => t.tipo === 'gasto' && t.contactoId === gasto.contactoId && (t.estado === 'Pendiente' || t.estado === 'Parcial'))
+        .reduce((sum, g) => sum + (g.total - (g.montoPagado || 0)), 0);
 
-        const modalHTML = `<h3 class="conta-title mb-4">Registrar Pago a Proveedor</h3>
-        <p class="mb-2"><strong>Proveedor:</strong> ${proveedor.nombre}</p>
-        <p class="mb-2"><strong>Deuda Total con Proveedor:</strong> <span class="font-bold">${this.formatCurrency(totalDeudaProveedor)}</span></p>
-        <p class="mb-6"><strong>Saldo Gasto #${gasto.id}:</strong> ${this.formatCurrency(saldoPendiente)}</p>
-        <form onsubmit="ContaApp.guardarPagoProveedor(event, ${gastoId})" class="space-y-4 modal-form">
-            <div><label>Monto a Pagar</label><input type="number" step="0.01" id="pago-monto" class="w-full p-2 mt-1" value="${saldoPendiente.toFixed(2)}" max="${saldoPendiente.toFixed(2)}" required></div>
-            <div><label>Pagar desde</label><select id="pago-cuenta-origen" class="w-full p-2 mt-1" required>${cuentasPago}</select></div>
-            <div><label>Fecha del Pago</label><input type="date" id="pago-fecha" value="${this.getTodayDate()}" class="w-full p-2 mt-1" required></div>
-            <div><label>Comentario / Referencia</label><input type="text" id="pago-comentario" class="w-full p-2 mt-1" placeholder="Ej: Transferencia #456, Pago parcial, etc."></div>
-            <div class="flex justify-end gap-2 mt-6"><button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button><button type="submit" class="conta-btn">Confirmar Pago</button></div>
-        </form>`;
-        this.showModal(modalHTML, 'xl');
-    },
-                async guardarPagoProveedor(e, gastoId) {
-        e.preventDefault();
-        const gasto = this.findById(this.transacciones, gastoId);
-        const monto = parseFloat(document.getElementById('pago-monto').value);
-        const cuentaOrigenId = parseInt(document.getElementById('pago-cuenta-origen').value);
-        const fecha = document.getElementById('pago-fecha').value;
-        const comentario = document.getElementById('pago-comentario').value;
-        const cuentaCxpId = 210;
+    const modalHTML = `<h3 class="conta-title mb-4">Registrar Pago a Proveedor</h3>
+    <p class="mb-2"><strong>Proveedor:</strong> ${proveedor.nombre}</p>
+    <p class="mb-2"><strong>Deuda Total con Proveedor:</strong> <span class="font-bold">${this.formatCurrency(totalDeudaProveedor)}</span></p>
+    <p class="mb-6"><strong>Saldo Gasto #${gasto.id}:</strong> ${this.formatCurrency(saldoPendiente)}</p>
+    <form id="pago-proveedor-form" class="space-y-4 modal-form">
+        <div><label>Monto a Pagar</label><input type="number" step="0.01" id="pago-monto" class="w-full p-2 mt-1" value="${saldoPendiente.toFixed(2)}" max="${saldoPendiente.toFixed(2)}" required></div>
+        <div><label>Pagar desde</label><select id="pago-cuenta-origen" class="w-full p-2 mt-1" required>${cuentasPago}</select></div>
+        <div><label>Fecha del Pago</label><input type="date" id="pago-fecha" value="${this.getTodayDate()}" class="w-full p-2 mt-1" required></div>
+        <div><label>Comentario / Referencia</label><input type="text" id="pago-comentario" class="w-full p-2 mt-1" placeholder="Ej: Transferencia #456, Pago parcial, etc."></div>
+        <div class="flex justify-end gap-2 mt-6">
+            <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button>
+            <!-- --- CORRECCIÓN: Se añadieron comillas simples alrededor de ${gastoId} --- -->
+            <button type="button" class="conta-btn" onclick="ContaApp.guardarPagoProveedor('${gastoId}')">Confirmar Pago</button>
+        </div>
+    </form>`;
+    this.showModal(modalHTML, 'xl');
+},
+                async guardarPagoProveedor(gastoId) {
+    // Ya no se necesita e.preventDefault()
+    const gasto = this.findById(this.transacciones, gastoId);
+    if (!gasto) {
+        this.showToast('Error: No se encontró el gasto para registrar el pago.', 'error');
+        return;
+    }
+    const monto = parseFloat(document.getElementById('pago-monto').value);
+    const cuentaOrigenId = parseInt(document.getElementById('pago-cuenta-origen').value);
+    const fecha = document.getElementById('pago-fecha').value;
+    const comentario = document.getElementById('pago-comentario').value;
+    const cuentaCxpId = 210;
 
-        try {
-            const pagoRegistrado = {
-                id: this.idCounter++,
-                tipo: 'pago_proveedor',
-                fecha: fecha,
-                contactoId: gasto.contactoId,
-                monto: monto,
-                cuentaOrigenId: cuentaOrigenId,
-                gastoId: gastoId,
-                comentario: comentario
-            };
-            this.transacciones.push(pagoRegistrado);
+    try {
+        const pagoRegistrado = {
+            id: this.generarUUID(),
+            tipo: 'pago_proveedor',
+            fecha: fecha,
+            contactoId: gasto.contactoId,
+            monto: monto,
+            cuentaOrigenId: cuentaOrigenId,
+            gastoId: gastoId,
+            comentario: comentario
+        };
+        this.transacciones.push(pagoRegistrado);
 
-            const asiento = this.crearAsiento(fecha, `Pago a proveedor por: ${gasto.descripcion}`, [
-                { cuentaId: cuentaCxpId, debe: monto, haber: 0 },
-                { cuentaId: cuentaOrigenId, debe: 0, haber: monto }
-            ], pagoRegistrado.id);
+        const asiento = this.crearAsiento(fecha, `Pago a proveedor por: ${gasto.descripcion}`, [
+            { cuentaId: cuentaCxpId, debe: monto, haber: 0 },
+            { cuentaId: cuentaOrigenId, debe: 0, haber: monto }
+        ], pagoRegistrado.id);
 
-            if (asiento) {
-                // --- INICIO DE LA MODIFICACIÓN ---
-                // Registramos la salida de dinero en la pestaña de pendientes del banco.
-                this._registrarMovimientoBancarioPendiente(cuentaOrigenId, fecha, `Pago Gasto #${gasto.id}`, -monto, asiento.id);
-                // --- FIN DE LA MODIFICACIÓN ---
+        if (asiento) {
+            this._registrarMovimientoBancarioPendiente(cuentaOrigenId, fecha, `Pago Gasto #${gasto.id}`, -monto, asiento.id);
 
-                gasto.montoPagado = (gasto.montoPagado || 0) + monto;
-                if (gasto.montoPagado >= gasto.total - 0.01) {
-                    gasto.estado = 'Pagado';
-                } else if (gasto.montoPagado > 0) {
-                    gasto.estado = 'Parcial';
-                }
-
-                await this.repository.actualizarMultiplesDatos({
-                    transacciones: this.transacciones,
-                    asientos: this.asientos,
-                    idCounter: this.idCounter,
-                    bancoImportado: this.bancoImportado // Añadimos esto para guardar el nuevo pendiente
-                });
-
-                this.closeModal();
-                this.irModulo('cxp', { proveedorId: gasto.contactoId });
-                this.showToast('Pago a proveedor registrado con éxito.', 'success');
-            } else {
-                throw new Error("No se pudo generar el asiento contable para el pago.");
+            gasto.montoPagado = (gasto.montoPagado || 0) + monto;
+            if (gasto.montoPagado >= gasto.total - 0.01) {
+                gasto.estado = 'Pagado';
+            } else if (gasto.montoPagado > 0) {
+                gasto.estado = 'Parcial';
             }
-        } catch (error) {
-            console.error("Error al guardar el pago a proveedor:", error);
-            this.showToast(`Error al guardar: ${error.message}`, 'error');
+
+            await this.repository.actualizarMultiplesDatos({
+                transacciones: this.transacciones,
+                asientos: this.asientos,
+                bancoImportado: this.bancoImportado
+            });
+
+            this.closeModal();
+            this.irModulo('cxp', { proveedorId: gasto.contactoId });
+            this.showToast('Pago a proveedor registrado con éxito.', 'success');
+        } else {
+            throw new Error("No se pudo generar el asiento contable para el pago.");
         }
-    },
+    } catch (error) {
+        console.error("Error al guardar el pago a proveedor:", error);
+        this.showToast(`Error al guardar: ${error.message}`, 'error');
+    }
+},
             abrirModalHistorialGasto(gastoId) {
         const gasto = this.findById(this.transacciones, gastoId);
         if (!gasto) return;
