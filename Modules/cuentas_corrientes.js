@@ -778,14 +778,18 @@ getAgingData(tipoContacto, fechaReporte) {
     },
 
         async guardarPagoLote(e, tipoContacto) {
-        e.preventDefault();
+    e.preventDefault();
+    const submitButton = e.target.querySelector('button[type="submit"]');
+    this.toggleButtonLoading(submitButton, true);
+
+    try {
         const montoTotalPago = parseFloat(document.getElementById('pago-lote-monto-total').value);
         const cuentaBancoId = parseInt(document.getElementById('pago-lote-cuenta-banco').value);
         const fecha = document.getElementById('pago-lote-fecha').value;
         const comentario = document.getElementById('pago-lote-comentario').value;
 
         const rows = document.querySelectorAll('.pago-lote-asignacion-row[data-factura-id]');
-        const primeraFactura = this.findById(this.transacciones, parseInt(rows[0].dataset.facturaId));
+        const primeraFactura = this.findById(this.transacciones, rows[0].dataset.facturaId);
         const contacto = this.findById(this.contactos, primeraFactura.contactoId);
 
         const esCobro = tipoContacto === 'cliente';
@@ -793,58 +797,60 @@ getAgingData(tipoContacto, fechaReporte) {
         const pagoTipo = esCobro ? 'pago_cliente' : 'pago_proveedor';
         const navModulo = esCobro ? 'cxc' : 'cxp';
 
-        try {
-            const pagoRegistrado = {
-                id: this.idCounter++, tipo: pagoTipo, fecha: fecha, contactoId: contacto.id,
-                monto: montoTotalPago, cuentaBancoId: cuentaBancoId, comentario: comentario, esLote: true
-            };
-            this.transacciones.push(pagoRegistrado);
-            
-            const asiento = this.crearAsiento(fecha, `Pago en lote ${esCobro ? 'de' : 'a'} ${contacto.nombre}. ${comentario}`, [
-                { cuentaId: cuentaBancoId, debe: esCobro ? montoTotalPago : 0, haber: esCobro ? 0 : montoTotalPago },
-                { cuentaId: cuentaContrapartidaId, debe: esCobro ? 0 : montoTotalPago, haber: esCobro ? montoTotalPago : 0 }
-            ], pagoRegistrado.id);
-
-            if (!asiento) {
-                throw new Error("No se pudo crear el asiento contable para el pago en lote.");
-            }
-
-            let montoRestante = montoTotalPago;
-            rows.forEach(row => {
-                if (montoRestante <= 0) return;
-                
-                const facturaId = parseInt(row.dataset.facturaId);
-                const factura = this.findById(this.transacciones, facturaId);
-                const saldoFactura = factura.total - (factura.montoPagado || 0);
-                
-                const montoAAplicar = Math.min(saldoFactura, montoRestante);
-                
-                factura.montoPagado = (factura.montoPagado || 0) + montoAAplicar;
-                if (factura.montoPagado >= factura.total - 0.01) {
-                    factura.estado = 'Pagado';
-                } else {
-                    factura.estado = 'Parcial';
-                }
-                montoRestante -= montoAAplicar;
-            });
-            
-            // --- INICIO DE LA REFACTORIZACIÓN ---
-            await this.repository.actualizarMultiplesDatos({
-                transacciones: this.transacciones,
-                asientos: this.asientos,
-                idCounter: this.idCounter
-            });
-            // --- FIN DE LA REFACTORIZACIÓN ---
-
-            this.closeModal();
-            this.irModulo(navModulo);
-            this.showToast('Pago en lote registrado y aplicado con éxito.', 'success');
+        const pagoRegistrado = {
+            id: this.generarUUID(), // <-- CORRECCIÓN: Usando UUID
+            tipo: pagoTipo,
+            fecha: fecha,
+            contactoId: contacto.id,
+            monto: montoTotalPago,
+            cuentaBancoId: cuentaBancoId,
+            comentario: comentario,
+            esLote: true
+        };
+        this.transacciones.push(pagoRegistrado);
         
-        } catch(error) {
-            console.error("Error al guardar pago en lote:", error);
-            this.showToast(`Error al guardar: ${error.message}`, 'error');
+        const asiento = this.crearAsiento(fecha, `Pago en lote ${esCobro ? 'de' : 'a'} ${contacto.nombre}. ${comentario}`, [
+            { cuentaId: cuentaBancoId, debe: esCobro ? montoTotalPago : 0, haber: esCobro ? 0 : montoTotalPago },
+            { cuentaId: cuentaContrapartidaId, debe: esCobro ? 0 : montoTotalPago, haber: esCobro ? montoTotalPago : 0 }
+        ], pagoRegistrado.id);
+
+        if (!asiento) {
+            this.transacciones.pop(); // Revertir si falla el asiento
+            throw new Error("No se pudo crear el asiento contable para el pago en lote.");
         }
-    },
+
+        let montoRestante = montoTotalPago;
+        rows.forEach(row => {
+            if (montoRestante <= 0) return;
+            
+            const facturaId = row.dataset.facturaId;
+            const factura = this.findById(this.transacciones, facturaId);
+            const saldoFactura = factura.total - (factura.montoPagado || 0);
+            
+            const montoAAplicar = Math.min(saldoFactura, montoRestante);
+            
+            factura.montoPagado = (factura.montoPagado || 0) + montoAAplicar;
+            if (factura.montoPagado >= factura.total - 0.01) {
+                factura.estado = 'Pagado';
+            } else {
+                factura.estado = 'Parcial';
+            }
+            montoRestante -= montoAAplicar;
+        });
+        
+        await this.saveAll();
+
+        this.closeModal();
+        this.irModulo(navModulo);
+        this.showToast('Pago en lote registrado y aplicado con éxito.', 'success');
+    
+    } catch(error) {
+        console.error("Error al guardar pago en lote:", error);
+        this.showToast(`Error al guardar: ${error.message}`, 'error');
+    } finally {
+        this.toggleButtonLoading(submitButton, false);
+    }
+},
     // Reemplaza la función existente en: modules/cuentas_corrientes.js
 
 procesarSeleccionDePago(tipoContacto) {

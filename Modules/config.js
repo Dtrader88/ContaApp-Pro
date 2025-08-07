@@ -10,9 +10,12 @@ renderConfig(params = {}) {
         <div class="flex gap-2 mb-6 border-b border-[var(--color-border-accent)] flex-wrap">
             <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'perfil' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'perfil'})">Perfil de la Compañía</button>
             <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'contactos' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'contactos'})">Contactos</button>
-            <!-- ===== INICIO DE LA MODIFICACIÓN ===== -->
             <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'centros-costo' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'centros-costo'})">Centros de Costo</button>
-            <!-- ===== FIN DE LA MODIFICACIÓN ===== -->
+            
+            <!-- --- INICIO DE LA MODIFICACIÓN --- -->
+            <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'usuarios' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'usuarios'})">Usuarios</button>
+            <!-- --- FIN DE LA MODIFICACIÓN --- -->
+
             <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'roles' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'roles'})">Roles y Permisos</button>
             <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'auditoria' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'auditoria'})">Auditoría</button>
             <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'unidades' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'unidades'})">Unidades de Medida</button>
@@ -28,9 +31,10 @@ renderConfig(params = {}) {
     switch (submodulo) {
         case 'perfil': this.renderConfig_Perfil(); break;
         case 'contactos': this.renderContactos('config-contenido'); break;
-        // ===== INICIO DE LA MODIFICACIÓN =====
         case 'centros-costo': this.renderConfig_CentrosDeCosto(); break;
-        // ===== FIN DE LA MODIFICACIÓN =====
+        // --- INICIO DE LA MODIFICACIÓN ---
+        case 'usuarios': this.renderConfig_Usuarios(); break;
+        // --- FIN DE LA MODIFICACIÓN ---
         case 'roles': this.renderConfig_Roles(); break;
         case 'auditoria': this.renderConfig_Auditoria(); break;
         case 'unidades': this.renderConfig_Unidades(); break;
@@ -885,5 +889,208 @@ renderConfig_Licencia() {
     }
     
     document.getElementById('config-contenido').innerHTML = html;
+},
+async renderConfig_Usuarios() {
+    document.getElementById('page-actions-header').innerHTML = `<button class="conta-btn" onclick="ContaApp.abrirModalInvitarUsuario()">+ Invitar Usuario</button>`;
+    
+    const db = firebase.firestore();
+    const usuariosSnapshot = await db.collection("usuarios").where("workspaceId", "==", this.currentUser.workspaceId).get();
+    const usuarios = usuariosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    let html;
+    if (usuarios.length <= 1) { // Solo el admin
+        html = this.generarEstadoVacioHTML('fa-users', 'Eres el único usuario', 'Invita a los miembros de tu equipo para que colaboren en tu workspace.', '+ Invitar Usuario', "ContaApp.abrirModalInvitarUsuario()");
+    } else {
+        html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
+            <thead><tr>
+                <th class="conta-table-th">Email</th>
+                <th class="conta-table-th">Rol</th>
+                <th class="conta-table-th">Sucursal Asignada</th>
+                <!-- --- INICIO DE LA MODIFICACIÓN --- -->
+                <th class="conta-table-th text-center">Acciones</th>
+                <!-- --- FIN DE LA MODIFICACIÓN --- -->
+            </tr></thead>
+            <tbody>`;
+        usuarios.forEach(user => {
+            const rolNombre = this.empresa.roles[user.rol]?.nombre || user.rol;
+            const centroDeCosto = user.centroDeCostoId ? (this.empresa.centrosDeCosto || []).find(cc => cc.id === user.centroDeCostoId) : null;
+            
+            // --- INICIO DE LA MODIFICACIÓN ---
+            // Solo se muestran acciones para otros usuarios, no para uno mismo.
+            let accionesHTML = '';
+            if (user.id !== this.currentUser.uid) {
+                accionesHTML = `
+                    <button class="conta-btn-icon edit" title="Editar Usuario" onclick="ContaApp.abrirModalEditarUsuario('${user.id}')"><i class="fa-solid fa-pencil"></i></button>
+                    <button class="conta-btn-icon delete ml-2" title="Eliminar Usuario" onclick="ContaApp.eliminarUsuario('${user.id}')"><i class="fa-solid fa-trash"></i></button>
+                `;
+            }
+            // --- FIN DE LA MODIFICACIÓN ---
+
+            html += `<tr>
+                <td class="conta-table-td font-bold">${user.email} ${user.id === this.currentUser.uid ? '<span class="tag tag-neutral">Tú</span>' : ''}</td>
+                <td class="conta-table-td">${rolNombre}</td>
+                <td class="conta-table-td">${centroDeCosto ? centroDeCosto.nombre : 'Acceso General'}</td>
+                <!-- --- INICIO DE LA MODIFICACIÓN --- -->
+                <td class="conta-table-td text-center">${accionesHTML}</td>
+                <!-- --- FIN DE LA MODIFICACIÓN --- -->
+            </tr>`;
+        });
+        html += `</tbody></table></div>`;
+    }
+    document.getElementById('config-contenido').innerHTML = html;
+},
+
+abrirModalInvitarUsuario() {
+    // Excluimos al administrador de los roles que se pueden asignar
+    const rolesOptions = Object.entries(this.empresa.roles)
+        .filter(([key]) => key !== 'administrador')
+        .map(([key, value]) => `<option value="${key}">${value.nombre}</option>`)
+        .join('');
+
+    const centrosDeCostoOptions = (this.empresa.centrosDeCosto || [])
+        .map(cc => `<option value="${cc.id}">${cc.nombre}</option>`)
+        .join('');
+
+    const modalHTML = `<h3 class="conta-title mb-4">Invitar Nuevo Usuario</h3>
+    <p class="text-sm text-[var(--color-text-secondary)] mb-6">El nuevo usuario deberá registrarse con este correo electrónico para acceder a tu workspace.</p>
+    <form onsubmit="ContaApp.guardarInvitacionUsuario(event)" class="space-y-4 modal-form">
+        <div>
+            <label>Correo Electrónico del Usuario</label>
+            <input type="email" id="invitar-email" class="w-full p-2 mt-1" required>
+        </div>
+        <div>
+            <label>Asignar Rol</label>
+            <select id="invitar-rol" class="w-full p-2 mt-1" required>
+                ${rolesOptions}
+            </select>
+        </div>
+        <div>
+            <label>Asignar a Sucursal (Opcional)</label>
+            <select id="invitar-centro-costo" class="w-full p-2 mt-1">
+                <option value="">Acceso General (Sin sucursal específica)</option>
+                ${centrosDeCostoOptions}
+            </select>
+        </div>
+        <div class="flex justify-end gap-2 mt-6">
+            <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button>
+            <button type="submit" class="conta-btn">Crear Perfil de Usuario</button>
+        </div>
+    </form>`;
+    this.showModal(modalHTML, 'xl');
+},
+
+async guardarInvitacionUsuario(e) {
+    e.preventDefault();
+    const email = document.getElementById('invitar-email').value;
+    const rol = document.getElementById('invitar-rol').value;
+    const centroDeCostoId = document.getElementById('invitar-centro-costo').value || null;
+
+    try {
+        const db = firebase.firestore();
+        // Generamos un ID de usuario "temporal" basado en el email.
+        // Firebase Auth lo reemplazará con un UID real cuando el usuario se registre.
+        // Por ahora, usamos una versión codificada del email para evitar caracteres inválidos.
+        const tempUserId = "temp_" + btoa(email).replace(/=/g, "");
+
+        await db.collection("usuarios").doc(tempUserId).set({
+            email: email,
+            rol: rol,
+            centroDeCostoId: centroDeCostoId,
+            workspaceId: this.currentUser.workspaceId, // Se une al workspace del admin
+            estado: 'pendiente' // Indicamos que el usuario aún no se ha registrado
+        });
+
+        this.closeModal();
+        this.irModulo('config', { submodulo: 'usuarios' });
+        this.showToast('Perfil de usuario creado. Ahora el usuario puede registrarse con ese email.', 'success');
+    } catch (error) {
+        console.error("Error al crear perfil de usuario:", error);
+        this.showToast(`Error: ${error.message}`, 'error');
+    }
+},
+async abrirModalEditarUsuario(userId) {
+    const db = firebase.firestore();
+    const userDoc = await db.collection("usuarios").doc(userId).get();
+    if (!userDoc.exists) {
+        this.showToast('Error: Usuario no encontrado.', 'error');
+        return;
+    }
+    const user = userDoc.data();
+
+    const rolesOptions = Object.entries(this.empresa.roles)
+        .filter(([key]) => key !== 'administrador')
+        .map(([key, value]) => `<option value="${key}" ${user.rol === key ? 'selected' : ''}>${value.nombre}</option>`)
+        .join('');
+
+    const centrosDeCostoOptions = (this.empresa.centrosDeCosto || [])
+        .map(cc => `<option value="${cc.id}" ${user.centroDeCostoId === cc.id ? 'selected' : ''}>${cc.nombre}</option>`)
+        .join('');
+
+    const modalHTML = `<h3 class="conta-title mb-4">Editar Usuario</h3>
+    <p class="text-sm text-[var(--color-text-secondary)] mb-6">Estás modificando el perfil para: <strong>${user.email}</strong></p>
+    <form onsubmit="ContaApp.guardarEdicionUsuario(event, '${userId}')" class="space-y-4 modal-form">
+        <div>
+            <label>Asignar Rol</label>
+            <select id="editar-rol" class="w-full p-2 mt-1" required>
+                ${rolesOptions}
+            </select>
+        </div>
+        <div>
+            <label>Asignar a Sucursal (Opcional)</label>
+            <select id="editar-centro-costo" class="w-full p-2 mt-1">
+                <option value="">Acceso General (Sin sucursal específica)</option>
+                ${centrosDeCostoOptions}
+            </select>
+        </div>
+        <div class="flex justify-end gap-2 mt-6">
+            <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button>
+            <button type="submit" class="conta-btn">Guardar Cambios</button>
+        </div>
+    </form>`;
+    this.showModal(modalHTML, 'xl');
+    // Asegurarse de que la opción correcta de centro de costo esté seleccionada
+    document.getElementById('editar-centro-costo').value = user.centroDeCostoId || '';
+},
+
+async guardarEdicionUsuario(e, userId) {
+    e.preventDefault();
+    const rol = document.getElementById('editar-rol').value;
+    const centroDeCostoId = document.getElementById('editar-centro-costo').value || null;
+
+    try {
+        const db = firebase.firestore();
+        await db.collection("usuarios").doc(userId).update({
+            rol: rol,
+            centroDeCostoId: centroDeCostoId
+        });
+        
+        this.closeModal();
+        this.irModulo('config', { submodulo: 'usuarios' });
+        this.showToast('Usuario actualizado con éxito.', 'success');
+    } catch (error) {
+        console.error("Error al actualizar usuario:", error);
+        this.showToast(`Error: ${error.message}`, 'error');
+    }
+},
+
+eliminarUsuario(userId) {
+    this.showConfirm(
+        "¿Estás seguro de que deseas eliminar a este usuario? Perderá el acceso a este workspace permanentemente. Esta acción no se puede deshacer.",
+        async () => {
+            try {
+                const db = firebase.firestore();
+                await db.collection("usuarios").doc(userId).delete();
+
+                // Nota: Esto elimina el acceso a nuestro sistema, pero no elimina la cuenta de Firebase Authentication.
+                // Una implementación más avanzada usaría Cloud Functions para eliminar también la cuenta de Auth.
+                
+                this.irModulo('config', { submodulo: 'usuarios' });
+                this.showToast('Usuario eliminado del workspace.', 'success');
+            } catch (error) {
+                console.error("Error al eliminar usuario:", error);
+                this.showToast(`Error: ${error.message}`, 'error');
+            }
+        }
+    );
 },
 });

@@ -90,19 +90,22 @@ Object.assign(ContaApp, {
             const unidad = this.findById(this.unidadesMedida, p.unidadMedidaId);
             const unidadDisplay = p.tipo === 'producto' ? (unidad ? unidad.nombre : 'N/A') : 'N/A';
 
+            // --- INICIO DE LA CORRECCIÓN ---
+            // Se asegura que los IDs de producto (que pueden ser UUIDs) se pasen como cadenas de texto.
             tableRowsHTML += `
-                <tr class="cursor-pointer hover:bg-[var(--color-bg-accent)] ${rowClass}" onclick="ContaApp.irModulo('inventario', { productoId: ${p.id} })">
+                <tr class="cursor-pointer hover:bg-[var(--color-bg-accent)] ${rowClass}" onclick="ContaApp.irModulo('inventario', { productoId: '${p.id}' })">
                     <td class="conta-table-td font-bold">${p.nombre} ${lowStockIcon}</td>
                     <td class="conta-table-td text-right font-mono">${stockDisplay}</td>
                     <td class="conta-table-td">${unidadDisplay}</td>
                     <td class="conta-table-td text-right font-mono">${this.formatCurrency(p.precio)}</td>
                     <td class="conta-table-td text-right font-mono">${this.formatCurrency(p.costo)}</td>
                     <td class="conta-table-td text-center" onclick="event.stopPropagation()">
-                        <button class="conta-btn-icon edit" title="Editar" onclick="ContaApp.abrirModalProducto(${p.id})"><i class="fa-solid fa-pencil"></i></button>
-                        ${p.tipo === 'producto' ? `<button class="conta-btn-icon" title="Ajustar Stock" onclick="ContaApp.abrirModalAjusteInventario(${p.id})"><i class="fa-solid fa-wrench"></i></button>` : ''}
-                        ${p.tipo === 'producto' ? `<button class="conta-btn conta-btn-small conta-btn-success ml-2" title="Vender este Producto" onclick="ContaApp.venderDesdeInventario(${p.id})">Vender</button>` : ''}
+                        <button class="conta-btn-icon edit" title="Editar" onclick="ContaApp.abrirModalProducto('${p.id}')"><i class="fa-solid fa-pencil"></i></button>
+                        ${p.tipo === 'producto' ? `<button class="conta-btn-icon" title="Ajustar Stock" onclick="ContaApp.abrirModalAjusteInventario('${p.id}')"><i class="fa-solid fa-wrench"></i></button>` : ''}
+                        ${p.tipo === 'producto' ? `<button class="conta-btn conta-btn-small conta-btn-success ml-2" title="Vender este Producto" onclick="ContaApp.venderDesdeInventario('${p.id}')">Vender</button>` : ''}
                     </td>
                 </tr>`;
+            // --- FIN DE LA CORRECCIÓN ---
         });
         
         html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
@@ -171,54 +174,63 @@ Object.assign(ContaApp, {
 
     document.getElementById('page-title-header').innerText = `Kardex de: ${producto.nombre}`;
     document.getElementById('page-actions-header').innerHTML = `
-        <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarReporteEstilizadoPDF('Kardex - ${producto.nombre}', 'reporte-kardex-area')">Imprimir PDF</button>
+        <button class.conta-btn conta-btn-accent" onclick="ContaApp.exportarReporteEstilizadoPDF('Kardex - ${producto.nombre}', 'reporte-kardex-area')">Imprimir PDF</button>
     `;
 
-    // 1. Recolectar todos los movimientos
     let movimientos = [];
     this.transacciones.forEach(t => {
-        if (t.tipo === 'compra_inventario' && t.estado !== 'Anulada') {
-            (t.items || []).forEach(item => {
-                if (item.productoId === productoId) movimientos.push({ fecha: t.fecha, detalle: `Compra s/f #${t.referencia || t.id}`, entrada: item.cantidad, salida: 0, costoUnitario: item.costoUnitario, asientoId: this.asientos.find(a => a.transaccionId === t.id)?.id });
-            });
-        } else if (t.tipo === 'venta' && t.estado !== 'Anulada') {
-            (t.items || []).forEach(item => {
-                if (item.itemType === 'producto' && item.productoId === productoId) movimientos.push({ fecha: t.fecha, detalle: `Venta s/f #${t.numeroFactura || t.id}`, entrada: 0, salida: item.cantidad, costoUnitario: item.costo, asientoId: this.asientos.find(a => a.transaccionId === t.id && a.descripcion.includes('Costo de venta'))?.id });
-            });
-        } else if (t.tipo === 'ajuste_inventario' && t.productoId === productoId) {
-             movimientos.push({ fecha: t.fecha, detalle: `Ajuste: ${t.descripcion}`, entrada: t.tipoAjuste === 'entrada' ? t.cantidad : 0, salida: t.tipoAjuste === 'salida' ? t.cantidad : 0, costoUnitario: t.costo, asientoId: this.asientos.find(a => a.transaccionId === t.id)?.id });
+        const fechaMovimiento = t.fechaCompletada || t.fecha;
+        // --- INICIO DE LA CORRECCIÓN: Añadir "entrada_produccion" a la lista de tipos válidos ---
+        if (['compra_inventario', 'venta', 'ajuste_inventario', 'salida_produccion', 'entrada_produccion'].includes(t.tipo) && t.estado !== 'Anulada') {
+            
+            if (t.tipo === 'ajuste_inventario' && t.productoId == productoId) {
+                const entrada = t.tipoAjuste === 'entrada' ? t.cantidad : 0;
+                const salida = t.tipoAjuste === 'salida' ? t.cantidad : 0;
+                movimientos.push({ fecha: fechaMovimiento, detalle: t.descripcion, entrada, salida, costoUnitario: t.costo });
+            } else if (t.items) {
+                (t.items).forEach(item => {
+                    if (item.productoId == productoId) {
+                        let entrada = 0, salida = 0, detalle = '', costoUnitario = 0;
+                        
+                        if (t.tipo === 'compra_inventario') {
+                            entrada = item.cantidad;
+                            detalle = t.descripcion || `Compra s/f #${t.referencia || t.id}`;
+                            costoUnitario = item.costoUnitario || item.costo;
+                        } else if (t.tipo === 'venta') {
+                            salida = item.cantidad;
+                            detalle = `Venta s/f #${t.numeroFactura || t.id}`;
+                            costoUnitario = item.costo;
+                        } else if (t.tipo === 'salida_produccion') {
+                            salida = item.cantidad;
+                            detalle = t.descripcion;
+                            costoUnitario = item.costo;
+                        // --- INICIO DE LA CORRECCIÓN: Añadir la lógica para la nueva transacción ---
+                        } else if (t.tipo === 'entrada_produccion') {
+                            entrada = item.cantidad;
+                            detalle = t.descripcion;
+                            costoUnitario = item.costoUnitario;
+                        }
+                        // --- FIN DE LA CORRECCIÓN ---
+                        movimientos.push({ fecha: fechaMovimiento, detalle, entrada, salida, costoUnitario });
+                    }
+                });
+            }
         }
     });
-
-    // 2. Ordenar cronológicamente
+    
     movimientos.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
-    // 3. Calcular Saldo Inicial trabajando hacia atrás desde el stock actual
-    const stockActual = producto.stock || 0;
-    const cambioNeto = movimientos.reduce((acc, mov) => acc + mov.entrada - mov.salida, 0);
-    const saldoInicial = stockActual - cambioNeto;
-    
-    // 4. Construir la tabla del Kardex
-    let saldoCorriente = saldoInicial;
-    let valorCorriente = saldoInicial * (producto.costo || 0); // Asumimos un costo promedio para el valor inicial
-    let costoPromedio = producto.costo || 0;
-
-    let filasHTML = `
-        <tr class="bg-[var(--color-bg-accent)] font-bold">
-            <td class="conta-table-td" colspan="2">SALDO INICIAL</td>
-            <td class="conta-table-td text-right font-mono"></td>
-            <td class="conta-table-td text-right font-mono"></td>
-            <td class="conta-table-td text-right font-mono">${saldoInicial}</td>
-            <td class="conta-table-td text-right font-mono"></td>
-            <td class="conta-table-td text-right font-mono">${this.formatCurrency(valorCorriente)}</td>
-        </tr>`;
+    let filasHTML = '';
+    let saldoCorriente = 0;
+    let valorCorriente = 0;
+    let costoPromedio = 0;
 
     movimientos.forEach(mov => {
         const totalEntrada = mov.entrada * mov.costoUnitario;
-        const totalSalida = mov.salida * costoPromedio;
+        const totalSalida = mov.salida * costoPromedio; 
         
-        valorCorriente += totalEntrada - totalSalida;
         saldoCorriente += mov.entrada - mov.salida;
+        valorCorriente += totalEntrada - totalSalida;
         costoPromedio = saldoCorriente > 0 ? valorCorriente / saldoCorriente : 0;
         
         filasHTML += `
@@ -234,25 +246,8 @@ Object.assign(ContaApp, {
         `;
     });
 
-    const html = `
-        <div class="conta-card overflow-auto" id="reporte-kardex-area">
-            <table class="min-w-full text-sm conta-table-zebra">
-                <thead>
-                    <tr>
-                        <th class="conta-table-th">Fecha</th>
-                        <th class="conta-table-th">Detalle</th>
-                        <th class="conta-table-th text-right">Entrada</th>
-                        <th class="conta-table-th text-right">Salida</th>
-                        <th class="conta-table-th text-right">Saldo (Stock)</th>
-                        <th class="conta-table-th text-right">Costo Unitario</th>
-                        <th class="conta-table-th text-right">Valor Total</th>
-                    </tr>
-                </thead>
-                <tbody>${filasHTML}</tbody>
-            </table>
-        </div>`;
-
-    document.getElementById('inventario').innerHTML = html;
+    const html = `<div class="conta-card overflow-auto" id="reporte-kardex-area">... (resto del HTML igual) ...</div>`;
+    document.getElementById('inventario').innerHTML = html.replace('... (resto del HTML igual) ...', `<table class="min-w-full text-sm conta-table-zebra"><thead><tr><th class="conta-table-th">Fecha</th><th class="conta-table-th">Detalle</th><th class="conta-table-th text-right">Entrada</th><th class="conta-table-th text-right">Salida</th><th class="conta-table-th text-right">Saldo (Stock)</th><th class="conta-table-th text-right">Costo Unitario</th><th class="conta-table-th text-right">Valor Total</th></tr></thead><tbody>${filasHTML}</tbody></table>`);
 },
 
     generarReporteKardex() {
@@ -470,49 +465,57 @@ Object.assign(ContaApp, {
         }
     },
     abrirModalAjusteInventario(productoId) {
-        const producto = this.findById(this.productos, productoId);
-        if(!producto || producto.tipo !== 'producto') {
-            this.showToast('Solo se puede ajustar el stock de productos.', 'error');
-            return;
-        }
+    const producto = this.findById(this.productos, productoId);
+    if(!producto || producto.tipo !== 'producto') {
+        this.showToast('Solo se puede ajustar el stock de productos.', 'error');
+        return;
+    }
 
-        const cuentasContrapartidaOptions = this.planDeCuentas
-            .filter(c => c.tipo === 'DETALLE' && (c.codigo.startsWith('5') || c.codigo.startsWith('3') || c.codigo.startsWith('1'))) // Gastos, Patrimonio, otros Activos
-            .sort((a,b) => a.codigo.localeCompare(b.codigo, undefined, {numeric: true}))
-            .map(c => `<option value="${c.id}" ${c.codigo.includes('510.3') ? 'selected' : ''}>${c.codigo} - ${c.nombre}</option>`).join('');
+    // --- INICIO DE LA CORRECCIÓN ---
+    // Se ha modificado el filtro para incluir las cuentas de GASTO (código '6').
+    const cuentasContrapartidaOptions = this.planDeCuentas
+        .filter(c => c.tipo === 'DETALLE' && (c.codigo.startsWith('1') || c.codigo.startsWith('3') || c.codigo.startsWith('5') || c.codigo.startsWith('6')))
+        .sort((a,b) => a.codigo.localeCompare(b.codigo, undefined, {numeric: true}))
+        // Se ha corregido la cuenta preseleccionada a la de "Merma de Inventario" (ID 61003).
+        .map(c => `<option value="${c.id}" ${c.id === 61003 ? 'selected' : ''}>${c.codigo} - ${c.nombre}</option>`).join('');
+    // --- FIN DE LA CORRECCIÓN ---
 
-        const modalHTML = `<h3 class="conta-title mb-4">Ajuste de Inventario</h3>
-        <p class="mb-2"><strong>Producto:</strong> ${producto.nombre}</p>
-        <p class="mb-6 text-[var(--color-text-secondary)]"><strong>Stock Actual:</strong> ${producto.stock} unidades</p>
-        <form onsubmit="ContaApp.guardarAjusteInventario(event, ${productoId})" class="space-y-4 modal-form">
-            <div>
-                <label for="ajuste-tipo">Tipo de Ajuste</label>
-                <select id="ajuste-tipo" class="w-full conta-input mt-1">
-                    <option value="salida">Salida (Merma / Pérdida)</option>
-                    <option value="entrada">Entrada (Compra / Corrección)</option>
-                </select>
-            </div>
-            <div>
-                <label for="ajuste-cantidad">Cantidad a ajustar</label>
-                <input type="number" id="ajuste-cantidad" class="w-full conta-input mt-1" min="1" required>
-            </div>
-            <div>
-                <label for="ajuste-cuenta-contrapartida">Cuenta de Contrapartida</label>
-                <select id="ajuste-cuenta-contrapartida" class="w-full conta-input mt-1" required>${cuentasContrapartidaOptions}</select>
-            </div>
-             <div>
-                <label for="ajuste-fecha">Fecha del Ajuste</label>
-                <input type="date" id="ajuste-fecha" value="${this.getTodayDate()}" class="w-full conta-input mt-1" required>
-            </div>
-            <div class="flex justify-end gap-2 mt-6">
-                <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button>
-                <button type="submit" class="conta-btn">Confirmar Ajuste</button>
-            </div>
-        </form>`;
-        this.showModal(modalHTML, 'xl');
-    },
+    const modalHTML = `<h3 class="conta-title mb-4">Ajuste de Inventario</h3>
+    <p class="mb-2"><strong>Producto:</strong> ${producto.nombre}</p>
+    <p class="mb-6 text-[var(--color-text-secondary)]"><strong>Stock Actual:</strong> ${producto.stock} unidades</p>
+    <form onsubmit="ContaApp.guardarAjusteInventario(event, '${producto.id}')" class="space-y-4 modal-form">
+        <div>
+            <label for="ajuste-tipo">Tipo de Ajuste</label>
+            <select id="ajuste-tipo" class="w-full conta-input mt-1">
+                <option value="salida">Salida (Merma / Pérdida)</option>
+                <option value="entrada">Entrada (Corrección)</option>
+            </select>
+        </div>
+        <div>
+            <label for="ajuste-cantidad">Cantidad a ajustar</label>
+            <input type="number" id="ajuste-cantidad" class="w-full conta-input mt-1" min="1" required>
+        </div>
+        <div>
+            <label for="ajuste-cuenta-contrapartida">Cuenta de Contrapartida</label>
+            <select id="ajuste-cuenta-contrapartida" class="w-full conta-input mt-1" required>${cuentasContrapartidaOptions}</select>
+        </div>
+         <div>
+            <label for="ajuste-fecha">Fecha del Ajuste</label>
+            <input type="date" id="ajuste-fecha" value="${this.getTodayDate()}" class="w-full conta-input mt-1" required>
+        </div>
+        <div class="flex justify-end gap-2 mt-6">
+            <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button>
+            <button type="submit" class="conta-btn">Confirmar Ajuste</button>
+        </div>
+    </form>`;
+    this.showModal(modalHTML, 'xl');
+},
             async guardarAjusteInventario(e, productoId) {
-        e.preventDefault();
+    e.preventDefault();
+    const submitButton = e.target.querySelector('button[type="submit"]');
+    this.toggleButtonLoading(submitButton, true);
+
+    try {
         const producto = this.findById(this.productos, productoId);
         const tipoAjuste = document.getElementById('ajuste-tipo').value;
         const cantidad = parseFloat(document.getElementById('ajuste-cantidad').value);
@@ -520,78 +523,73 @@ Object.assign(ContaApp, {
         const fecha = document.getElementById('ajuste-fecha').value;
 
         if (isNaN(cantidad) || cantidad <= 0) {
-            this.showToast('La cantidad a ajustar debe ser un número positivo.', 'error');
-            return;
+            throw new Error('La cantidad a ajustar debe ser un número positivo.');
         }
-        
+
         if (tipoAjuste === 'salida' && cantidad > producto.stock) {
-            this.showToast('La cantidad a dar de baja no puede ser mayor al stock actual.', 'error');
-            return;
+            throw new Error('La cantidad a dar de baja no puede ser mayor al stock actual.');
         }
 
-        // --- INICIO DE LA REFACTORIZACIÓN ---
-        // 1. Preparamos los cambios en copias temporales
-        const productosCopia = JSON.parse(JSON.stringify(this.productos));
-        const transaccionesCopia = JSON.parse(JSON.stringify(this.transacciones));
-        const asientosCopia = JSON.parse(JSON.stringify(this.asientos));
-        const idCounterCopia = this.idCounter + 1;
-
-        const productoCopia = productosCopia.find(p => p.id === productoId);
-        const valorAjuste = cantidad * productoCopia.costo;
+        const valorAjuste = cantidad * producto.costo;
         let descripcionAsiento, movimientos;
 
+        // 1. Modificar el estado local del stock
         if (tipoAjuste === 'entrada') {
-            productoCopia.stock += cantidad;
-            descripcionAsiento = `Ajuste de entrada de inventario: ${cantidad} x ${productoCopia.nombre}`;
+            producto.stock += cantidad;
+            descripcionAsiento = `Ajuste de entrada de inventario: ${cantidad} x ${producto.nombre}`;
             movimientos = [
-                { cuentaId: productoCopia.cuentaInventarioId, debe: valorAjuste, haber: 0 },
+                { cuentaId: producto.cuentaInventarioId, debe: valorAjuste, haber: 0 },
                 { cuentaId: cuentaContrapartidaId, debe: 0, haber: valorAjuste }
             ];
         } else { // Salida
-            productoCopia.stock -= cantidad;
-            descripcionAsiento = `Ajuste de salida (merma) de inventario: ${cantidad} x ${productoCopia.nombre}`;
+            producto.stock -= cantidad;
+            descripcionAsiento = `Ajuste de salida (merma) de inventario: ${cantidad} x ${producto.nombre}`;
             movimientos = [
                 { cuentaId: cuentaContrapartidaId, debe: valorAjuste, haber: 0 },
-                { cuentaId: productoCopia.cuentaInventarioId, debe: 0, haber: valorAjuste }
+                { cuentaId: producto.cuentaInventarioId, debe: 0, haber: valorAjuste }
             ];
         }
-        
+
+        // 2. Crear la transacción de ajuste
         const transaccionAjuste = {
-            id: this.idCounter, tipo: 'ajuste_inventario', fecha, productoId,
-            cantidad, costo: productoCopia.costo, tipoAjuste, descripcion: descripcionAsiento
+            id: this.generarUUID(), // Usando UUID
+            tipo: 'ajuste_inventario',
+            fecha,
+            productoId,
+            cantidad,
+            costo: producto.costo,
+            tipoAjuste,
+            descripcion: descripcionAsiento
         };
-        transaccionesCopia.push(transaccionAjuste);
+        this.transacciones.push(transaccionAjuste);
+
+        // 3. Crear el asiento contable (que también se añade a this.asientos)
+        const asiento = this.crearAsiento(fecha, descripcionAsiento, movimientos, transaccionAjuste.id);
         
-        const asiento = { 
-            id: idCounterCopia, fecha: fecha, descripcion: descripcionAsiento, 
-            movimientos: movimientos, transaccionId: transaccionAjuste.id 
-        };
-        asientosCopia.push(asiento);
-
-        try {
-            // 2. Intentamos guardar todo en el repositorio PRIMERO.
-            await this.repository.actualizarMultiplesDatos({
-                productos: productosCopia,
-                transacciones: transaccionesCopia,
-                asientos: asientosCopia,
-                idCounter: idCounterCopia + 1
-            });
-
-            // 3. SOLO SI tiene éxito, actualizamos el estado local.
-            this.productos = productosCopia;
-            this.transacciones = transaccionesCopia;
-            this.asientos = asientosCopia;
-            this.idCounter = idCounterCopia + 1;
-            
-            this.closeModal();
-            this.irModulo('inventario');
-            this.showToast('Ajuste de inventario registrado con éxito.', 'success');
-        } catch (error) {
-            console.error("Error al guardar ajuste de inventario:", error);
-            this.showToast(`Error al guardar: ${error.message}`, 'error');
+        if (!asiento) {
+            // Revertir los cambios locales si la creación del asiento falla
+            if (tipoAjuste === 'entrada') {
+                producto.stock -= cantidad;
+            } else {
+                producto.stock += cantidad;
+            }
+            this.transacciones.pop();
+            throw new Error("No se pudo generar el asiento contable para el ajuste.");
         }
-        // --- FIN DE LA REFACTORIZACIÓN ---
-    },
+
+        // 4. Guardar todo el estado actualizado de la aplicación
+        await this.saveAll();
+
+        this.closeModal();
+        this.irModulo('inventario');
+        this.showToast('Ajuste de inventario registrado con éxito.', 'success');
+    } catch (error) {
+        console.error("Error al guardar ajuste de inventario:", error);
+        this.showToast(`Error al guardar: ${error.message}`, 'error');
+    } finally {
+        this.toggleButtonLoading(submitButton, false);
+    }
+},
     exportarInventarioCSV() {
         const dataParaExportar = this.productos.map(p => ({
             'Nombre': p.nombre,

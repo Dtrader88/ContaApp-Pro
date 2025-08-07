@@ -20,82 +20,85 @@ Object.assign(ContaApp, {
         }
     },
     renderProduccion_TabOrdenes(params = {}) {
-        document.getElementById('page-actions-header').innerHTML = `
-            <button class="conta-btn" onclick="ContaApp.abrirModalOrdenProduccion()">+ Nueva Orden de Producción</button>
-        `;
+    document.getElementById('page-actions-header').innerHTML = `
+        <button class="conta-btn" onclick="ContaApp.abrirModalOrdenProduccion()">+ Nueva Orden de Producción</button>
+    `;
 
-        let html;
-        const ordenes = this.ordenesProduccion || [];
+    let html;
+    const ordenes = this.ordenesProduccion || [];
 
-        if (ordenes.length === 0) {
-            html = this.generarEstadoVacioHTML(
-                'fa-cogs', 'Aún no tienes Órdenes de Producción',
-                'Crea tu primera orden para registrar la fabricación de un producto terminado.',
-                '+ Crear Primera Orden', "ContaApp.abrirModalOrdenProduccion()"
-            );
-        } else {
-            const { currentPage, perPage } = this.getPaginationState('produccion');
-            const startIndex = (currentPage - 1) * perPage;
-            const endIndex = startIndex + perPage;
+    if (ordenes.length === 0) {
+        html = this.generarEstadoVacioHTML(
+            'fa-cogs', 'Aún no tienes Órdenes de Producción',
+            'Crea tu primera orden para registrar la fabricación de un producto terminado.',
+            '+ Crear Primera Orden', "ContaApp.abrirModalOrdenProduccion()"
+        );
+    } else {
+        const { currentPage, perPage } = this.getPaginationState('produccion');
+        const startIndex = (currentPage - 1) * perPage;
+        const endIndex = startIndex + perPage;
 
-            const ordenesOrdenadas = ordenes.sort((a,b) => new Date(b.fecha) - new Date(a.fecha) || b.id - a.id);
-            const itemsParaMostrar = ordenesOrdenadas.slice(startIndex, endIndex);
-            
-            let tableRows = '';
-            itemsParaMostrar.forEach(orden => {
-                const productoFinal = this.findById(this.productos, orden.productoTerminadoId);
-                let estadoTag;
-                let accionesHTML;
-
-                if (orden.estado === 'Pendiente') {
-                    estadoTag = `<span class="tag tag-warning">Pendiente</span>`;
-                    accionesHTML = `
-                        <button class="conta-btn conta-btn-small conta-btn-success" title="Completar Producción" onclick="ContaApp.completarOrdenProduccion(${orden.id})"><i class="fa-solid fa-play"></i> Completar</button>
-                        <button class="conta-btn-icon edit" title="Editar Orden" onclick="ContaApp.abrirModalOrdenProduccion(${orden.id})"><i class="fa-solid fa-pencil"></i></button>
-                        <button class="conta-btn-icon delete" title="Cancelar Orden" onclick="ContaApp.cancelarOrdenProduccion(${orden.id})"><i class="fa-solid fa-ban"></i></button>
-                    `;
-                } else { // Completada
-                    estadoTag = `<span class="tag tag-success">Completada</span>`;
-                    accionesHTML = `
-                        <button class="conta-btn-icon" title="Ver Detalle" onclick="ContaApp.abrirModalDetalleOrdenProduccion(${orden.id})"><i class="fa-solid fa-eye"></i></button>
-                        <button class="conta-btn-icon edit" title="Duplicar Orden" onclick="ContaApp.abrirModalOrdenProduccion(null, ${orden.id})"><i class="fa-solid fa-copy"></i></button>
-                    `;
-                }
-
-                tableRows += `
-                    <tr>
-                        <td class="conta-table-td">${orden.fecha}</td>
-                        <td class="conta-table-td font-mono">${orden.numero}</td>
-                        <td class="conta-table-td">${orden.descripcion}</td>
-                        <td class="conta-table-td font-bold">${productoFinal?.nombre || 'N/A'}</td>
-                        <td class="conta-table-td text-right font-mono">${orden.cantidadProducida}</td>
-                        <td class="conta-table-td text-right font-mono">${this.formatCurrency(orden.costoTotal)}</td>
-                        <td class="conta-table-td">${estadoTag}</td>
-                        <td class="conta-table-td text-center">${accionesHTML}</td>
-                    </tr>
-                `;
-            });
-
-            html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
-                <thead>
-                    <tr>
-                        <th class="conta-table-th">Fecha</th>
-                        <th class="conta-table-th">Orden #</th>
-                        <th class="conta-table-th">Descripción</th>
-                        <th class="conta-table-th">Producto Final</th>
-                        <th class="conta-table-th text-right">Cantidad</th>
-                        <th class="conta-table-th text-right">Costo Proyectado</th>
-                        <th class="conta-table-th">Estado</th>
-                        <th class="conta-table-th text-center">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>${tableRows}</tbody></table></div>`;
-            
-            this.renderPaginationControls('produccion', ordenes.length);
-        }
+        const ordenesOrdenadas = ordenes.sort((a,b) => new Date(b.fecha) - new Date(a.fecha)); // El sort por ID numérico ya no es fiable
+        const itemsParaMostrar = ordenesOrdenadas.slice(startIndex, endIndex);
         
-        document.getElementById('produccion-contenido').innerHTML = html;
-    },
+        let tableRows = '';
+        itemsParaMostrar.forEach(orden => {
+            const productoFinal = this.findById(this.productos, orden.productoTerminadoId);
+            let estadoTag;
+            let accionesHTML;
+
+            // --- INICIO DE LA CORRECCIÓN ---
+            // Se han añadido comillas simples ('') alrededor de ${orden.id} en todas las llamadas onclick.
+            if (orden.estado === 'Pendiente') {
+                estadoTag = `<span class="tag tag-warning">Pendiente</span>`;
+                accionesHTML = `
+                    <button class="conta-btn conta-btn-small conta-btn-success" title="Completar Producción" onclick="ContaApp.completarOrdenProduccion('${orden.id}')"><i class="fa-solid fa-play"></i> Completar</button>
+                    <button class="conta-btn-icon edit" title="Editar Orden" onclick="ContaApp.abrirModalOrdenProduccion('${orden.id}')"><i class="fa-solid fa-pencil"></i></button>
+                    <button class="conta-btn-icon delete" title="Cancelar Orden" onclick="ContaApp.cancelarOrdenProduccion('${orden.id}')"><i class="fa-solid fa-ban"></i></button>
+                `;
+            } else { // Completada
+                estadoTag = `<span class="tag tag-success">Completada</span>`;
+                accionesHTML = `
+                    <button class="conta-btn-icon" title="Ver Detalle" onclick="ContaApp.abrirModalDetalleOrdenProduccion('${orden.id}')"><i class="fa-solid fa-eye"></i></button>
+                    <button class="conta-btn-icon edit" title="Duplicar Orden" onclick="ContaApp.abrirModalOrdenProduccion(null, '${orden.id}')"><i class="fa-solid fa-copy"></i></button>
+                `;
+            }
+            // --- FIN DE LA CORRECCIÓN ---
+
+            tableRows += `
+                <tr>
+                    <td class="conta-table-td">${orden.fecha}</td>
+                    <td class="conta-table-td font-mono">${orden.numero}</td>
+                    <td class="conta-table-td">${orden.descripcion}</td>
+                    <td class="conta-table-td font-bold">${productoFinal?.nombre || 'N/A'}</td>
+                    <td class="conta-table-td text-right font-mono">${orden.cantidadProducida}</td>
+                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(orden.costoTotal)}</td>
+                    <td class="conta-table-td">${estadoTag}</td>
+                    <td class="conta-table-td text-center">${accionesHTML}</td>
+                </tr>
+            `;
+        });
+
+        html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
+            <thead>
+                <tr>
+                    <th class="conta-table-th">Fecha</th>
+                    <th class="conta-table-th">Orden #</th>
+                    <th class="conta-table-th">Descripción</th>
+                    <th class="conta-table-th">Producto Final</th>
+                    <th class="conta-table-th text-right">Cantidad</th>
+                    <th class="conta-table-th text-right">Costo Proyectado</th>
+                    <th class="conta-table-th">Estado</th>
+                    <th class="conta-table-th text-center">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>${tableRows}</tbody></table></div>`;
+        
+        this.renderPaginationControls('produccion', ordenes.length);
+    }
+    
+    document.getElementById('produccion-contenido').innerHTML = html;
+},
     abrirModalOrdenProduccion(id = null, duplicarId = null) {
     const ordenOriginal = duplicarId ? this.findById(this.ordenesProduccion, duplicarId) : (id ? this.findById(this.ordenesProduccion, id) : {});
     const isEditing = id !== null && !duplicarId;
@@ -167,225 +170,237 @@ Object.assign(ContaApp, {
     agregarComponenteOP(componente = {}) {
     const container = document.getElementById('op-componentes-container');
     
-    // --- MEJORA CLAVE: Filtramos solo productos categorizados como Materias Primas (ID 13002) ---
     const materiasPrimasOptions = this.productos
         .filter(p => p.cuentaInventarioId === 13002) 
-        .map(p => `<option value="${p.id}" ${componente.productoId === p.id ? 'selected' : ''}>${p.nombre}</option>`)
+        .map(p => {
+            const unidad = this.findById(this.unidadesMedida, p.unidadMedidaId);
+            // Agregamos la unidad al nombre para mayor claridad
+            const nombreMostrado = unidad ? `${p.nombre} (${unidad.nombre})` : p.nombre;
+            return `<option value="${p.id}" ${componente.productoId === p.id ? 'selected' : ''}>${nombreMostrado}</option>`;
+        })
         .join('');
 
+    // --- INICIO DE LA CORRECCIÓN: Diseño de fila simplificado ---
+    // Se eliminan los campos de unidad y costo.
     const itemHTML = `
-        <div class="grid grid-cols-12 gap-2 items-center dynamic-row">
-            <div class="col-span-6">
-                <select class="w-full conta-input op-componente-id" onchange="ContaApp.actualizarUnidadMedidaOP(this)" required>
+        <div class="grid grid-cols-12 gap-4 items-center dynamic-row">
+            <div class="col-span-8">
+                <select class="w-full conta-input op-componente-id" required>
                     <option value="">-- Selecciona una materia prima --</option>
                     ${materiasPrimasOptions}
                 </select>
             </div>
-            <div class="col-span-2">
-                 <input type="number" step="any" class="w-full conta-input text-right op-componente-cantidad" placeholder="Cantidad" value="${componente.cantidad || ''}" required>
-            </div>
             <div class="col-span-3">
-                <input type="text" class="w-full conta-input bg-gray-100 dark:bg-gray-700 op-componente-unidad-display" readonly>
+                 <input type="number" step="any" class="w-full conta-input text-right op-componente-cantidad" placeholder="Cantidad a usar" value="${componente.cantidad || ''}" required>
             </div>
             <button type="button" class="col-span-1 conta-btn-icon delete" onclick="this.closest('.dynamic-row').remove()">🗑️</button>
         </div>
     `;
-    container.insertAdjacentHTML('beforeend', itemHTML);
+    // --- FIN DE LA CORRECCIÓN ---
 
-    const nuevaFila = container.querySelector('.dynamic-row:last-child');
-    if (nuevaFila) {
-        this.actualizarUnidadMedidaOP(nuevaFila.querySelector('.op-componente-id'));
+    container.insertAdjacentHTML('beforeend', itemHTML);
+},
+
+    async guardarOrdenProduccion(e, id = null) {
+    e.preventDefault();
+    const isEditing = id !== null;
+    const submitButton = e.target.querySelector('button[type="submit"]');
+    this.toggleButtonLoading(submitButton, true);
+
+    try {
+        const descripcion = document.getElementById('op-descripcion').value;
+        const fecha = document.getElementById('op-fecha').value;
+        let productoTerminadoId = document.getElementById('op-producto-terminado-id').value;
+        const productoFinalNombre = document.getElementById('op-producto-terminado-input').value.trim();
+        const cantidadProducida = parseFloat(document.getElementById('op-cantidad-producir').value);
+        const unidadMedidaId = parseInt(document.getElementById('op-producto-unidad-medida').value);
+
+        let productoFueCreado = false;
+        if (!productoTerminadoId) {
+            if (!productoFinalNombre) throw new Error('Debes especificar el nombre del producto final a fabricar.');
+            
+            let productoExistente = this.productos.find(p => p.nombre.toLowerCase() === productoFinalNombre.toLowerCase());
+            if (productoExistente) {
+                productoTerminadoId = productoExistente.id;
+            } else {
+                const nuevoProducto = {
+                    id: this.generarUUID(),
+                    nombre: productoFinalNombre,
+                    tipo: 'producto',
+                    stock: 0, costo: 0, precio: 0,
+                    unidadMedidaId: unidadMedidaId,
+                    cuentaIngresoId: 41002,
+                    cuentaInventarioId: 13004
+                };
+                this.productos.push(nuevoProducto);
+                productoTerminadoId = nuevoProducto.id;
+                productoFueCreado = true;
+                this.showToast(`Producto "${productoFinalNombre}" creado en el inventario.`, 'info');
+            }
+        }
+
+        const componentes = [];
+        document.querySelectorAll('#op-componentes-container .dynamic-row').forEach(row => {
+            // --- INICIO DE LA CORRECCIÓN ---
+            // Se elimina parseInt para que acepte tanto IDs numéricos antiguos como UUIDs de texto nuevos.
+            const productoId = row.querySelector('.op-componente-id').value;
+            // --- FIN DE LA CORRECCIÓN ---
+            const cantidad = parseFloat(row.querySelector('.op-componente-cantidad').value);
+            if (productoId && cantidad > 0) {
+                componentes.push({ productoId, cantidad });
+            }
+        });
+
+        if (!productoTerminadoId || componentes.length === 0 || !cantidadProducida || cantidadProducida <= 0) {
+            throw new Error('Debes completar todos los campos de la orden con valores válidos.');
+        }
+        
+        let costoTotalProyectado = 0;
+        for (const comp of componentes) {
+            const materiaPrima = this.findById(this.productos, comp.productoId);
+            costoTotalProyectado += (materiaPrima.costo || 0) * comp.cantidad;
+        }
+
+        if (isEditing) {
+            const ordenExistente = this.findById(this.ordenesProduccion, id);
+            if (ordenExistente) {
+                Object.assign(ordenExistente, {
+                    descripcion, fecha, productoTerminadoId, cantidadProducida, 
+                    productoFinalNombre, componentes, costoTotal: costoTotalProyectado
+                });
+            }
+        } else {
+            const nuevaOrden = {
+                id: this.generarUUID(),
+                numero: `OP-${this.generarUUID().substring(0, 8)}`,
+                descripcion, fecha, productoTerminadoId, cantidadProducida, productoFinalNombre,
+                componentes,
+                costoTotal: costoTotalProyectado,
+                estado: 'Pendiente'
+            };
+            this.ordenesProduccion.push(nuevaOrden);
+        }
+        
+        await this.saveAll();
+
+        this.closeModal();
+        this.irModulo('produccion');
+        this.showToast(`Orden de Producción ${isEditing ? 'actualizada' : 'planificada'} con éxito.`, 'success');
+
+    } catch(error) {
+        this.showToast(error.message, 'error');
+        console.error("Error al guardar la orden de producción:", error);
+    } finally {
+        this.toggleButtonLoading(submitButton, false);
     }
 },
-    actualizarUnidadMedidaOP(selectProducto) {
-        const fila = selectProducto.closest('.dynamic-row');
-        const productoId = parseInt(selectProducto.value);
-        const producto = this.findById(this.productos, productoId);
-        const unidadDisplay = fila.querySelector('.op-componente-unidad-display');
-
-        if (producto) {
-            const unidad = this.findById(this.unidadesMedida, producto.unidadMedidaId);
-            unidadDisplay.value = unidad ? unidad.nombre : 'N/A';
-        } else {
-            unidadDisplay.value = '';
-        }
-    },
-
-            async guardarOrdenProduccion(e, id = null) {
-        e.preventDefault();
-        const isEditing = id !== null;
-
-        try {
-            const descripcion = document.getElementById('op-descripcion').value;
-            const fecha = document.getElementById('op-fecha').value;
-            let productoTerminadoId = parseInt(document.getElementById('op-producto-terminado-id').value);
-            const productoFinalNombre = document.getElementById('op-producto-terminado-input').value.trim();
-            const cantidadProducida = parseFloat(document.getElementById('op-cantidad-producir').value);
-            const unidadMedidaId = parseInt(document.getElementById('op-producto-unidad-medida').value);
-
-            let productoFueCreado = false;
-            if (isNaN(productoTerminadoId)) {
-                if (!productoFinalNombre) throw new Error('Debes especificar el nombre del producto final a fabricar.');
-                
-                let productoExistente = this.productos.find(p => p.nombre.toLowerCase() === productoFinalNombre.toLowerCase());
-                if (productoExistente) {
-                    productoTerminadoId = productoExistente.id;
-                } else {
-                    const nuevoProducto = {
-                        id: this.idCounter++,
-                        nombre: productoFinalNombre,
-                        tipo: 'producto',
-                        stock: 0, costo: 0, precio: 0,
-                        unidadMedidaId: unidadMedidaId,
-                        cuentaIngresoId: 41002,
-                        cuentaInventarioId: 13004
-                    };
-                    this.productos.push(nuevoProducto);
-                    productoTerminadoId = nuevoProducto.id;
-                    productoFueCreado = true;
-                    this.showToast(`Producto "${productoFinalNombre}" creado en el inventario.`, 'info');
-                }
-            }
-
-            const componentes = [];
-            document.querySelectorAll('#op-componentes-container .dynamic-row').forEach(row => {
-                const productoId = parseInt(row.querySelector('.op-componente-id').value);
-                const cantidad = parseFloat(row.querySelector('.op-componente-cantidad').value);
-                if (productoId && cantidad > 0) {
-                    componentes.push({ productoId, cantidad });
-                }
-            });
-
-            if (!productoTerminadoId || componentes.length === 0 || !cantidadProducida || cantidadProducida <= 0) {
-                throw new Error('Debes completar todos los campos de la orden con valores válidos.');
-            }
-            
-            let costoTotalProyectado = 0;
-            for (const comp of componentes) {
-                const materiaPrima = this.findById(this.productos, comp.productoId);
-                costoTotalProyectado += (materiaPrima.costo || 0) * comp.cantidad;
-            }
-
-            if (isEditing) {
-                const ordenExistente = this.findById(this.ordenesProduccion, id);
-                if (ordenExistente) {
-                    Object.assign(ordenExistente, {
-                        descripcion, fecha, productoTerminadoId, cantidadProducida, 
-                        productoFinalNombre, componentes, costoTotal: costoTotalProyectado
-                    });
-                }
-            } else {
-                const nuevaOrden = {
-                    id: this.idCounter++,
-                    numero: `OP-${this.idCounter}`,
-                    descripcion, fecha, productoTerminadoId, cantidadProducida, productoFinalNombre,
-                    componentes,
-                    costoTotal: costoTotalProyectado,
-                    estado: 'Pendiente'
-                };
-                this.ordenesProduccion.push(nuevaOrden);
-            }
-
-            // --- INICIO DE LA REFACTORIZACIÓN ---
-            const datosParaActualizar = {
-                ordenesProduccion: this.ordenesProduccion,
-                idCounter: this.idCounter
-            };
-            // Si creamos un producto nuevo, también debemos persistir el array de productos.
-            if (productoFueCreado) {
-                datosParaActualizar.productos = this.productos;
-            }
-            await this.repository.actualizarMultiplesDatos(datosParaActualizar);
-            // --- FIN DE LA REFACTORIZACIÓN ---
-
-            this.closeModal();
-            this.irModulo('produccion');
-            this.showToast(`Orden de Producción ${isEditing ? 'actualizada' : 'planificada'} con éxito.`, 'success');
-
-        } catch(error) {
-            this.showToast(error.message, 'error');
-            console.error("Error al guardar la orden de producción:", error);
-        }
-    },
 
         completarOrdenProduccion(ordenId) {
-        const orden = this.findById(this.ordenesProduccion, ordenId);
-        if (!orden) {
-            this.showToast('Error: Orden de producción no encontrada.', 'error');
-            return;
-        }
+    const orden = this.findById(this.ordenesProduccion, ordenId);
+    if (!orden) {
+        this.showToast('Error: Orden de producción no encontrada.', 'error');
+        return;
+    }
 
-        this.showConfirm(
-            `¿Estás seguro de que deseas completar la Orden #${orden.numero}? Se consumirán las materias primas del inventario y se creará el producto final. Esta acción no se puede deshacer.`,
-            async () => { // <-- Se convierte la función callback en async
-                try {
-                    let costoRealProduccion = 0;
-                    for (const comp of orden.componentes) {
-                        const materiaPrima = this.findById(this.productos, comp.productoId);
-                        if (!materiaPrima || materiaPrima.stock < comp.cantidad) {
-                            throw new Error(`Stock insuficiente para "${materiaPrima?.nombre || 'un componente'}". Necesitas ${comp.cantidad}, tienes ${materiaPrima?.stock || 0}.`);
-                        }
-                        costoRealProduccion += materiaPrima.costo * comp.cantidad;
+    this.showConfirm(
+        `¿Estás seguro de que deseas completar la Orden #${orden.numero}? Se consumirán las materias primas del inventario y se creará el producto final. Esta acción no se puede deshacer.`,
+        async () => {
+            try {
+                let costoRealProduccion = 0;
+                const componentesConsumidos = [];
+
+                for (const comp of orden.componentes) {
+                    const materiaPrima = this.findById(this.productos, comp.productoId);
+                    if (!materiaPrima || materiaPrima.stock < comp.cantidad) {
+                        throw new Error(`Stock insuficiente para "${materiaPrima?.nombre || 'un componente'}". Necesitas ${comp.cantidad}, tienes ${materiaPrima?.stock || 0}.`);
                     }
-
-                    // --- Modificaciones al estado local (en memoria) ---
-                    orden.componentes.forEach(comp => {
-                        const materiaPrima = this.findById(this.productos, comp.productoId);
-                        materiaPrima.stock -= comp.cantidad;
+                    const costoConsumo = materiaPrima.costo * comp.cantidad;
+                    costoRealProduccion += costoConsumo;
+                    componentesConsumidos.push({
+                        productoId: comp.productoId,
+                        cantidad: comp.cantidad,
+                        costo: materiaPrima.costo
                     });
-
-                    const productoTerminado = this.findById(this.productos, orden.productoTerminadoId);
-                    const valorStockActualPT = (productoTerminado.stock || 0) * (productoTerminado.costo || 0);
-                    const nuevoStockPT = (productoTerminado.stock || 0) + orden.cantidadProducida;
-                    productoTerminado.costo = nuevoStockPT > 0 ? (valorStockActualPT + costoRealProduccion) / nuevoStockPT : (costoRealProduccion / orden.cantidadProducida);
-                    productoTerminado.stock = nuevoStockPT;
-                    
-                    orden.costoTotal = costoRealProduccion;
-                    orden.estado = 'Completada';
-                    orden.fechaCompletada = this.getTodayDate();
-
-                    const cuentaProductosTerminadosId = 13004;
-                    const movimientos = [{ cuentaId: cuentaProductosTerminadosId, debe: costoRealProduccion, haber: 0 }];
-                    orden.componentes.forEach(comp => {
-                        const materiaPrima = this.findById(this.productos, comp.productoId);
-                        const costoComponente = materiaPrima.costo * comp.cantidad;
-                        const cuentaInventarioComponenteId = materiaPrima.cuentaInventarioId; 
-                        movimientos.push({ cuentaId: cuentaInventarioComponenteId, debe: 0, haber: costoComponente });
-                    });
-
-                    const asiento = this.crearAsiento(
-                        orden.fechaCompletada, 
-                        `Completar OP #${orden.numero}: ${orden.descripcion}`,
-                        movimientos,
-                        orden.id
-                    );
-
-                    if (!asiento) {
-                        throw new Error("No se pudo crear el asiento contable de producción. La operación ha sido revertida.");
-                    }
-
-                    // --- INICIO DE LA REFACTORIZACIÓN ---
-                    // Se empaquetan todos los arrays modificados y se guardan en una sola operación.
-                    await this.repository.actualizarMultiplesDatos({
-                        ordenesProduccion: this.ordenesProduccion,
-                        productos: this.productos,
-                        asientos: this.asientos,
-                        idCounter: this.idCounter
-                    });
-                    // --- FIN DE LA REFACTORIZACIÓN ---
-
-                    this.irModulo('produccion');
-                    this.showToast('Orden de Producción completada con éxito.', 'success');
-
-                } catch(error) {
-                    this.showToast(error.message, 'error');
-                    console.error("Error al completar la orden:", error);
-                    // NOTA: En una implementación real, aquí se haría un "rollback" para deshacer los cambios en memoria.
-                    // Por ahora, recargar la página sería una forma simple de asegurar la consistencia si algo falla.
                 }
+
+                // Disminuir stock de materias primas
+                componentesConsumidos.forEach(comp => {
+                    const materiaPrima = this.findById(this.productos, comp.productoId);
+                    materiaPrima.stock -= comp.cantidad;
+                });
+
+                // Actualizar producto terminado
+                const productoTerminado = this.findById(this.productos, orden.productoTerminadoId);
+                const valorStockActualPT = (productoTerminado.stock || 0) * (productoTerminado.costo || 0);
+                const nuevoStockPT = (productoTerminado.stock || 0) + orden.cantidadProducida;
+                productoTerminado.costo = nuevoStockPT > 0 ? (valorStockActualPT + costoRealProduccion) / nuevoStockPT : (costoRealProduccion / orden.cantidadProducida);
+                productoTerminado.stock = nuevoStockPT;
+                
+                // Actualizar la orden
+                orden.costoTotal = costoRealProduccion;
+                orden.estado = 'Completada';
+                orden.fechaCompletada = this.getTodayDate();
+
+                // Crear transacción de SALIDA para las materias primas
+                const transaccionSalida = {
+                    id: this.generarUUID(),
+                    tipo: 'salida_produccion',
+                    fecha: orden.fechaCompletada,
+                    descripcion: `Consumo de material para OP #${orden.numero}`,
+                    items: componentesConsumidos,
+                    total: costoRealProduccion,
+                    ordenId: orden.id
+                };
+                this.transacciones.push(transaccionSalida);
+
+                // --- INICIO DE LA CORRECCIÓN CLAVE ---
+                // Crear transacción de ENTRADA para el producto terminado
+                const transaccionEntrada = {
+                    id: this.generarUUID(),
+                    tipo: 'entrada_produccion', // Nuevo tipo de transacción
+                    fecha: orden.fechaCompletada,
+                    descripcion: `Producción terminada de OP #${orden.numero}`,
+                    items: [{ // El "item" es el producto terminado
+                        productoId: productoTerminado.id,
+                        cantidad: orden.cantidadProducida,
+                        costoUnitario: productoTerminado.costo
+                    }],
+                    total: costoRealProduccion,
+                    ordenId: orden.id
+                };
+                this.transacciones.push(transaccionEntrada);
+                // --- FIN DE LA CORRECCIÓN CLAVE ---
+
+                // Crear el asiento contable de producción
+                const cuentaProductosTerminadosId = 13004;
+                const movimientos = [{ cuentaId: cuentaProductosTerminadosId, debe: costoRealProduccion, haber: 0 }];
+                componentesConsumidos.forEach(comp => {
+                    const materiaPrima = this.findById(this.productos, comp.productoId);
+                    const costoComponente = comp.costo * comp.cantidad;
+                    movimientos.push({ cuentaId: materiaPrima.cuentaInventarioId, debe: 0, haber: costoComponente });
+                });
+                const asiento = this.crearAsiento(
+                    orden.fechaCompletada, 
+                    `Completar OP #${orden.numero}: ${orden.descripcion}`,
+                    movimientos,
+                    orden.id
+                );
+
+                if (!asiento) {
+                    throw new Error("No se pudo crear el asiento contable de producción.");
+                }
+                
+                await this.saveAll();
+                this.irModulo('produccion');
+                this.showToast('Orden de Producción completada con éxito.', 'success');
+
+            } catch(error) {
+                this.showToast(`Error al anular la orden: ${error.message}`, 'error');
+                console.error("Error al completar la orden:", error);
             }
-        );
-    },
+        }
+    );
+},
 
         renderProduccion_TabTerminada(params = {}) {
     document.getElementById('page-actions-header').innerHTML = `
@@ -455,33 +470,35 @@ Object.assign(ContaApp, {
     },
 
         facturarProduccionSeleccionada() {
-        const itemsParaFacturar = [];
-        document.querySelectorAll('.prod-terminada-check:checked').forEach(checkbox => {
-            const productoId = parseInt(checkbox.dataset.productoId);
-            const producto = this.findById(this.productos, productoId);
-            if (producto) {
-                itemsParaFacturar.push({
-                    itemType: 'producto',
-                    productoId: producto.id,
-                    cantidad: 1,
-                    precio: producto.precio || 0,
-                    costo: producto.costo
-                });
-            }
-        });
-
-        if (itemsParaFacturar.length === 0) {
-            this.showToast('Debes seleccionar al menos un producto para facturar.', 'error');
-            return;
+    const itemsParaFacturar = [];
+    document.querySelectorAll('.prod-terminada-check:checked').forEach(checkbox => {
+        // --- INICIO DE LA CORRECCIÓN ---
+        // Se elimina parseInt para manejar correctamente los UUIDs de texto.
+        const productoId = checkbox.dataset.productoId;
+        // --- FIN DE LA CORRECCIÓN ---
+        
+        const producto = this.findById(this.productos, productoId);
+        if (producto) {
+            itemsParaFacturar.push({
+                itemType: 'producto',
+                productoId: producto.id,
+                cantidad: 1, // Por defecto se añade 1, se puede cambiar en el modal de venta
+                precio: producto.precio || 0,
+                costo: producto.costo
+            });
         }
+    });
 
-        // --- INICIO DE LA MEJORA ---
-        // Usamos la variable temporal para pasar los datos...
-        ContaApp.tempItemsParaVenta = itemsParaFacturar;
-        // ...y navegamos al módulo de ventas con la instrucción de crear un nuevo documento.
-        this.irModulo('ventas', { action: 'new' });
-        // --- FIN DE LA MEJORA ---
-    },
+    if (itemsParaFacturar.length === 0) {
+        this.showToast('Debes seleccionar al menos un producto para facturar.', 'error');
+        return;
+    }
+
+    // Usamos la variable temporal para pasar los datos...
+    this.tempItemsParaVenta = itemsParaFacturar;
+    // ...y navegamos al módulo de ventas con la instrucción de crear un nuevo documento.
+    this.irModulo('ventas', { action: 'new' });
+},
     abrirModalDetalleOrdenProduccion(ordenId) {
         const orden = this.findById(this.ordenesProduccion, ordenId);
         if (!orden) return;

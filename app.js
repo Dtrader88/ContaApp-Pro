@@ -405,7 +405,7 @@ const ROLES = {
             inventario.forEach(item => {
                 if (!item.nombre) return;
                 const nuevoProducto = {
-                    id: this.idCounter++,
+                    id: this.generarUUID(), // Usando UUID
                     nombre: item.nombre,
                     tipo: 'producto',
                     stock: item.stock,
@@ -418,10 +418,28 @@ const ROLES = {
                 this.productos.push(nuevoProducto);
                 const valorInventario = (item.costo || 0) * (item.stock || 0);
                 if (valorInventario > 0) {
-                    this.crearAsiento(fechaApertura, `Inventario inicial ${item.nombre}`, [
+                    
+                    // --- INICIO DE LA CORRECCIÓN ---
+                    const descripcionAjuste = `Stock inicial de apertura para ${item.nombre}`;
+                    // 1. Crear la transacción de ajuste que el Kardex pueda leer
+                    const transaccionAjuste = {
+                        id: this.generarUUID(),
+                        tipo: 'ajuste_inventario',
+                        fecha: fechaApertura,
+                        productoId: nuevoProducto.id,
+                        cantidad: item.stock,
+                        costo: item.costo,
+                        tipoAjuste: 'entrada',
+                        descripcion: descripcionAjuste
+                    };
+                    this.transacciones.push(transaccionAjuste);
+                    
+                    // 2. Crear el asiento contable, vinculado a la nueva transacción de ajuste
+                    this.crearAsiento(fechaApertura, descripcionAjuste, [
                         { cuentaId: item.categoriaId, debe: valorInventario, haber: 0 },
-                        { cuentaId: 330, debe: 0, haber: valorInventario }
-                    ]);
+                        { cuentaId: 330, debe: 0, haber: valorInventario } // 330: Utilidades de Apertura
+                    ], transaccionAjuste.id);
+                    // --- FIN DE LA CORRECCIÓN ---
                 }
             });
         }
@@ -503,133 +521,143 @@ irAtras() {
     this.irModulo(previousState.mod, previousState.params, true);
 },
         async irModulo(mod, params = {}, isBackNavigation = false) {
-        if (!this.hasPermission(mod)) {
-            this.showToast('No tienes permiso para acceder a este módulo.', 'error');
-            console.warn(`Intento de acceso denegado al módulo '${mod}' por el rol '${this.currentUser.rol}'.`);
-            if (mod !== 'dashboard') { 
-                this.irModulo('dashboard');
-            }
-            return;
+    if (!this.hasPermission(mod)) {
+        this.showToast('No tienes permiso para acceder a este módulo.', 'error');
+        console.warn(`Intento de acceso denegado al módulo '${mod}' por el rol '${this.currentUser.rol}'.`);
+        if (mod !== 'dashboard') { 
+            this.irModulo('dashboard');
         }
-        const paginationContainer = document.getElementById('pagination-container');
-        if (paginationContainer) {
-            paginationContainer.innerHTML = '';
-        }
+        return;
+    }
+    const paginationContainer = document.getElementById('pagination-container');
+    if (paginationContainer) {
+        paginationContainer.innerHTML = '';
+    }
 
-        if (!this.licencia || !this.licencia.modulosActivos) {
-            console.warn(`Intento de navegar al módulo '${mod}' antes de que la licencia esté cargada. Abortando.`);
-            return;
-        }
+    if (!this.licencia || !this.licencia.modulosActivos) {
+        console.warn(`Intento de navegar al módulo '${mod}' antes de que la licencia esté cargada. Abortando.`);
+        return;
+    }
 
-        const mapaLicencias = {
-            'inventario': 'INVENTARIO_BASE', 'bancos': 'FINANZAS_AVANZADO', 'cierre-periodo': 'CONTABILIDAD_AVANZADO',
-            'activos-fijos': 'ACTIVOS_AVANZADOS', 'produccion': 'PRODUCCION',
-        };
+    const mapaLicencias = {
+        'inventario': 'INVENTARIO_BASE', 'bancos': 'FINANZAS_AVANZADO', 'cierre-periodo': 'CONTABILIDAD_AVANZADO',
+        'activos-fijos': 'ACTIVOS_AVANZADOS', 'produccion': 'PRODUCCION',
+    };
 
-        const licenciaRequerida = mapaLicencias[mod];
-        if (licenciaRequerida && !this.licencia.modulosActivos.includes(licenciaRequerida)) {
-            const elToShow = document.getElementById(mod);
-            if (elToShow) {
-                elToShow.innerHTML = this.generarEstadoVacioHTML('fa-lock', 'Módulo Bloqueado', `Esta funcionalidad no está incluida en tu paquete "${this.licencia.paquete}".`, 'Volver al Dashboard', "ContaApp.irModulo('dashboard')");
-                elToShow.style.display = "block";
-            }
-            this.showToast(`El módulo '${mod}' requiere un paquete superior.`, 'error');
-            return;
+    const licenciaRequerida = mapaLicencias[mod];
+    if (licenciaRequerida && !this.licencia.modulosActivos.includes(licenciaRequerida)) {
+        const elToShow = document.getElementById(mod);
+        if (elToShow) {
+            elToShow.innerHTML = this.generarEstadoVacioHTML('fa-lock', 'Módulo Bloqueado', `Esta funcionalidad no está incluida en tu paquete "${this.licencia.paquete}".`, 'Volver al Dashboard', "ContaApp.irModulo('dashboard')");
+            elToShow.style.display = "block";
         }
+        this.showToast(`El módulo '${mod}' requiere un paquete superior.`, 'error');
+        return;
+    }
 
-        const hasNewFilterParams = Object.keys(params).some(k => ['search', 'startDate', 'endDate', 'estado'].includes(k));
-        if (!hasNewFilterParams && this.moduleFilters[mod]) {
-            params = { ...this.moduleFilters[mod], ...params };
-        } else {
-            this.moduleFilters[mod] = params;
+    // --- INICIO DE LA MODIFICACIÓN ---
+    // Si el usuario actual tiene un centro de costo asignado, se inyecta como un filtro fijo.
+    if (this.currentUser && this.currentUser.centroDeCostoId) {
+        // Solo aplicamos este filtro a los módulos que lo soportan para no romper otros.
+        if(['ventas', 'gastos', 'compras', 'activos-fijos'].includes(mod)) {
+            params.centroDeCostoId = this.currentUser.centroDeCostoId;
         }
+    }
+    // --- FIN DE LA MODIFICACIÓN ---
 
-        if (this.isFormDirty) {
-            this.showConfirm("Tienes cambios sin guardar. ¿Estás seguro de que quieres salir?", () => {
-                this.isFormDirty = false;
-                this.irModulo(mod, params);
-            });
-            return;
-        }
+    const hasNewFilterParams = Object.keys(params).some(k => ['search', 'startDate', 'endDate', 'estado'].includes(k));
+    if (!hasNewFilterParams && this.moduleFilters[mod]) {
+        params = { ...this.moduleFilters[mod], ...params };
+    } else {
+        this.moduleFilters[mod] = params;
+    }
 
-        if (!isBackNavigation) {
-            const lastState = this.navigationHistory[this.navigationHistory.length - 1];
-            if (!lastState || lastState.mod !== mod || JSON.stringify(lastState.params) !== JSON.stringify(params)) {
-                this.navigationHistory.push({ mod, params });
-            }
+    if (this.isFormDirty) {
+        this.showConfirm("Tienes cambios sin guardar. ¿Estás seguro de que quieres salir?", () => {
+            this.isFormDirty = false;
+            this.irModulo(mod, params);
+        });
+        return;
+    }
+
+    if (!isBackNavigation) {
+        const lastState = this.navigationHistory[this.navigationHistory.length - 1];
+        if (!lastState || lastState.mod !== mod || JSON.stringify(lastState.params) !== JSON.stringify(params)) {
+            this.navigationHistory.push({ mod, params });
         }
+    }
+    
+    const backButton = document.getElementById('back-button');
+    if (backButton) { backButton.disabled = this.navigationHistory.length <= 1; }
+
+    const loader = document.getElementById('module-loader');
+    const contentArea = document.getElementById('content-area');
+    loader.classList.remove('hidden');
+    contentArea.style.opacity = '0.5';
+
+    try {
+        document.querySelectorAll('#content-area > div').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('.conta-nav-link').forEach(el => el.classList.remove('active'));
         
-        const backButton = document.getElementById('back-button');
-        if (backButton) { backButton.disabled = this.navigationHistory.length <= 1; }
-
-        const loader = document.getElementById('module-loader');
-        const contentArea = document.getElementById('content-area');
-        loader.classList.remove('hidden');
-        contentArea.style.opacity = '0.5';
-
-        try {
-            document.querySelectorAll('#content-area > div').forEach(el => el.style.display = 'none');
-            document.querySelectorAll('.conta-nav-link').forEach(el => el.classList.remove('active'));
-            
-            const elToShow = document.getElementById(mod);
-            if (elToShow) elToShow.style.display = "block";
-            
-            const navLink = document.getElementById("nav-" + mod);
-            if (navLink) navLink.classList.add("active");
-            document.querySelectorAll('nav .conta-nav-link').forEach(link => {
-                const linkMod = link.id.replace('nav-', '');
-                if (!this.hasPermission(linkMod)) {
-                    link.style.display = 'none';
-                } else {
-                    link.style.display = 'block';
+        const elToShow = document.getElementById(mod);
+        if (elToShow) elToShow.style.display = "block";
+        
+        const navLink = document.getElementById("nav-" + mod);
+        if (navLink) navLink.classList.add("active");
+        document.querySelectorAll('nav .conta-nav-link').forEach(link => {
+            const linkMod = link.id.replace('nav-', '');
+            if (!this.hasPermission(linkMod)) {
+                link.style.display = 'none';
+            } else {
+                link.style.display = 'block';
+            }
+        });
+        document.querySelectorAll('nav .text-xs.font-bold').forEach(title => {
+            let nextElement = title.nextElementSibling;
+            let allHidden = true;
+            while(nextElement && nextElement.classList.contains('conta-nav-link')) {
+                if (nextElement.style.display !== 'none') {
+                    allHidden = false;
+                    break;
                 }
-            });
-            document.querySelectorAll('nav .text-xs.font-bold').forEach(title => {
-                let nextElement = title.nextElementSibling;
-                let allHidden = true;
-                while(nextElement && nextElement.classList.contains('conta-nav-link')) {
-                    if (nextElement.style.display !== 'none') {
-                        allHidden = false;
-                        break;
-                    }
-                    nextElement = nextElement.nextElementSibling;
-                }
-                title.style.display = allHidden ? 'none' : 'block';
-            });
-            const moduleTitle = navLink ? navLink.innerText.trim() : mod.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-            
-            if (!params.clienteId && !params.proveedorId && !params.activoId) {
-                document.getElementById('page-title-header').innerText = moduleTitle;
+                nextElement = nextElement.nextElementSibling;
             }
-            document.title = `${this.empresa.nombre} - ${moduleTitle}`;
-            document.getElementById('page-actions-header').innerHTML = '';
-            
-            const moduleRenderers = {
-                'dashboard': this.renderDashboard, 'ventas': this.renderVentas, 'gastos': this.renderGastos,
-                'compras': this.renderCompras, 'cxc': (p) => p.clienteId ? this.renderCXCDetalleCliente(p.clienteId, p) : this.renderCXC(p),
-                'cxp': (p) => p.proveedorId ? this.renderCXPDetalleProveedor(p.proveedorId, p) : this.renderCXP(p),
-                'inventario': this.renderInventario, 'plan-de-cuentas': this.renderPlanDeCuentas,
-                'diario-general': this.renderDiarioGeneral, 'cierre-periodo': this.renderCierrePeriodo,
-                'bancos': this.renderBancosYTarjetas, 'reportes': this.renderReportes, 'activos-fijos': this.renderActivosFijos,
-                'produccion': this.renderProduccion, 'config': this.renderConfig
-            };
-            
-            if (moduleRenderers[mod]) {
-                await moduleRenderers[mod].call(this, params);
-            }
-            this.renderNotifications();
-            if (params.action === 'new' && mod === 'ventas') {
-                setTimeout(() => this.abrirModalVenta(params.clienteId, params.anticipoId), 100);
-            }
-
-        } catch (e) {
-            console.error(`Error al renderizar el módulo ${mod}:`, e);
-            this.showToast(`Error al cargar el módulo ${mod}`, 'error');
-        } finally {
-            loader.classList.add('hidden');
-            contentArea.style.opacity = '1';
+            title.style.display = allHidden ? 'none' : 'block';
+        });
+        const moduleTitle = navLink ? navLink.innerText.trim() : mod.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        
+        if (!params.clienteId && !params.proveedorId && !params.activoId) {
+            document.getElementById('page-title-header').innerText = moduleTitle;
         }
-    },
+        document.title = `${this.empresa.nombre} - ${moduleTitle}`;
+        document.getElementById('page-actions-header').innerHTML = '';
+        
+        const moduleRenderers = {
+            'dashboard': this.renderDashboard, 'ventas': this.renderVentas, 'gastos': this.renderGastos,
+            'compras': this.renderCompras, 'cxc': (p) => p.clienteId ? this.renderCXCDetalleCliente(p.clienteId, p) : this.renderCXC(p),
+            'cxp': (p) => p.proveedorId ? this.renderCXPDetalleProveedor(p.proveedorId, p) : this.renderCXP(p),
+            'inventario': this.renderInventario, 'plan-de-cuentas': this.renderPlanDeCuentas,
+            'diario-general': this.renderDiarioGeneral, 'cierre-periodo': this.renderCierrePeriodo,
+            'bancos': this.renderBancosYTarjetas, 'reportes': this.renderReportes, 'activos-fijos': this.renderActivosFijos,
+            'produccion': this.renderProduccion, 'config': this.renderConfig
+        };
+        
+        if (moduleRenderers[mod]) {
+            await moduleRenderers[mod].call(this, params);
+        }
+        this.renderNotifications();
+        if (params.action === 'new' && mod === 'ventas') {
+            setTimeout(() => this.abrirModalVenta(params.clienteId, params.anticipoId), 100);
+        }
+
+    } catch (e) {
+        console.error(`Error al renderizar el módulo ${mod}:`, e);
+        this.showToast(`Error al cargar el módulo ${mod}`, 'error');
+    } finally {
+        loader.classList.add('hidden');
+        contentArea.style.opacity = '1';
+    }
+},
 
     showModal(content, size = '2xl') {
         const modalContent = document.getElementById('modal-content');
@@ -838,6 +866,8 @@ irAtras() {
                 }
             },
             dashboardLayout: 'grid', pdfTemplate: 'clasica', pdfColor: '#1877f2', periodosContables: {},
+            pdfTemplate: 'clasica', pdfColor: '#1877f2', periodosContables: {},
+            // --- INICIO DE LA MODIFICACIÓN ---
             roles: {
                 administrador: {
                     nombre: "Administrador",
@@ -854,6 +884,13 @@ irAtras() {
                     nombre: "Vendedor",
                     permisos: {
                         modules: ['dashboard', 'ventas', 'cxc', 'inventario'],
+                        actions: []
+                    }
+                },
+                operador_sucursal: {
+                    nombre: "Operador de Sucursal",
+                    permisos: {
+                        modules: ['ventas', 'gastos', 'compras', 'inventario'],
                         actions: []
                     }
                 }
@@ -1074,7 +1111,18 @@ getPeriodoContableActual() {
         this.showToast(`Error: Asiento descuadrado. Debe=${this.formatCurrency(totalDebe)}, Haber=${this.formatCurrency(totalHaber)}`, 'error');
         return null;
     }
-    const asiento = { id: this.generarUUID(), fecha: fechaContable, descripcion: descripcionFinal, movimientos, transaccionId };
+    
+    // --- INICIO DE LA CORRECCIÓN ---
+    const asiento = { 
+        id: this.generarUUID(), 
+        fecha: fechaContable, 
+        descripcion: descripcionFinal, 
+        movimientos, 
+        transaccionId,
+        timestamp: new Date().toISOString() // Se añade la marca de tiempo
+    };
+    // --- FIN DE LA CORRECCIÓN ---
+
     this.asientos.push(asiento);
     this.actualizarSaldosGlobales();
     return asiento;
@@ -1706,6 +1754,23 @@ getPeriodoContableActual() {
         entidadTipo: entidadTipo
     };
     this.auditLog.unshift(logEntry);
+},
+cerrarSesion() {
+    this.showConfirm(
+        "¿Estás seguro de que deseas cerrar tu sesión?",
+        () => {
+            firebase.auth().signOut()
+                .then(() => {
+                    console.log("Sesión cerrada exitosamente.");
+                    // La redirección a login.html es manejada automáticamente por el listener en init.js
+                    // por lo que no necesitamos una redirección manual aquí.
+                })
+                .catch((error) => {
+                    console.error("Error al cerrar la sesión:", error);
+                    this.showToast('Ocurrió un error al intentar cerrar la sesión.', 'error');
+                });
+        }
+    );
 },
 aplicarFiltrosAvanzados(modulo) {
         const filtrosBasicos = {

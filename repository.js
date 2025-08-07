@@ -224,52 +224,71 @@ export class FirebaseRepository extends DataRepository {
         }
     }
     async getPaginatedAsientos(params) {
-        const { page = 1, perPage = 20, filters = {}, sort = { column: 'fecha', order: 'desc' } } = params;
-        console.log("Solicitando asientos paginados con:", params);
+    const { page = 1, perPage = 20, filters = {}, sort = { column: 'fecha', order: 'desc' } } = params;
+    console.log("Solicitando asientos paginados con:", params);
 
-        const workspaceId = await this._getWorkspaceId();
-        if (!workspaceId) return { data: [], totalItems: 0 };
-        
-        const docRef = this.db.collection("workspaces").doc(workspaceId);
-        const doc = await docRef.get();
-        if (!doc.exists) return { data: [], totalItems: 0 };
-        
-        let allAsientos = doc.data().asientos || [];
-        
-        let filteredData = allAsientos.filter(a => {
-            if (filters.startDate && a.fecha < filters.startDate) {
-                return false;
-            }
-            if (filters.endDate && a.fecha > filters.endDate) {
-                return false;
-            }
-            if (filters.search) {
-                const term = filters.search.toLowerCase();
-                const matchesId = a.id.toString().includes(term);
-                const matchesDescripcion = a.descripcion.toLowerCase().includes(term);
-                if (!matchesId && !matchesDescripcion) return false;
-            }
-            return true;
-        });
+    const workspaceId = await this._getWorkspaceId();
+    if (!workspaceId) return { data: [], totalItems: 0 };
+    
+    const docRef = this.db.collection("workspaces").doc(workspaceId);
+    const doc = await docRef.get();
+    if (!doc.exists) return { data: [], totalItems: 0 };
+    
+    let allAsientos = doc.data().asientos || [];
+    
+    let filteredData = allAsientos.filter(a => {
+        if (filters.startDate && a.fecha < filters.startDate) {
+            return false;
+        }
+        if (filters.endDate && a.fecha > filters.endDate) {
+            return false;
+        }
+        if (filters.search) {
+            const term = filters.search.toLowerCase();
+            const matchesId = a.id.toString().includes(term);
+            const matchesDescripcion = a.descripcion.toLowerCase().includes(term);
+            if (!matchesId && !matchesDescripcion) return false;
+        }
+        return true;
+    });
 
-        const totalItems = filteredData.length;
+    const totalItems = filteredData.length;
 
-        filteredData.sort((a, b) => {
-            const valA = a[sort.column];
-            const valB = b[sort.column];
-            if (typeof valA === 'string') {
-                return sort.order === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-            } else {
-                return sort.order === 'asc' ? (valA || 0) - (valB || 0) : (valB || 0) - (valA || 0);
-            }
-        });
-        
-        const startIndex = (page - 1) * perPage;
-        const endIndex = startIndex + perPage;
-        const paginatedData = filteredData.slice(startIndex, endIndex);
+    filteredData.sort((a, b) => {
+        const valA = a[sort.column];
+        const valB = b[sort.column];
+        const safeA = valA === null || valA === undefined ? '' : valA;
+        const safeB = valB === null || valB === undefined ? '' : valB;
 
-        return { data: paginatedData, totalItems };
-    }
+        // --- INICIO DE LA CORRECCIÓN ---
+        // Lógica de comparación primaria
+        let primaryCompare = 0;
+        if (typeof safeA === 'string' || typeof safeB === 'string') {
+            primaryCompare = String(safeA).localeCompare(String(safeB));
+        } else {
+            primaryCompare = safeA - safeB;
+        }
+
+        // Aplicar orden ascendente o descendente a la comparación primaria
+        const orderedCompare = sort.order === 'asc' ? primaryCompare : -primaryCompare;
+
+        // Si la comparación primaria da un resultado (no son iguales), lo retornamos
+        if (orderedCompare !== 0) {
+            return orderedCompare;
+        }
+
+        // Criterio de desempate: Siempre ordenar por timestamp descendente
+        // Se añade un fallback por si asientos muy antiguos no tienen timestamp
+        return (b.timestamp || '1970-01-01').localeCompare(a.timestamp || '1970-01-01');
+        // --- FIN DE LA CORRECCIÓN ---
+    });
+    
+    const startIndex = (page - 1) * perPage;
+    const endIndex = startIndex + perPage;
+    const paginatedData = filteredData.slice(startIndex, endIndex);
+
+    return { data: paginatedData, totalItems };
+}
     // NOTA: getDatosDashboard se mantiene aquí por ahora, ya que contiene lógica de negocio
     // que eventualmente vivirá en el backend, no en el repositorio genérico.
     async getDatosDashboard() {

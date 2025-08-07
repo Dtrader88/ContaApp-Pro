@@ -1,3 +1,5 @@
+// Archivo: init.js
+
 import { FirebaseRepository } from './repository.js';
 
 window.onload = () => {
@@ -12,11 +14,13 @@ window.onload = () => {
 
                 if (!userProfileDoc.exists) {
                     console.log("Perfil no encontrado, creando uno nuevo...");
-                    const workspaceId = user.uid;
+                    const workspaceId = user.uid; // El primer usuario es dueño de su workspace
                     const newProfileData = {
                         email: user.email,
                         rol: "administrador",
-                        workspaceId: workspaceId
+                        workspaceId: workspaceId,
+                        // Los nuevos administradores no tienen un centro de costo específico
+                        centroDeCostoId: null 
                     };
                     
                     const workspaceRef = db.collection("workspaces").doc(workspaceId);
@@ -34,7 +38,11 @@ window.onload = () => {
                     uid: user.uid,
                     email: user.email,
                     rol: userProfileData.rol,
-                    workspaceId: userProfileData.workspaceId
+                    workspaceId: userProfileData.workspaceId,
+                    // --- INICIO DE LA MODIFICACIÓN ---
+                    // Se lee el centro de costo del perfil del usuario
+                    centroDeCostoId: userProfileData.centroDeCostoId || null 
+                    // --- FIN DE LA MODIFICACIÓN ---
                 };
 
                 const onlineRepository = new FirebaseRepository(userProfile.workspaceId);

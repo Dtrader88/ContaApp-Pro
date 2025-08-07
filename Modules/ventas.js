@@ -111,6 +111,8 @@ Object.assign(ContaApp, {
             const cliente = this.findById(this.contactos, t.contactoId);
             let estadoClass = '', estadoTexto = t.estado || 'Pendiente', totalDisplay, numeroDisplay, accionesHTML, rowOnclick;
 
+            // --- INICIO DE LA CORRECCIÓN ---
+            // Se han añadido comillas simples ('') alrededor de ${t.id} en todas las llamadas onclick.
             if (t.tipo === 'venta') {
                 switch(t.estado) {
                     case 'Pagada': estadoClass = 'tag-success'; break;
@@ -121,23 +123,24 @@ Object.assign(ContaApp, {
                 }
                 totalDisplay = this.formatCurrency(t.total);
                 numeroDisplay = t.numeroFactura || t.id;
-                accionesHTML = `<button class="conta-btn-icon" title="Ver Factura" onclick="event.stopPropagation(); ContaApp.abrirVistaPreviaFactura(${t.id})"><i class="fa-solid fa-file-lines"></i></button>`;
+                accionesHTML = `<button class="conta-btn-icon" title="Ver Factura" onclick="event.stopPropagation(); ContaApp.abrirVistaPreviaFactura('${t.id}')"><i class="fa-solid fa-file-lines"></i></button>`;
                 if (t.estado !== 'Anulada') {
-                    accionesHTML += `<button class="conta-btn-icon edit" title="Editar Venta" onclick="event.stopPropagation(); ContaApp.abrirModalEditarVenta(${t.id})"><i class="fa-solid fa-pencil"></i></button>`;
+                    accionesHTML += `<button class="conta-btn-icon edit" title="Editar Venta" onclick="event.stopPropagation(); ContaApp.abrirModalEditarVenta('${t.id}')"><i class="fa-solid fa-pencil"></i></button>`;
                 }
-                accionesHTML += `<button class="conta-btn-icon" title="Duplicar Venta" onclick="event.stopPropagation(); ContaApp.abrirModalVenta(null, null, ${t.id})"><i class="fa-solid fa-copy"></i></button>`;
+                accionesHTML += `<button class="conta-btn-icon" title="Duplicar Venta" onclick="event.stopPropagation(); ContaApp.abrirModalVenta(null, null, '${t.id}')"><i class="fa-solid fa-copy"></i></button>`;
                 if (t.estado !== 'Anulada' && this.hasPermission('anular_transaccion')) {
-                    accionesHTML += `<button class="conta-btn-icon delete" title="Anular Factura" onclick="event.stopPropagation(); ContaApp.anularVenta(${t.id})"><i class="fa-solid fa-ban"></i></button>`;
+                    accionesHTML += `<button class="conta-btn-icon delete" title="Anular Factura" onclick="event.stopPropagation(); ContaApp.anularVenta('${t.id}')"><i class="fa-solid fa-ban"></i></button>`;
                 }
-                rowOnclick = `ContaApp.abrirVistaPreviaFactura(${t.id})`;
+                rowOnclick = `ContaApp.abrirVistaPreviaFactura('${t.id}')`;
             } else {
                 estadoClass = 'tag-nota-credito';
                 estadoTexto = 'Nota de Crédito';
                 totalDisplay = `-${this.formatCurrency(t.total)}`;
                 numeroDisplay = t.numeroNota || t.id;
-                accionesHTML = `<button class="conta-btn-icon" title="Ver Nota de Crédito" onclick="event.stopPropagation(); ContaApp.abrirVistaPreviaNotaCredito(${t.id})"><i class="fa-solid fa-file-lines"></i></button>`;
-                rowOnclick = `ContaApp.abrirVistaPreviaNotaCredito(${t.id})`;
+                accionesHTML = `<button class="conta-btn-icon" title="Ver Nota de Crédito" onclick="event.stopPropagation(); ContaApp.abrirVistaPreviaNotaCredito('${t.id}')"><i class="fa-solid fa-file-lines"></i></button>`;
+                rowOnclick = `ContaApp.abrirVistaPreviaNotaCredito('${t.id}')`;
             }
+            // --- FIN DE LA CORRECCIÓN ---
             
             tableRowsHTML += `<tr class="cursor-pointer" onclick="${rowOnclick}">
                 <td class="conta-table-td font-mono">${numeroDisplay}</td>
@@ -712,7 +715,7 @@ abrirModalEditarVenta(ventaId) {
     const isEditing = !!ventaIdEdit;
 
     try {
-        const clienteId = parseInt(document.getElementById('venta-cliente-id').value);
+        const clienteId = document.getElementById('venta-cliente-id').value;
         if (!clienteId) throw new Error('Por favor, selecciona un cliente válido de la lista.');
         
         const fecha = document.getElementById('venta-fecha').value;
@@ -722,17 +725,19 @@ abrirModalEditarVenta(ventaId) {
 
         for (const row of document.querySelectorAll('.venta-item-row')) {
             const tipo = row.querySelector('.venta-item-type').value;
-            const itemId = parseInt(row.querySelector('.venta-item-id').value);
+            // --- INICIO DE LA CORRECCIÓN ---
+            // Se ajusta el querySelector para encontrar el ID dentro de su contenedor.
+            const itemIdSelect = row.querySelector('.venta-item-selector-container .venta-item-id');
+            if (!itemIdSelect) continue; // Si no se encuentra el selector, se salta la fila.
+            const itemId = itemIdSelect.value;
+            // --- FIN DE LA CORRECCIÓN ---
+            
             const cantidad = parseInt(row.querySelector('.venta-item-cantidad').value);
             const precio = parseFloat(row.querySelector('.venta-item-precio').value);
-            
-            // --- INICIO DE LA CORRECCIÓN ---
-            // Se elimina parseInt y se ajusta la validación para aceptar texto.
             const centroDeCostoId = row.querySelector('.venta-item-centro-costo').value;
             if (!centroDeCostoId) {
                 throw new Error('Todas las líneas de la venta deben tener un Centro de Costo asignado.');
             }
-            // --- FIN DE LA CORRECCIÓN ---
 
             const item = { itemType: tipo, cantidad, precio, costo: 0, centroDeCostoId };
             if (tipo === 'producto') {
@@ -756,13 +761,15 @@ abrirModalEditarVenta(ventaId) {
         
         let ventaParaGuardar;
         if (isEditing) {
-            ventaParaGuardar = this.findById(this.transacciones, parseInt(ventaIdEdit));
+            ventaParaGuardar = this.findById(this.transacciones, ventaIdEdit);
+            // Revertir stock antes de re-calcular
             ventaParaGuardar.items.forEach(item => {
                 if (item.itemType === 'producto') {
                     const producto = this.findById(this.productos, item.productoId);
                     if (producto) producto.stock += item.cantidad;
                 }
             });
+            // Eliminar asientos viejos para recrearlos
             this.asientos = this.asientos.filter(a => a.transaccionId !== ventaParaGuardar.id);
         } else {
             ventaParaGuardar = {
@@ -810,40 +817,12 @@ abrirModalEditarVenta(ventaId) {
             this._registrarMovimientoBancarioPendiente(cuentaDebeId, fecha, `Cobro Factura #${ventaParaGuardar.numeroFactura}`, total, asientoVenta.id);
         }
         
-        const costoItemsPorCentro = items.filter(i => i.itemType === 'producto' && i.costo > 0 && i.cantidad > 0)
-            .reduce((acc, item) => {
-                const costoDelItem = item.costo * item.cantidad;
-                if (!acc[item.centroDeCostoId]) {
-                    acc[item.centroDeCostoId] = { costoTotal: 0 };
-                }
-                acc[item.centroDeCostoId].costoTotal += costoDelItem;
-                return acc;
-            }, {});
-
-        if (Object.keys(costoItemsPorCentro).length > 0) {
-            const movimientosCosto = [];
-            let costoTotalGeneral = 0;
-
-            for (const centroId in costoItemsPorCentro) {
-                const costoPorCentro = costoItemsPorCentro[centroId].costoTotal;
-                costoTotalGeneral += costoPorCentro;
-                movimientosCosto.push({ 
-                    cuentaId: 510, // Costo de Ventas
-                    debe: costoPorCentro, 
-                    haber: 0,
-                    centroDeCostoId: centroId
-                });
-            }
-            
-            if (costoTotalGeneral > 0) {
-                movimientosCosto.push({
-                    cuentaId: 13001, // Inventario de Mercancía para Reventa
-                    debe: 0,
-                    haber: costoTotalGeneral
-                });
-                
-                this.crearAsiento(fecha, `Costo de venta #${ventaParaGuardar.numeroFactura}`, movimientosCosto, ventaParaGuardar.id);
-            }
+        const costoTotalItems = items.filter(i => i.itemType === 'producto').reduce((sum, i) => sum + (i.costo * i.cantidad), 0);
+        if (costoTotalItems > 0) {
+            this.crearAsiento(fecha, `Costo de venta #${ventaParaGuardar.numeroFactura}`, [
+                { cuentaId: 510, debe: costoTotalItems, haber: 0 },
+                { cuentaId: 13004, debe: 0, haber: costoTotalItems } // Asumiendo que los productos terminados salen de esta cuenta
+            ], ventaParaGuardar.id);
         }
         
         await this.saveAll();

@@ -8,22 +8,45 @@ Object.assign(ContaApp, {
         return;
     }
 
+    // --- INICIO DE LA MODIFICACIÓN: Añadir filtro y mejorar botones ---
+    const centrosDeCostoOptions = (this.empresa.centrosDeCosto || [])
+        .map(cc => `<option value="${cc.id}" ${params.centroDeCostoId === cc.id ? 'selected' : ''}>${cc.nombre}</option>`)
+        .join('');
+
+    const filtroHTML = `
+        <div class="flex-grow max-w-sm">
+            <select id="activos-filtro-cc" class="w-full conta-input" onchange="ContaApp.filtrarActivosPorCC(this.value)">
+                <option value="">-- Filtrar por Sucursal --</option>
+                ${centrosDeCostoOptions}
+            </select>
+        </div>
+    `;
+
     document.getElementById('page-actions-header').innerHTML = `
-        <div class="flex gap-2 flex-wrap">
+        <div class="flex gap-2 flex-wrap items-center">
+            ${filtroHTML}
             <button class="conta-btn conta-btn-accent" onclick="ContaApp.ejecutarDepreciacionMensual()"><i class="fa-solid fa-calculator me-2"></i>Depreciación Mensual</button>
-            <button class="conta-btn conta-btn-accent" onclick="ContaApp.abrirModalReporteActivos()"><i class="fa-solid fa-file-alt me-2"></i>Generar Reporte</button>
             <button class="conta-btn" onclick="ContaApp.abrirModalActivoFijo()">+ Nueva Compra de Activo</button>
         </div>`;
+    // --- FIN DE LA MODIFICACIÓN ---
 
     let html;
-    if (this.activosFijos.length === 0) {
+    
+    // --- INICIO DE LA MODIFICACIÓN: Aplicar el filtro a la lista ---
+    let activosFiltrados = this.activosFijos;
+    if (params.centroDeCostoId) {
+        activosFiltrados = this.activosFijos.filter(activo => activo.centroDeCostoId === params.centroDeCostoId);
+    }
+    // --- FIN DE LA MODIFICACIÓN ---
+
+    if (activosFiltrados.length === 0) {
         html = this.generarEstadoVacioHTML('fa-building-columns', 'Aún no tienes activos registrados', 'Registra tu primer activo para empezar a gestionar su depreciación.', '+ Registrar Compra de Activo', "ContaApp.abrirModalActivoFijo()");
     } else {
         const { currentPage, perPage } = this.getPaginationState('activos-fijos');
         const startIndex = (currentPage - 1) * perPage;
         const endIndex = startIndex + perPage;
 
-        const activosOrdenados = this.activosFijos.sort((a,b) => new Date(b.fechaCompra) - new Date(a.fechaCompra));
+        const activosOrdenados = activosFiltrados.sort((a,b) => new Date(b.fechaCompra) - new Date(a.fechaCompra));
         const itemsParaMostrar = activosOrdenados.slice(startIndex, endIndex);
 
         let tableRows = '';
@@ -33,11 +56,17 @@ Object.assign(ContaApp, {
             if (activo.estado === 'Activo') estadoClass = 'tag-success';
             if (activo.estado === 'Depreciado') estadoClass = 'tag-accent';
             if (activo.estado === 'Vendido' || activo.estado === 'De Baja') estadoClass = 'tag-anulada';
+            
+            // --- INICIO DE LA MODIFICACIÓN: Obtener nombre del Centro de Costo ---
+            const centroDeCosto = (this.empresa.centrosDeCosto || []).find(cc => cc.id === activo.centroDeCostoId);
+            // --- FIN DE LA MODIFICACIÓN ---
 
-            // --- INICIO DE LA CORRECCIÓN ---
             tableRows += `
                 <tr class="cursor-pointer hover:bg-[var(--color-bg-accent)]" onclick="ContaApp.irModulo('activos-fijos', { activoId: '${activo.id}' })">
                     <td class="conta-table-td font-bold">${activo.nombre}</td>
+                    <!-- --- INICIO DE LA MODIFICACIÓN: Añadir celda de Sucursal --- -->
+                    <td class="conta-table-td">${centroDeCosto ? centroDeCosto.nombre : 'N/A'}</td>
+                    <!-- --- FIN DE LA MODIFICACIÓN --- -->
                     <td class="conta-table-td">${activo.fechaCompra}</td>
                     <td class="conta-table-td text-right font-mono">${this.formatCurrency(activo.costo)}</td>
                     <td class="conta-table-td text-right font-mono">(${this.formatCurrency(activo.depreciacionAcumulada)})</td>
@@ -53,13 +82,15 @@ Object.assign(ContaApp, {
                     </td>
                 </tr>
             `;
-            // --- FIN DE LA CORRECCIÓN ---
         });
 
         html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
             <thead>
                 <tr>
                     <th class="conta-table-th">Activo</th>
+                    <!-- --- INICIO DE LA MODIFICACIÓN: Añadir cabecera de Sucursal --- -->
+                    <th class="conta-table-th">Sucursal</th>
+                    <!-- --- FIN DE LA MODIFICACIÓN --- -->
                     <th class="conta-table-th">Fecha Compra</th>
                     <th class="conta-table-th text-right">Costo</th>
                     <th class="conta-table-th text-right">Dep. Acum.</th>
@@ -70,7 +101,7 @@ Object.assign(ContaApp, {
             </thead>
             <tbody>${tableRows}</tbody></table></div>`;
 
-        this.renderPaginationControls('activos-fijos', this.activosFijos.length);
+        this.renderPaginationControls('activos-fijos', activosFiltrados.length);
     }
 
     document.getElementById('activos-fijos').innerHTML = html;
@@ -121,100 +152,112 @@ Object.assign(ContaApp, {
         document.getElementById('activos-fijos').innerHTML = htmlReporte;
     }, 
         abrirModalActivoFijo(id = null) {
-        const activo = id ? this.findById(this.activosFijos, id) : {};
-        const isEditing = id !== null;
+    const activo = id ? this.findById(this.activosFijos, id) : {};
+    const isEditing = id !== null;
 
-        const cuentasActivoOptions = this.planDeCuentas
-            .filter(c => c.parentId === 150 && c.tipo === 'DETALLE')
-            .map(c => `<option value="${c.id}" ${activo.cuentaId === c.id ? 'selected' : ''}>${c.codigo} - ${c.nombre}</option>`)
-            .join('');
+    const cuentasActivoOptions = this.planDeCuentas
+        .filter(c => c.parentId === 150 && c.tipo === 'DETALLE')
+        .map(c => `<option value="${c.id}" ${activo.cuentaId == c.id ? 'selected' : ''}>${c.codigo} - ${c.nombre}</option>`)
+        .join('');
 
-        const cuentasPagoOptions = this.planDeCuentas
-            .filter(c => c.parentId === 110 && c.tipo === 'DETALLE')
-            .map(c => `<option value="${c.id}" ${activo.cuentaPagoId === c.id ? 'selected' : ''}>${c.nombre}</option>`)
-            .join('');
+    const cuentasPagoOptions = this.planDeCuentas
+        .filter(c => c.parentId === 110 && c.tipo === 'DETALLE')
+        .map(c => `<option value="${c.id}" ${activo.cuentaPagoId == c.id ? 'selected' : ''}>${c.nombre}</option>`)
+        .join('');
 
-        const modalHTML = `
-            <h3 class="conta-title mb-4">${isEditing ? 'Editar' : 'Registrar Compra de'} Activo Fijo</h3>
-            <form onsubmit="ContaApp.guardarActivoFijo(event, ${id})" class="space-y-4 modal-form">
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label>Nombre del Activo</label>
-                        <input type="text" id="activo-nombre" class="w-full conta-input mt-1" value="${activo.nombre || ''}" required>
-                    </div>
-                    <div>
-                        <label>Proveedor</label>
-                        <div class="flex items-center gap-2">
-                            <input list="proveedores-datalist-activo" id="activo-proveedor-input" class="w-full conta-input mt-1" placeholder="Buscar proveedor..." required>
-                            <datalist id="proveedores-datalist-activo">${this.contactos.filter(c => c.tipo === 'proveedor').map(c => `<option value="${c.nombre}" data-id="${c.id}"></option>`).join('')}</datalist>
-                            <input type="hidden" id="activo-proveedor-id">
-                            <button type="button" class="conta-btn conta-btn-small" onclick="ContaApp.abrirSubModalNuevoContacto('proveedor', 'activo-proveedor-input')">+</button>
-                        </div>
-                    </div>
-                </div>
+    const centrosDeCostoOptions = (this.empresa.centrosDeCosto || [])
+        .map(cc => `<option value="${cc.id}" ${activo.centroDeCostoId == cc.id ? 'selected' : ''}>${cc.nombre}</option>`)
+        .join('');
 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <label>Fecha de Compra</label>
-                        <input type="date" id="activo-fecha-compra" class="w-full conta-input mt-1" value="${activo.fechaCompra || this.getTodayDate()}" ${isEditing ? 'disabled' : ''} required>
-                    </div>
-                    <div>
-                        <label>Referencia / Factura #</label>
-                        <input type="text" id="activo-referencia" class="w-full conta-input mt-1" value="${activo.referencia || ''}" placeholder="Ej: F-12345" ${isEditing ? 'disabled' : ''}>
-                    </div>
-                    <div>
-                        <label>Cuenta Contable del Activo</label>
-                        <select id="activo-cuenta-id" class="w-full conta-input mt-1" ${isEditing ? 'disabled' : ''} required>${cuentasActivoOptions}</select>
-                    </div>
-                </div>
-                
-                <div class="conta-card p-4">
-                    <p class="font-semibold mb-2">Detalles para Depreciación</p>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <label>Costo de Adquisición</label>
-                            <input type="number" step="0.01" id="activo-costo" class="w-full conta-input mt-1" value="${activo.costo || ''}" ${isEditing ? 'disabled' : ''} required>
-                        </div>
-                        <div>
-                            <label>Vida Útil (en meses)</label>
-                            <input type="number" id="activo-vida-util" class="w-full conta-input mt-1" value="${activo.vidaUtil || ''}" ${isEditing ? 'disabled' : ''} placeholder="Ej: 36" required>
-                        </div>
-                         <div>
-                            <label>Valor Residual</label>
-                            <input type="number" step="0.01" id="activo-valor-residual" class="w-full conta-input mt-1" value="${activo.valorResidual || 0}" ${isEditing ? 'disabled' : ''} required>
-                        </div>
-                    </div>
-                </div>
+    // --- INICIO DE LA CORRECCIÓN CLAVE ---
+    // Se asegura que el ID (sea null o un UUID) se pase como una cadena de texto válida a la función onsubmit.
+    const formSubmitAction = `ContaApp.guardarActivoFijo(event, ${id ? `'${id}'` : null})`;
+    // --- FIN DE LA CORRECCIÓN CLAVE ---
 
+    const modalHTML = `
+        <h3 class="conta-title mb-4">${isEditing ? 'Editar' : 'Registrar Compra de'} Activo Fijo</h3>
+        <form onsubmit="${formSubmitAction}" class="space-y-4 modal-form">
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label>Forma de Pago</label>
-                    <select id="activo-pago-id" class="w-full conta-input mt-1" ${isEditing ? 'disabled' : ''} required>
-                        <option value="210" ${activo.cuentaPagoId === 210 ? 'selected' : ''}>A crédito (Genera Cta. por Pagar)</option>
-                        <optgroup label="De Contado desde:">
-                            ${cuentasPagoOptions}
-                        </optgroup>
+                    <label>Nombre del Activo</label>
+                    <input type="text" id="activo-nombre" class="w-full conta-input mt-1" value="${activo.nombre || ''}" required>
+                </div>
+                <div>
+                    <label>Proveedor</label>
+                    <div class="flex items-center gap-2">
+                        <input list="proveedores-datalist-activo" id="activo-proveedor-input" class="w-full conta-input mt-1" placeholder="Buscar proveedor..." required>
+                        <datalist id="proveedores-datalist-activo">${this.contactos.filter(c => c.tipo === 'proveedor').map(c => `<option value="${c.nombre}" data-id="${c.id}"></option>`).join('')}</datalist>
+                        <input type="hidden" id="activo-proveedor-id">
+                        <button type="button" class="conta-btn conta-btn-small" onclick="ContaApp.abrirSubModalNuevoContacto('proveedor', 'activo-proveedor-input')">+</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label>Fecha de Compra</label>
+                    <input type="date" id="activo-fecha-compra" class="w-full conta-input mt-1" value="${activo.fechaCompra || this.getTodayDate()}" ${isEditing ? 'disabled' : ''} required>
+                </div>
+                <div>
+                    <label>Asignar a Sucursal (Centro de Costo)</label>
+                     <select id="activo-centro-costo-id" class="w-full conta-input mt-1" ${isEditing ? 'disabled' : ''} required>
+                        <option value="">-- Seleccione Sucursal --</option>
+                        ${centrosDeCostoOptions}
                     </select>
                 </div>
-                
-                <div class="flex justify-end gap-2 mt-6">
-                    <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button>
-                    <button type="submit" class="conta-btn">${isEditing ? 'Guardar Cambios' : 'Registrar Compra'}</button>
+                <div>
+                    <label>Cuenta Contable del Activo</label>
+                    <select id="activo-cuenta-id" class="w-full conta-input mt-1" ${isEditing ? 'disabled' : ''} required>${cuentasActivoOptions}</select>
                 </div>
-            </form>
-        `;
-        this.showModal(modalHTML, '4xl');
-        this.setupDatalistListener('activo-proveedor-input', 'activo-proveedor-id', 'proveedores-datalist-activo');
+            </div>
+            
+            <div class="conta-card p-4">
+                <p class="font-semibold mb-2">Detalles para Depreciación</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label>Costo de Adquisición</label>
+                        <input type="number" step="0.01" id="activo-costo" class="w-full conta-input mt-1" value="${activo.costo || ''}" ${isEditing ? 'disabled' : ''} required>
+                    </div>
+                    <div>
+                        <label>Vida Útil (en meses)</label>
+                        <input type="number" id="activo-vida-util" class="w-full conta-input mt-1" value="${activo.vidaUtil || ''}" ${isEditing ? 'disabled' : ''} placeholder="Ej: 36" required>
+                    </div>
+                     <div>
+                        <label>Valor Residual</label>
+                        <input type="number" step="0.01" id="activo-valor-residual" class="w-full conta-input mt-1" value="${activo.valorResidual || 0}" ${isEditing ? 'disabled' : ''} required>
+                    </div>
+                </div>
+            </div>
 
-        if (isEditing) {
-            const proveedor = this.findById(this.contactos, activo.proveedorId);
-            if (proveedor) {
-                document.getElementById('activo-proveedor-input').value = proveedor.nombre;
-                document.getElementById('activo-proveedor-id').value = proveedor.id;
-            }
+            <div>
+                <label>Forma de Pago</label>
+                <select id="activo-pago-id" class="w-full conta-input mt-1" ${isEditing ? 'disabled' : ''} required>
+                    <option value="210" ${activo.cuentaPagoId == 210 ? 'selected' : ''}>A crédito (Genera Cta. por Pagar)</option>
+                    <optgroup label="De Contado desde:">
+                        ${cuentasPagoOptions}
+                    </optgroup>
+                </select>
+            </div>
+            
+            <div class="flex justify-end gap-2 mt-6">
+                <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button>
+                <button type="submit" class="conta-btn">${isEditing ? 'Guardar Cambios' : 'Registrar Compra'}</button>
+            </div>
+        </form>
+    `;
+    this.showModal(modalHTML, '4xl');
+    this.setupDatalistListener('activo-proveedor-input', 'activo-proveedor-id', 'proveedores-datalist-activo');
+
+    if (isEditing) {
+        const proveedor = this.findById(this.contactos, activo.proveedorId);
+        if (proveedor) {
+            document.getElementById('activo-proveedor-input').value = proveedor.nombre;
+            document.getElementById('activo-proveedor-id').value = proveedor.id;
         }
-    },
-                    async guardarActivoFijo(e, id = null) {
+    }
+},
+    async guardarActivoFijo(e, id = null) {
     e.preventDefault();
     const isEditing = id !== null;
     const submitButton = e.target.querySelector('button[type="submit"]');
@@ -238,7 +281,9 @@ Object.assign(ContaApp, {
                 cuentaId: parseInt(document.getElementById('activo-cuenta-id').value),
                 fechaCompra: document.getElementById('activo-fecha-compra').value,
                 proveedorId: document.getElementById('activo-proveedor-id').value,
-                referencia: document.getElementById('activo-referencia').value,
+                // --- INICIO DE LA MODIFICACIÓN ---
+                centroDeCostoId: document.getElementById('activo-centro-costo-id').value,
+                // --- FIN DE LA MODIFICACIÓN ---
                 costo: parseFloat(document.getElementById('activo-costo').value),
                 vidaUtil: parseInt(document.getElementById('activo-vida-util').value),
                 valorResidual: parseFloat(document.getElementById('activo-valor-residual').value),
@@ -246,6 +291,9 @@ Object.assign(ContaApp, {
             };
 
             if (!data.proveedorId) { throw new Error('Debe seleccionar un proveedor.'); }
+            // --- INICIO DE LA MODIFICACIÓN ---
+            if (!data.centroDeCostoId) { throw new Error('Debe asignar el activo a una sucursal (Centro de Costo).'); }
+            // --- FIN DE LA MODIFICACIÓN ---
             if (isNaN(data.costo) || isNaN(data.vidaUtil) || isNaN(data.valorResidual)) { throw new Error('Costo, Vida Útil y Valor Residual deben ser números.'); }
             if (data.costo <= data.valorResidual) { throw new Error('El costo debe ser mayor que el valor residual.'); }
 
@@ -262,7 +310,7 @@ Object.assign(ContaApp, {
 
             const asiento = this.crearAsiento(
                 data.fechaCompra,
-                `Compra de activo fijo: ${data.nombre} (Ref: ${data.referencia || 'N/A'})`,
+                `Compra de activo fijo: ${data.nombre}`,
                 [
                     { cuentaId: data.cuentaId, debe: data.costo, haber: 0 },
                     { cuentaId: data.cuentaPagoId, debe: 0, haber: data.costo }
@@ -271,11 +319,7 @@ Object.assign(ContaApp, {
             );
 
             if (asiento) {
-                await this.repository.actualizarMultiplesDatos({
-                    activosFijos: this.activosFijos,
-                    asientos: this.asientos
-                });
-
+                await this.saveAll();
                 this.closeModal();
                 this.irModulo('activos-fijos');
                 this.showToast('Compra de activo fijo registrada con éxito.', 'success');
@@ -293,11 +337,10 @@ Object.assign(ContaApp, {
 },
     ejecutarDepreciacionMensual() {
     this.showConfirm(
-        '¿Deseas registrar la depreciación para el mes actual? Se creará un asiento contable para todos los activos elegibles. Esta acción solo debe realizarse una vez por mes.',
-        () => {
-            let totalDepreciacionDelMes = 0;
+        '¿Deseas registrar la depreciación para el mes actual? Se creará un asiento contable detallado por sucursal para todos los activos elegibles. Esta acción solo debe realizarse una vez por mes.',
+        async () => {
             const hoy = new Date();
-            const fechaAsiento = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().slice(0,10); // Último día del mes actual
+            const fechaAsiento = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().slice(0,10);
 
             const activosADepreciar = this.activosFijos.filter(activo => 
                 activo.estado === 'Activo' && activo.mesesDepreciados < activo.vidaUtil
@@ -308,35 +351,60 @@ Object.assign(ContaApp, {
                 return;
             }
 
+            // --- INICIO DE LA MODIFICACIÓN ---
+            const depreciacionPorCentroDeCosto = {};
+
             activosADepreciar.forEach(activo => {
                 const montoADepreciar = (activo.costo - activo.valorResidual) / activo.vidaUtil;
                 
                 activo.depreciacionAcumulada += montoADepreciar;
                 activo.mesesDepreciados += 1;
-                totalDepreciacionDelMes += montoADepreciar;
 
                 if (activo.mesesDepreciados >= activo.vidaUtil) {
                     activo.estado = 'Depreciado';
                 }
+
+                // Agrupar la depreciación por Centro de Costo
+                const ccId = activo.centroDeCostoId || 'sin_asignar';
+                if (!depreciacionPorCentroDeCosto[ccId]) {
+                    depreciacionPorCentroDeCosto[ccId] = 0;
+                }
+                depreciacionPorCentroDeCosto[ccId] += montoADepreciar;
             });
 
-            // --- INICIO DE LA CORRECCIÓN ---
-            // Se actualiza el ID de la cuenta de Gasto por Depreciación de 51004 a 61004.
-            const cuentaGastoDepreciacionId = 61004; // Gasto por Depreciación
-            // --- FIN DE LA CORRECCIÓN ---
-            const cuentaDepAcumuladaId = 15901; // Dep. Acum. Mobiliario y Equipo
+            const cuentaGastoDepreciacionId = 61004;
+            const cuentaDepAcumuladaId = 15901;
+            
+            const movimientos = [];
+            let totalDepreciacionDelMes = 0;
+
+            for (const ccId in depreciacionPorCentroDeCosto) {
+                const monto = depreciacionPorCentroDeCosto[ccId];
+                totalDepreciacionDelMes += monto;
+                movimientos.push({
+                    cuentaId: cuentaGastoDepreciacionId,
+                    debe: monto,
+                    haber: 0,
+                    centroDeCostoId: ccId === 'sin_asignar' ? null : ccId
+                });
+            }
+
+            // Un único crédito a la cuenta de Depreciación Acumulada
+            movimientos.push({
+                cuentaId: cuentaDepAcumuladaId,
+                debe: 0,
+                haber: totalDepreciacionDelMes
+            });
+            // --- FIN DE LA MODIFICACIÓN ---
             
             const asiento = this.crearAsiento(
                 fechaAsiento,
                 `Depreciación del mes ${hoy.toLocaleString('es-ES', { month: 'long', year: 'numeric' })}`,
-                [
-                    { cuentaId: cuentaGastoDepreciacionId, debe: totalDepreciacionDelMes, haber: 0 },
-                    { cuentaId: cuentaDepAcumuladaId, debe: 0, haber: totalDepreciacionDelMes }
-                ]
+                movimientos
             );
 
             if (asiento) {
-                this.saveAll();
+                await this.saveAll();
                 this.irModulo('activos-fijos');
                 this.showToast('Depreciación mensual registrada con éxito.', 'success');
             }
@@ -780,4 +848,12 @@ Object.assign(ContaApp, {
             this.showToast('Mejora capitalizada con éxito.', 'success');
         }
     },
+    filtrarActivosPorCC(centroDeCostoId) {
+    if (centroDeCostoId) {
+        this.irModulo('activos-fijos', { centroDeCostoId: centroDeCostoId });
+    } else {
+        // Si el usuario selecciona "-- Filtrar por Sucursal --", volvemos a la vista sin filtro
+        this.irModulo('activos-fijos');
+    }
+},
 });
