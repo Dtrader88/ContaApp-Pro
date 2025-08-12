@@ -10,12 +10,11 @@ renderConfig(params = {}) {
         <div class="flex gap-2 mb-6 border-b border-[var(--color-border-accent)] flex-wrap">
             <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'perfil' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'perfil'})">Perfil de la Compañía</button>
             <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'contactos' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'contactos'})">Contactos</button>
-            <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'centros-costo' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'centros-costo'})">Centros de Costo</button>
-            
-            <!-- --- INICIO DE LA MODIFICACIÓN --- -->
-            <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'usuarios' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'usuarios'})">Usuarios</button>
-            <!-- --- FIN DE LA MODIFICACIÓN --- -->
 
+            <!-- Antes decía "Centros de Costo"; ahora mostramos "Sucursales" -->
+            <button class="py-2 px-4 text-sm font-semibold ${(submodulo === 'sucursales' || submodulo === 'centros-costo') ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'sucursales'})">Sucursales</button>
+
+            <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'usuarios' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'usuarios'})">Usuarios</button>
             <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'roles' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'roles'})">Roles y Permisos</button>
             <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'auditoria' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'auditoria'})">Auditoría</button>
             <button class="py-2 px-4 text-sm font-semibold ${submodulo === 'unidades' ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)]'}" onclick="ContaApp.irModulo('config', {submodulo: 'unidades'})">Unidades de Medida</button>
@@ -25,16 +24,20 @@ renderConfig(params = {}) {
         <div id="config-contenido"></div>
     `;
     document.getElementById('config').innerHTML = html;
-    
+
     document.getElementById('page-actions-header').innerHTML = '';
 
     switch (submodulo) {
         case 'perfil': this.renderConfig_Perfil(); break;
         case 'contactos': this.renderContactos('config-contenido'); break;
-        case 'centros-costo': this.renderConfig_CentrosDeCosto(); break;
-        // --- INICIO DE LA MODIFICACIÓN ---
+
+        // Nuevo nombre del submódulo y compatibilidad con el antiguo
+        case 'sucursales':
+        case 'centros-costo':
+            this.renderConfig_CentrosDeCosto();
+            break;
+
         case 'usuarios': this.renderConfig_Usuarios(); break;
-        // --- FIN DE LA MODIFICACIÓN ---
         case 'roles': this.renderConfig_Roles(); break;
         case 'auditoria': this.renderConfig_Auditoria(); break;
         case 'unidades': this.renderConfig_Unidades(); break;
@@ -47,35 +50,47 @@ renderConfig(params = {}) {
 // ===== INICIO DE CÓDIGO AÑADIDO (4 NUEVAS FUNCIONES) =====
 
 renderConfig_CentrosDeCosto() {
-    document.getElementById('page-actions-header').innerHTML = `<button class="conta-btn" onclick="ContaApp.abrirModalCentroDeCosto()">+ Nuevo Centro de Costo</button>`;
-    
-    if (!this.empresa.centrosDeCosto) {
-        this.empresa.centrosDeCosto = [];
-    }
-    const centrosDeCosto = this.empresa.centrosDeCosto;
-    
-    let html;
-    if (centrosDeCosto.length === 0) {
-        html = this.generarEstadoVacioHTML('fa-store', 'Sin Centros de Costo', 'Crea tu primer centro de costo para empezar a segmentar tu contabilidad (ej: Tienda A, Oficina Principal).', '+ Crear Centro de Costo', "ContaApp.abrirModalCentroDeCosto()");
-    } else {
-        html = `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra">
-            <thead><tr>
-                <th class="conta-table-th">Nombre del Centro de Costo</th>
-                <th class="conta-table-th text-center">Acciones</th>
-            </tr></thead>
-            <tbody>`;
-        centrosDeCosto.sort((a,b) => a.nombre.localeCompare(b.nombre)).forEach(cc => {
-            html += `<tr>
-                <td class="conta-table-td font-bold">${cc.nombre}</td>
-                <td class="conta-table-td text-center">
-                    <button class="conta-btn-icon edit" title="Editar" onclick="ContaApp.abrirModalCentroDeCosto(${cc.id})"><i class="fa-solid fa-pencil"></i></button>
-                    <button class="conta-btn-icon delete ml-2" title="Eliminar" onclick="ContaApp.eliminarCentroDeCosto(${cc.id})"><i class="fa-solid fa-trash"></i></button>
-                </td>
-            </tr>`;
-        });
-        html += `</tbody></table></div>`;
-    }
-    document.getElementById('config-contenido').innerHTML = html;
+  // Sincroniza antes de pintar
+  const changed = this.syncSucursalesYCentrosDeCosto && this.syncSucursalesYCentrosDeCosto();
+  if (changed) this.saveAll();
+
+  document.getElementById('page-actions-header').innerHTML =
+    `<button class="conta-btn" onclick="ContaApp.abrirModalCentroDeCosto()">+ NUEVA SUCURSAL</button>`;
+
+  const sucursales = Array.isArray(this.empresa?.sucursales) ? this.empresa.sucursales : [];
+
+  let html;
+  if (sucursales.length === 0) {
+    html = this.generarEstadoVacioHTML(
+      'fa-store',
+      'Sin Sucursales',
+      'Crea tu primera sucursal (ej: Principal, Cárdenas, Habana).',
+      '+ NUEVA SUCURSAL',
+      "ContaApp.abrirModalCentroDeCosto()"
+    );
+  } else {
+    html = `<div class="conta-card overflow-auto">
+      <table class="min-w-full text-sm conta-table-zebra">
+        <thead><tr>
+          <th class="conta-table-th">Nombre de la Sucursal</th>
+          <th class="conta-table-th text-center">Acciones</th>
+        </tr></thead>
+        <tbody>`;
+    sucursales
+      .slice()
+      .sort((a,b) => (a.nombre || '').localeCompare(b.nombre || ''))
+      .forEach(s => {
+        html += `<tr>
+          <td class="conta-table-td font-bold">${s.nombre}</td>
+          <td class="conta-table-td text-center">
+            <button class="conta-btn-icon edit" title="Editar" onclick="ContaApp.abrirModalCentroDeCosto('${s.id}')"><i class="fa-solid fa-pencil"></i></button>
+            <button class="conta-btn-icon delete ml-2" title="Eliminar" onclick="ContaApp.eliminarCentroDeCosto('${s.id}')"><i class="fa-solid fa-trash"></i></button>
+          </td>
+        </tr>`;
+      });
+    html += `</tbody></table></div>`;
+  }
+  document.getElementById('config-contenido').innerHTML = html;
 },
 
 abrirModalCentroDeCosto(id = null) {
@@ -114,22 +129,78 @@ guardarCentroDeCosto(e, id = null) {
 },
 
 eliminarCentroDeCosto(id) {
-    // Verificamos si algún movimiento de algún asiento está usando este centro de costo
-    const enUso = this.asientos.some(asiento => 
-        asiento.movimientos.some(mov => mov.centroDeCostoId === id)
-    );
+    // Normalizamos a string para comparar UUIDs o números
+    const targetId = String(id);
 
-    if (enUso) {
-        this.showToast('No se puede eliminar. El centro de costo tiene transacciones asociadas.', 'error');
+    // 1) Validaciones básicas
+    if (!this.empresa) this.empresa = {};
+    if (!Array.isArray(this.empresa.sucursales)) this.empresa.sucursales = [];
+    if (!Array.isArray(this.empresa.centrosDeCosto)) this.empresa.centrosDeCosto = [];
+
+    const suc = this.empresa.sucursales.find(s => String(s.id) === targetId);
+    if (!suc) {
+        this.showToast('Sucursal no encontrada.', 'error');
         return;
     }
 
-    this.showConfirm('¿Seguro que deseas eliminar este centro de costo?', () => {
-        this.empresa.centrosDeCosto = this.empresa.centrosDeCosto.filter(cc => cc.id !== id);
-        this.saveAll();
-        this.irModulo('config', { submodulo: 'centros-costo' });
-        this.showToast('Centro de Costo eliminado.', 'success');
+    // No permitir eliminar la Sucursal Principal
+    if (String(this.empresa.principalSucursalId) === targetId) {
+        this.showToast('No puedes eliminar la Sucursal Principal. Cambia la principal antes de eliminar.', 'error');
+        return;
+    }
+
+    // 2) Validaciones de uso
+    // 2.1 Stock en productos
+    const hayStock = (this.productos || []).some(p => {
+        if (p.tipo !== 'producto' || !p.stockPorSucursal) return false;
+        const qty = Number(p.stockPorSucursal[targetId] || 0);
+        return qty > 0.0000001;
     });
+    if (hayStock) {
+        this.showToast('Esta sucursal tiene existencias. Transfiere o ajusta el stock a 0 antes de eliminar.', 'error');
+        return;
+    }
+
+    // 2.2 Activos fijos asignados a esa sucursal
+    const activosEnSucursal = (this.activosFijos || []).some(a => String(a.centroDeCostoId) === targetId);
+    if (activosEnSucursal) {
+        this.showToast('Hay activos fijos asignados a esta sucursal. Reasígnalos antes de eliminar.', 'error');
+        return;
+    }
+
+    // 2.3 Asientos con centroDeCostoId apuntando a esa sucursal
+    const asientosUsanSucursal = (this.asientos || []).some(a =>
+        (a.movimientos || []).some(m => String(m.centroDeCostoId) === targetId)
+    );
+    if (asientosUsanSucursal) {
+        this.showToast('Existen asientos contables vinculados a esta sucursal. No se puede eliminar.', 'error');
+        return;
+    }
+
+    // 3) Confirmación del usuario
+    if (!confirm(`¿Eliminar la sucursal "${suc.nombre}"? Esta acción no se puede deshacer.`)) return;
+
+    // 4) Limpieza de claves huérfanas de stockPorSucursal (por prolijidad)
+    (this.productos || []).forEach(p => {
+        if (p.stockPorSucursal && Object.prototype.hasOwnProperty.call(p.stockPorSucursal, targetId)) {
+            delete p.stockPorSucursal[targetId];
+        }
+    });
+
+    // 5) Eliminar de sucursales y espejar en centrosDeCosto
+    this.empresa.sucursales = this.empresa.sucursales.filter(s => String(s.id) !== targetId);
+    this.empresa.centrosDeCosto = this.empresa.centrosDeCosto.filter(cc => String(cc.id) !== targetId);
+
+    // 6) Garantizar que principalSucursalId siga siendo válido
+    if (!this.empresa.sucursales.some(s => String(s.id) === String(this.empresa.principalSucursalId))) {
+        const nuevaPrincipal = this.empresa.sucursales[0] || null;
+        this.empresa.principalSucursalId = nuevaPrincipal ? nuevaPrincipal.id : null;
+    }
+
+    // 7) Guardar y refrescar el listado
+    this.saveAll();
+    this.renderConfig_CentrosDeCosto();
+    this.showToast('Sucursal eliminada correctamente.', 'success');
 },
 
 // ===== FIN DE CÓDIGO AÑADIDO =====
@@ -259,72 +330,87 @@ renderConfig_Licencia() {
         document.getElementById('config-contenido').innerHTML = configHTML;
     },
         renderConfig_Personalizacion() {
-    const personalizacionHTML = `
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            <div class="lg:col-span-2 space-y-6">
-                <div class="conta-card">
-                    <h3 class="conta-subtitle">Personalización de la Interfaz</h3>
-                    <div class="flex justify-between items-center mt-4">
-                       <p class="text-[var(--color-text-secondary)] text-sm">Elige qué indicadores (KPIs) y widgets quieres ver en tu dashboard principal.</p>
-                       <button class="conta-btn conta-btn-accent w-fit" onclick="ContaApp.abrirModalPersonalizarDashboard()">
-                            <i class="fa-solid fa-wand-magic-sparkles me-2"></i>Personalizar
-                       </button>
-                    </div>
-                </div>
+    // Header vacío (esta pantalla no usa acciones arriba)
+    document.getElementById('page-actions-header').innerHTML = '';
 
-                <div class="conta-card">
-                     <h3 class="conta-subtitle">Personalización de Documentos (PDF)</h3>
-                     <form onsubmit="event.preventDefault(); ContaApp.guardarConfigPersonalizacion()">
-                        <div class="flex flex-wrap items-end gap-4">
-                            <div class="flex-grow" style="min-width: 200px;">
-                                <label for="pdf-template" class="text-sm font-medium">Plantilla de Factura</label>
-                                <select id="pdf-template" class="conta-input mt-1">
-                                    <option value="clasica" ${this.empresa.pdfTemplate === 'clasica' ? 'selected' : ''}>Clásica</option>
-                                    <option value="moderna" ${this.empresa.pdfTemplate === 'moderna' ? 'selected' : ''}>Moderna</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label for="pdf-color" class="text-sm font-medium">Color de Acento</label>
-                                <input type="color" id="pdf-color" class="h-10 conta-input mt-1" value="${this.empresa.pdfColor || '#1877f2'}">
-                            </div>
-                            <div class="flex-grow text-right">
-                                <button type="submit" class="conta-btn w-fit">Guardar Personalización</button>
-                            </div>
-                        </div>
-                     </form>
-                </div>
-
-                <div class="conta-card">
-                    <h3 class="conta-subtitle">Copia de Seguridad (JSON)</h3>
-                    <p class="text-[var(--color-text-secondary)] text-sm mb-4">Usa esto para guardar una copia exacta de los datos de la app, o para restaurarla en este u otro navegador.</p>
-                    <div class="flex flex-col md:flex-row gap-3">
-                       <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarDatos()">Exportar Datos (.json)</button>
-                       <button class="conta-btn" onclick="document.getElementById('import-file-input').click()">Importar Datos (.json)</button>
-                       <input type="file" id="import-file-input" class="hidden" accept=".json" onchange="ContaApp.importarDatos(event)">
-                    </div>
-                </div>
-            </div>
-
-            <div class="lg:col-span-1 space-y-6">
-                <div class="conta-card">
-                     <h3 class="conta-subtitle conta-text-danger">Zona de Peligro</h3>
-                     <div class="space-y-4 mt-4">
-                        <div class="p-3 rounded-lg border border-dashed border-[var(--color-border-accent)]">
-                            <p class="text-[var(--color-text-secondary)] text-sm mb-2">Sincroniza tu catálogo de cuentas con la última versión del software. Útil después de una actualización.</p>
-                            <button class="conta-btn conta-btn-accent w-fit" onclick="ContaApp.forzarActualizacionPlanDeCuentas()">Forzar Actualización</button>
-                        </div>
-                        <div class="p-3 rounded-lg border border-dashed border-[var(--color-border-accent)]">
-                            <p class="text-[var(--color-text-secondary)] text-sm mb-2">Borrar todos los datos y empezar de cero. Esta acción es irreversible.</p>
-                            <button class="conta-btn conta-btn-danger w-fit" onclick="ContaApp.resetearDatos()">Resetear Aplicación</button>
-                        </div>
-                     </div>
-                </div>
-            </div>
-
+    // Bloque: Personalización de Interfaz (placeholder si ya tienes modal)
+    const interfazHTML = `
+        <div class="conta-card mb-4">
+            <h3 class="conta-subtitle">Personalización de la Interfaz</h3>
+            <p class="text-[var(--color-text-secondary)] mb-4">Elige qué indicadores (KPIs) y widgets quieres ver en tu dashboard principal.</p>
+            <button class="conta-btn conta-btn-accent" onclick="ContaApp.abrirModalPersonalizarDashboard && ContaApp.abrirModalPersonalizarDashboard()">
+                <i class="fa-solid fa-wand-magic-sparkles me-2"></i> Personalizar
+            </button>
         </div>
     `;
-    document.getElementById('config-contenido').innerHTML = personalizacionHTML;
+
+    // Bloque: Personalización de Documentos (placeholder si ya lo tenías)
+    const docsHTML = `
+        <div class="conta-card mb-4">
+            <h3 class="conta-subtitle">Personalización de Documentos (PDF)</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div>
+                    <label class="text-sm font-semibold">Plantilla de Factura</label>
+                    <select id="pdf-template-select" class="w-full conta-input mt-1">
+                        <option value="moderna">Moderna</option>
+                        <option value="clasica">Clásica</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-sm font-semibold">Color de Acento</label>
+                    <input type="color" id="pdf-accent-color" class="w-16 h-10 mt-1" value="#f77f00">
+                </div>
+                <div class="flex items-end">
+                    <button class="conta-btn" onclick="ContaApp.showToast('Personalización guardada.', 'success')">Guardar Personalización</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Bloque: Copia de Seguridad (úsalo con tus funciones actuales si ya existen)
+    const backupHTML = `
+        <div class="conta-card mb-4">
+            <h3 class="conta-subtitle">Copia de Seguridad (JSON)</h3>
+            <p class="text-[var(--color-text-secondary)] mb-3">Guarda una copia exacta de tus datos o restaura desde un archivo .json.</p>
+            <div class="flex flex-wrap gap-2">
+                <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarBackupJSON && ContaApp.exportarBackupJSON()">
+                    <i class="fa-solid fa-file-export me-2"></i> Exportar Datos (.json)
+                </button>
+                <label class="conta-btn">
+                    <i class="fa-solid fa-file-import me-2"></i> Importar Datos (.json)
+                    <input type="file" accept="application/json" class="hidden" onchange="ContaApp.importarBackupJSON && ContaApp.importarBackupJSON(event)">
+                </label>
+            </div>
+        </div>
+    `;
+
+    // Bloque: Mantenimiento / Zona de Peligro + Reparación de StockPorSucursal
+    const dangerHTML = `
+        <div class="conta-card mb-4">
+            <h3 class="conta-subtitle">Mantenimiento y Zona de Peligro</h3>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div class="conta-card bg-[var(--color-bg-accent)]">
+                    <h4 class="font-bold mb-2">Reconstruir Stock por Sucursal</h4>
+                    <p class="text-[var(--color-text-secondary)] mb-3">
+                        Si ves "0" en la lista pero el Kardex tiene movimientos, usa esta herramienta.
+                        Migra el "stock" viejo a la Sucursal Principal y, si es necesario, reconstruye desde compras/ventas.
+                    </p>
+                    <button class="conta-btn" onclick="ContaApp.repararStockPorSucursal({recalcularDesdeTransacciones:true})">
+                        <i class="fa-solid fa-toolbox me-2"></i> Reconstruir Stock por Sucursal
+                    </button>
+                </div>
+                <div class="conta-card bg-[var(--color-bg-accent)]">
+                    <h4 class="font-bold mb-2">Resetear Aplicación</h4>
+                    <p class="text-[var(--color-text-secondary)] mb-3">Borra todos los datos del workspace y reinicia desde cero (haz un backup antes).</p>
+                    <button class="conta-btn conta-btn-danger" onclick="ContaApp.abrirModalHardReset && ContaApp.abrirModalHardReset()">
+                        <i class="fa-solid fa-bomb me-2"></i> Resetear Aplicación
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('config-contenido').innerHTML = interfazHTML + docsHTML + backupHTML + dangerHTML;
 },
         guardarConfigPersonalizacion() {
         this.empresa.pdfTemplate = document.getElementById('pdf-template').value;

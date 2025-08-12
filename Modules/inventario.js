@@ -1,18 +1,17 @@
 Object.assign(ContaApp, {
 
     filtrarInventario(cuentaInventarioId) {
-    // --- INICIO DE LA MEJORA: Lógica de renderizado directo ---
-    // En lugar de recargar todo el módulo con irModulo,
-    // llamamos directamente a la función que renderiza solo la lista.
     const search = document.getElementById('inventario-search').value;
     const params = { search };
-
-    // Guardamos el filtro para mantener el estado si el usuario navega y vuelve
     this.moduleFilters['inventario'] = { ...this.moduleFilters['inventario'], ...params };
-
-    // Obtenemos la cuentaId de la pestaña activa que pasamos como argumento
     this.renderInventarioLista(params, cuentaInventarioId);
-    // --- FIN DE LA MEJORA ---
+},
+getSucursalesActivas() {
+    const s = Array.isArray(this.empresa?.sucursales) ? this.empresa.sucursales : [];
+    if (s.length > 0) return s;
+
+    const cc = Array.isArray(this.empresa?.centrosDeCosto) ? this.empresa.centrosDeCosto : [];
+    return cc.map(c => ({ id: String(c.id), nombre: c.nombre }));
 },
     renderInventario(params = {}) {
     // Si se pasa un ID de producto, renderizamos la vista de Kardex
@@ -48,17 +47,19 @@ Object.assign(ContaApp, {
     this.renderInventarioLista(params, cuentaIdActiva);
 },
       renderInventarioLista(params = {}, cuentaInventarioId) {
+    // Header de acciones
     document.getElementById('page-actions-header').innerHTML = `
         <div class="flex gap-2 flex-wrap">
             <button class="conta-btn conta-btn-accent" onclick="ContaApp.exportarInventarioCSV()"><i class="fa-solid fa-file-csv me-2"></i>Exportar CSV</button>
+            <button id="transfer-btn" class="conta-btn conta-btn-primary" onclick="ContaApp.abrirModalTransferenciaInventario()" disabled><i class="fa-solid fa-right-left me-2"></i>Transferir Selección</button>
             <button class="conta-btn" onclick="ContaApp.abrirModalProducto()">+ Nuevo Producto/Servicio</button>
         </div>`;
-    
-    let productosFiltrados = this.productos.filter(p => p.cuentaInventarioId === cuentaInventarioId);
-    
+
+    // Filtro de búsqueda
+    let productosFiltrados = (this.productos || []).filter(p => p.cuentaInventarioId === cuentaInventarioId);
     if (params.search) {
         const term = params.search.toLowerCase();
-        productosFiltrados = productosFiltrados.filter(p => p.nombre.toLowerCase().includes(term));
+        productosFiltrados = productosFiltrados.filter(p => (p.nombre || '').toLowerCase().includes(term));
     }
 
     let html = `
@@ -68,58 +69,92 @@ Object.assign(ContaApp, {
                     <label class="text-xs font-semibold">Buscar por Nombre</label>
                     <input type="search" id="inventario-search" class="conta-input w-full md:w-80" value="${params.search || ''}" placeholder="Escribe para filtrar...">
                 </div>
-                <button type="submit" class="conta-btn">Buscar</button>
+                <button type="submit" class="conta-btn">BUSCAR</button>
             </form>
         </div>`;
-        
+
     if (productosFiltrados.length === 0) {
-        html += `<div class="conta-card text-center p-8 text-[var(--color-text-secondary)]"><i class="fa-solid fa-box-open fa-3x mb-4 opacity-50"></i><h3 class="font-bold text-lg">Sin Productos</h3><p>No se encontraron productos en esta categoría.</p></div>`;
-    } else {
-        const { currentPage, perPage } = this.getPaginationState('inventario');
-        const startIndex = (currentPage - 1) * perPage;
-        const endIndex = startIndex + perPage;
-        productosFiltrados.sort((a,b) => a.nombre.localeCompare(b.nombre));
-        const itemsParaMostrar = productosFiltrados.slice(startIndex, endIndex);
-
-        let tableRowsHTML = '';
-        itemsParaMostrar.forEach(p => {
-            const isLowStock = p.tipo === 'producto' && p.stockMinimo > 0 && p.stock <= p.stockMinimo;
-            const rowClass = isLowStock ? 'low-stock-row' : '';
-            const stockDisplay = p.tipo === 'producto' ? p.stock : 'N/A';
-            const lowStockIcon = isLowStock ? `<i class="fa-solid fa-triangle-exclamation text-[var(--color-danger)] ml-2" title="Stock bajo (Mínimo: ${p.stockMinimo})"></i>` : '';
-            const unidad = this.findById(this.unidadesMedida, p.unidadMedidaId);
-            const unidadDisplay = p.tipo === 'producto' ? (unidad ? unidad.nombre : 'N/A') : 'N/A';
-
-            // --- INICIO DE LA CORRECCIÓN ---
-            // Se asegura que los IDs de producto (que pueden ser UUIDs) se pasen como cadenas de texto.
-            tableRowsHTML += `
-                <tr class="cursor-pointer hover:bg-[var(--color-bg-accent)] ${rowClass}" onclick="ContaApp.irModulo('inventario', { productoId: '${p.id}' })">
-                    <td class="conta-table-td font-bold">${p.nombre} ${lowStockIcon}</td>
-                    <td class="conta-table-td text-right font-mono">${stockDisplay}</td>
-                    <td class="conta-table-td">${unidadDisplay}</td>
-                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(p.precio)}</td>
-                    <td class="conta-table-td text-right font-mono">${this.formatCurrency(p.costo)}</td>
-                    <td class="conta-table-td text-center" onclick="event.stopPropagation()">
-                        <button class="conta-btn-icon edit" title="Editar" onclick="ContaApp.abrirModalProducto('${p.id}')"><i class="fa-solid fa-pencil"></i></button>
-                        ${p.tipo === 'producto' ? `<button class="conta-btn-icon" title="Ajustar Stock" onclick="ContaApp.abrirModalAjusteInventario('${p.id}')"><i class="fa-solid fa-wrench"></i></button>` : ''}
-                        ${p.tipo === 'producto' ? `<button class="conta-btn conta-btn-small conta-btn-success ml-2" title="Vender este Producto" onclick="ContaApp.venderDesdeInventario('${p.id}')">Vender</button>` : ''}
-                    </td>
-                </tr>`;
-            // --- FIN DE LA CORRECCIÓN ---
-        });
-        
-        html += `<div class="conta-card overflow-auto"><table class="min-w-full text-sm conta-table-zebra"><thead><tr>
-            <th class="conta-table-th">Nombre</th>
-            <th class="conta-table-th text-right">Stock</th>
-            <th class="conta-table-th">Unidad</th>
-            <th class="conta-table-th text-right">Precio Venta</th>
-            <th class="conta-table-th text-right">Costo</th>
-            <th class="conta-table-th text-center">Acciones</th>
-        </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
-        
-        this.renderPaginationControls('inventario', productosFiltrados.length);
+        html += `<div class="conta-card text-center p-8 text-[var(--color-text-secondary)]">
+            <i class="fa-solid fa-box-open fa-3x mb-4 opacity-50"></i>
+            <h3 class="font-bold text-lg">Sin Productos</h3>
+            <p>No se encontraron productos en esta categoría.</p>
+        </div>`;
+        document.getElementById('inventario-contenido').innerHTML = html;
+        this.actualizarEstadoBotonTransferencia();
+        return;
     }
+
+    const { currentPage, perPage } = this.getPaginationState('inventario');
+    const startIndex = (currentPage - 1) * perPage;
+    const endIndex = startIndex + perPage;
+    productosFiltrados.sort((a,b) => (a.nombre || '').localeCompare(b.nombre || ''));
+    const itemsParaMostrar = productosFiltrados.slice(startIndex, endIndex);
+
+    let tableRowsHTML = '';
+    itemsParaMostrar.forEach(p => {
+        const stockTotal = p.tipo === 'producto'
+            ? Object.values(p.stockPorSucursal || {}).reduce((s,c) => s + Number(c || 0), 0)
+            : 0;
+        const unidad = this.findById(this.unidadesMedida, p.unidadMedidaId);
+        const unidadDisplay = p.tipo === 'producto' ? (unidad ? unidad.nombre : 'N/A') : 'N/A';
+
+        let desgloseStockHTML = '';
+        if (p.tipo === 'producto' && p.stockPorSucursal) {
+            const info = Object.entries(p.stockPorSucursal).map(([sid, stk]) => {
+                const suc = (this.getSucursalesActivas() || []).find(s => String(s.id) === String(sid));
+                return `${suc ? suc.nombre : 'Desconocida'}: ${stk}`;
+            }).join('\n');
+            desgloseStockHTML = `title="Desglose por Sucursal:\n${info}"`;
+        }
+
+        tableRowsHTML += `
+        <tr class="hover:bg-[var(--color-bg-accent)]">
+            <td class="conta-table-td w-10 text-center" onclick="event.stopPropagation()">
+                <input type="checkbox" class="inventario-checkbox" value="${p.id}" onclick="ContaApp.actualizarEstadoBotonTransferencia()">
+            </td>
+            <td class="conta-table-td font-bold">
+                <button class="underline" onclick="ContaApp.irModulo('inventario', { productoId: '${p.id}' })" title="Ver Kardex">${p.nombre || '—'}</button>
+            </td>
+            <td class="conta-table-td text-right font-mono" ${desgloseStockHTML}>${p.tipo === 'producto' ? stockTotal : 'N/A'}</td>
+            <td class="conta-table-td">${unidadDisplay}</td>
+            <td class="conta-table-td text-right font-mono">${this.formatCurrency(p.precio || 0)}</td>
+            <td class="conta-table-td text-right font-mono">${this.formatCurrency(p.costo || 0)}</td>
+            <td class="conta-table-td text-center">
+                <button class="conta-btn conta-btn-small" onclick="ContaApp.abrirModalVentaRapida && ContaApp.abrirModalVentaRapida('${p.id}')">Vender</button>
+                <button class="conta-btn-icon edit" title="Editar" onclick="ContaApp.abrirModalProducto('${p.id}')"><i class="fa-solid fa-pencil"></i></button>
+            </td>
+        </tr>`;
+    });
+
+    html += `
+    <div class="conta-card overflow-auto">
+        <table class="min-w-full text-sm conta-table-zebra">
+            <thead>
+                <tr>
+                    <th class="conta-table-th w-10 text-center">
+                        <input type="checkbox" onclick="
+                            const bodyCbs = document.querySelectorAll('#inventario-contenido tbody input[type=checkbox]');
+                            bodyCbs.forEach(cb => cb.checked = this.checked);
+                            ContaApp.actualizarEstadoBotonTransferencia();
+                        ">
+                    </th>
+                    <th class="conta-table-th">Nombre</th>
+                    <th class="conta-table-th text-right">Stock Total</th>
+                    <th class="conta-table-th">Unidad</th>
+                    <th class="conta-table-th text-right">Precio Venta</th>
+                    <th class="conta-table-th text-right">Costo</th>
+                    <th class="conta-table-th text-center">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>${tableRowsHTML}</tbody>
+        </table>
+    </div>`;
+
     document.getElementById('inventario-contenido').innerHTML = html;
+
+    // Paginación y reevaluación del botón
+    this.renderPaginationControls('inventario', productosFiltrados.length);
+    this.actualizarEstadoBotonTransferencia();
 },
     renderInventarioReporteVista() {
         document.getElementById('page-actions-header').innerHTML = `
@@ -362,17 +397,38 @@ Object.assign(ContaApp, {
     const isEditing = id !== null;
 
     const unidadesOptions = this.unidadesMedida
-        .map(u => `<option value="${u.id}" ${producto.unidadMedidaId === u.id ? 'selected' : ''}>${u.nombre}</option>`)
+        .map(u => `<option value="${u.id}" ${producto.unidadMedidaId == u.id ? 'selected' : ''}>${u.nombre}</option>`)
         .join('');
     
     const cuentasInventarioOptions = this.planDeCuentas
         .filter(c => c.parentId === 130)
-        .map(c => `<option value="${c.id}" ${producto.cuentaInventarioId === c.id ? 'selected' : ''}>${c.nombre}</option>`)
+        .map(c => `<option value="${c.id}" ${producto.cuentaInventarioId == c.id ? 'selected' : ''}>${c.nombre}</option>`)
         .join('');
+    
+    // --- INICIO DE LA MODIFICACIÓN ---
+    let stockDetalleHTML = '';
+    if (isEditing && producto.tipo === 'producto' && producto.stockPorSucursal) {
+        const filasDetalle = Object.entries(producto.stockPorSucursal).map(([sucursalId, stock]) => {
+            const sucursal = this.empresa.sucursales.find(s => s.id === sucursalId);
+            return `
+                <div class="flex justify-between items-center py-1 border-b border-[var(--color-border-accent)]">
+                    <span class="text-sm">${sucursal ? sucursal.nombre : 'Sucursal Desconocida'}</span>
+                    <span class="font-mono font-bold">${stock}</span>
+                </div>`;
+        }).join('');
 
+        stockDetalleHTML = `
+            <div class="mt-4">
+                <label class="font-semibold">Stock Actual por Sucursal</label>
+                <div class="p-3 mt-1 rounded-lg bg-[var(--color-bg-accent)]">
+                    ${filasDetalle || '<p class="text-sm text-center text-[var(--color-text-secondary)]">Sin stock registrado.</p>'}
+                </div>
+            </div>`;
+    }
+    
     const modalHTML = `<h3 class="conta-title mb-4">${id ? 'Editar' : 'Nuevo'} Producto/Servicio</h3>
-    <form onsubmit="ContaApp.guardarProducto(event, ${id})" class="space-y-4 modal-form">
-         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <form onsubmit="ContaApp.guardarProducto(event, '${id || ''}')" class="space-y-4 modal-form">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><label>Nombre</label><input type="text" id="prod-nombre" class="w-full p-2 mt-1" value="${producto.nombre || ''}" required></div>
             <div><label>Tipo</label><select id="prod-tipo" class="w-full p-2 mt-1" required>
                 <option value="producto" ${producto.tipo === 'producto' ? 'selected' : ''}>Producto (con stock)</option>
@@ -385,20 +441,21 @@ Object.assign(ContaApp, {
             <select id="prod-cuenta-inventario" class="w-full p-2 mt-1">${cuentasInventarioOptions}</select>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
                 <label>Unidad de Medida</label>
-                <!-- ===== INICIO DE LA CORRECCIÓN CLAVE ===== -->
                 <select id="prod-unidad" class="w-full p-2 mt-1">${unidadesOptions}</select>
-                <!-- ===== FIN DE LA CORRECCIÓN CLAVE (se añadió el id="prod-unidad") ===== -->
             </div>
-            <div><label>Stock Inicial</label><input type="number" id="prod-stock" class="w-full p-2 mt-1" value="${producto.stock || 0}" ${isEditing ? 'disabled':''}></div>
             <div><label>Costo Unitario</label><input type="number" step="0.01" id="prod-costo" class="w-full p-2 mt-1" value="${producto.costo || 0}"></div>
             <div><label>Precio de Venta</label><input type="number" step="0.01" id="prod-precio" class="w-full p-2 mt-1" value="${producto.precio || 0}" required></div>
         </div>
+        
+        ${stockDetalleHTML}
 
         <div class="flex justify-end gap-2 mt-6"><button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button><button type="submit" class="conta-btn">${isEditing ? 'Guardar Cambios' : 'Crear'}</button></div>
     </form>`;
+    // --- FIN DE LA MODIFICACIÓN ---
+
     this.showModal(modalHTML, '4xl');
 
     if (isEditing) {
@@ -409,61 +466,47 @@ Object.assign(ContaApp, {
     }
 },
             async guardarProducto(e, id) {
-        e.preventDefault();
-        const data = {
-            nombre: document.getElementById('prod-nombre').value,
-            tipo: document.getElementById('prod-tipo').value,
-            cuentaInventarioId: parseInt(document.getElementById('prod-cuenta-inventario').value),
-            unidadMedidaId: parseInt(document.getElementById('prod-unidad').value) || null,
-            stock: parseFloat(document.getElementById('prod-stock').value) || 0,
-            stockMinimo: 0,
-            costo: parseFloat(document.getElementById('prod-costo').value) || 0,
-            precio: parseFloat(document.getElementById('prod-precio').value) || 0,
-            cuentaIngresoId: 41001
-        };
+    e.preventDefault();
 
-        try {
-            if (id) {
-                const productoOriginal = this.findById(this.productos, id);
-                data.stock = productoOriginal.stock; // El stock no se modifica al editar
-                Object.assign(productoOriginal, data);
-                
-                await this.repository.actualizarMultiplesDatos({ productos: this.productos });
+    // Lee los datos del formulario del modal
+    const data = {
+        nombre: document.getElementById('prod-nombre').value,
+        tipo: document.getElementById('prod-tipo').value, // 'producto' | 'servicio'
+        cuentaInventarioId: parseInt(document.getElementById('prod-cuenta-inventario').value),
+        unidadMedidaId: parseInt(document.getElementById('prod-unidad').value) || null,
+        stockMinimo: 0,
+        costo: parseFloat(document.getElementById('prod-costo').value) || 0,
+        precio: parseFloat(document.getElementById('prod-precio').value) || 0,
+        // Cuenta de ingresos por defecto (detalle válida)
+        cuentaIngresoId: 41001
+    };
 
-            } else {
-                // --- CORRECCIÓN APLICADA AQUÍ ---
-                const nuevoProducto = { id: this.generarUUID(), ...data };
-                this.productos.push(nuevoProducto);
-
-                // Ya no es necesario actualizar idCounter para esta operación específica
-                const datosParaGuardar = {
-                    productos: this.productos
-                };
-                
-                if (nuevoProducto.stock > 0 && nuevoProducto.costo > 0) {
-                    const valorInventario = nuevoProducto.stock * nuevoProducto.costo;
-                    this.crearAsiento(
-                        this.getTodayDate(), `Stock inicial para ${nuevoProducto.nombre}`,
-                        [
-                            { cuentaId: nuevoProducto.cuentaInventarioId, debe: valorInventario, haber: 0 },
-                            { cuentaId: 330, debe: 0, haber: valorInventario }
-                        ]
-                    );
-                    datosParaGuardar.asientos = this.asientos;
-                }
-                
-                await this.repository.actualizarMultiplesDatos(datosParaGuardar);
-            }
-
-            this.closeModal();
-            this.irModulo('inventario');
-            this.showToast(`Producto/Servicio ${id ? 'actualizado' : 'creado'} con éxito.`, 'success');
-
-        } catch (error) {
-            console.error("Error al guardar producto:", error);
-            this.showToast(`Error al guardar: ${error.message}`, 'error');
+    try {
+        if (id) {
+            // EDITAR: actualiza el producto existente sin tocar el stock
+            const productoOriginal = this.findById(this.productos, id);
+            Object.assign(productoOriginal, data);
+            await this.repository.actualizarMultiplesDatos({ productos: this.productos });
+        } else {
+            // CREAR: usa spread correcto (...data) y NO inicializa stock manual
+            const nuevoProducto = {
+                id: this.generarUUID(),
+                ...data,
+                // Importante: modelo nuevo usa stockPorSucursal; empieza vacío
+                stockPorSucursal: {}
+            };
+            this.productos.push(nuevoProducto);
+            await this.repository.actualizarMultiplesDatos({ productos: this.productos });
         }
-    },
+
+        this.closeModal();
+        this.irModulo('inventario');
+        this.showToast(`Producto/Servicio ${id ? 'actualizado' : 'creado'} con éxito.`, 'success');
+    } catch (error) {
+        console.error("Error al guardar producto:", error);
+        this.showToast(`Error al guardar: ${error.message}`, 'error');
+    }
+},
     abrirModalAjusteInventario(productoId) {
     const producto = this.findById(this.productos, productoId);
     if(!producto || producto.tipo !== 'producto') {
@@ -749,4 +792,253 @@ Object.assign(ContaApp, {
         this.irModulo('ventas', { action: 'new' });
         // --- FIN DE LA MEJORA ---
     },
+    // --- INICIO DE CÓDIGO NUEVO ---
+
+/**
+ * Activa o desactiva el botón de transferencia basado en la selección y el número de sucursales.
+ */
+actualizarEstadoBotonTransferencia() {
+    const btn = document.getElementById('transfer-btn');
+    if (!btn) return;
+
+    // 1) Selección (tolerante: usa la clase si existe; si no, busca checkboxes dentro del área)
+    let seleccionados = Array.from(document.querySelectorAll('.inventario-checkbox:checked'));
+    if (seleccionados.length === 0) {
+        const area = document.getElementById('inventario-contenido') || document;
+        seleccionados = Array.from(area.querySelectorAll('tbody input[type="checkbox"]:checked'));
+    }
+
+    // 2) Sucursales disponibles (sucursales o centros de costo)
+    const sucursales = this.getSucursalesActivas();
+    const tieneMasDeUnaSucursal = (sucursales.filter(Boolean).length >= 2);
+
+    // 3) Licencia
+    const multiOk = (this.isMultiSucursalActivo && this.isMultiSucursalActivo()) ? true : false;
+
+    // 4) Determinar si puede transferir
+    const puedeTransferir = multiOk && tieneMasDeUnaSucursal && seleccionados.length > 0;
+
+    // 5) Aplicar estado + tooltip de motivo
+    btn.disabled = !puedeTransferir;
+    if (!multiOk) {
+        btn.title = 'Disponible en plan Multi-Sucursal. Actualiza tu licencia.';
+    } else if (!tieneMasDeUnaSucursal) {
+        btn.title = 'Necesitas al menos dos sucursales para transferir.';
+    } else if (seleccionados.length === 0) {
+        btn.title = 'Selecciona uno o más productos para transferir.';
+    } else {
+        btn.title = '';
+    }
+
+    // Log de apoyo (para debug rápido en consola)
+    console.debug('[Transferencia] multiOk:', multiOk, '| sucursales:', sucursales.length, '| seleccionados:', seleccionados.length, '| habilitado:', !btn.disabled);
+},
+getSucursalesActivas() {
+    const s = Array.isArray(this.empresa?.sucursales) ? this.empresa.sucursales : [];
+    if (s.length > 0) return s;
+    const cc = Array.isArray(this.empresa?.centrosDeCosto) ? this.empresa.centrosDeCosto : [];
+    return cc.map(c => ({ id: String(c.id), nombre: c.nombre }));
+},
+/**
+ * Selecciona o deselecciona todos los checkboxes de la lista de inventario.
+ * @param {HTMLInputElement} checkboxPrincipal - El checkbox de la cabecera de la tabla.
+ */
+toggleSeleccionInventario(checkboxPrincipal) {
+    const todosLosCheckboxes = document.querySelectorAll('.inventario-checkbox');
+    todosLosCheckboxes.forEach(cb => {
+        cb.checked = checkboxPrincipal.checked;
+    });
+    this.actualizarEstadoBotonTransferencia();
+},
+abrirModalTransferenciaInventario() {
+    // Licencia
+    if (!(this.isMultiSucursalActivo && this.isMultiSucursalActivo())) {
+        this.showToast('Función disponible en plan Multi-Sucursal.', 'error');
+        return;
+    }
+
+    // Selección
+    let seleccionados = Array.from(document.querySelectorAll('.inventario-checkbox:checked'));
+    if (seleccionados.length === 0) {
+        const area = document.getElementById('inventario-contenido') || document;
+        seleccionados = Array.from(area.querySelectorAll('tbody input[type="checkbox"]:checked'));
+    }
+    if (seleccionados.length === 0) {
+        this.showToast('Debes seleccionar al menos un producto para transferir.', 'error');
+        return;
+    }
+
+    // Sucursales
+    const sucursales = this.getSucursalesActivas();
+    if (!sucursales || sucursales.length < 2) {
+        this.showToast('Necesitas al menos dos sucursales para transferir.', 'error');
+        return;
+    }
+
+    const sucursalesOptions = sucursales.map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
+    let itemsHTML = '';
+    seleccionados.forEach(cb => {
+        const producto = this.findById(this.productos, cb.value);
+        if (!producto) return;
+        itemsHTML += `
+            <div class="transfer-item-row grid grid-cols-12 gap-4 items-center py-2 border-b border-[var(--color-border-accent)]" data-product-id="${producto.id}">
+                <div class="col-span-6 font-semibold">${producto.nombre}</div>
+                <div class="col-span-3 text-sm text-[var(--color-text-secondary)]">
+                    Stock Origen: <span class="stock-origen-display font-mono">--</span>
+                </div>
+                <div class="col-span-3">
+                    <input type="number" min="0" class="w-full conta-input text-right transfer-cantidad" placeholder="0" oninput="ContaApp.validarCantidadTransferencia && ContaApp.validarCantidadTransferencia(this)">
+                </div>
+            </div>`;
+    });
+
+    const modalHTML = `
+        <h3 class="conta-title mb-4">Transferir Inventario entre Sucursales</h3>
+        <form onsubmit="ContaApp.guardarTransferenciaInventario(event)" class="space-y-4 modal-form">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label>Desde (Sucursal Origen)</label>
+                    <select id="transfer-origen" class="w-full conta-input mt-1" required onchange="ContaApp.actualizarStockOrigenTransferencia && ContaApp.actualizarStockOrigenTransferencia()">
+                        <option value="">-- Seleccionar Origen --</option>
+                        ${sucursalesOptions}
+                    </select>
+                </div>
+                <div>
+                    <label>Hacia (Sucursal Destino)</label>
+                    <select id="transfer-destino" class="w-full conta-input mt-1" required>
+                        <option value="">-- Seleccionar Destino --</option>
+                        ${sucursalesOptions}
+                    </select>
+                </div>
+            </div>
+            <div class="conta-card p-4 mt-4">
+                <h4 class="font-bold mb-2">Productos a Transferir</h4>
+                <div id="transfer-items-container">${itemsHTML}</div>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+                <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button>
+                <button type="submit" class="conta-btn">Confirmar Transferencia</button>
+            </div>
+        </form>`;
+    this.showModal(modalHTML, '4xl');
+},
+
+// --- INICIO DE CÓDIGO NUEVO ---
+
+/**
+ * Muestra el stock disponible para cada producto en el modal de transferencia
+ * cuando el usuario selecciona una sucursal de origen.
+ */
+actualizarStockOrigenTransferencia() {
+    const origenId = document.getElementById('transfer-origen').value;
+    if (!origenId) return;
+
+    document.querySelectorAll('.transfer-item-row').forEach(row => {
+        const productoId = row.dataset.productId;
+        const producto = this.findById(this.productos, productoId);
+        const stockOrigen = producto.stockPorSucursal[origenId] || 0;
+        
+        row.querySelector('.stock-origen-display').textContent = stockOrigen;
+        row.querySelector('.transfer-cantidad').max = stockOrigen;
+    });
+},
+
+/**
+ * Valida en tiempo real que la cantidad a transferir no exceda el stock de origen.
+ * @param {HTMLInputElement} inputCantidad - El campo de cantidad que se está modificando.
+ */
+validarCantidadTransferencia(inputCantidad) {
+    const maxStock = parseFloat(inputCantidad.max);
+    const valorActual = parseFloat(inputCantidad.value);
+
+    if (valorActual > maxStock) {
+        inputCantidad.value = maxStock;
+        this.showToast('La cantidad a transferir no puede exceder el stock de origen.', 'error');
+    }
+    if (valorActual < 0) {
+        inputCantidad.value = 0;
+    }
+},
+
+/**
+ * Procesa y guarda la transferencia de inventario, actualizando el stock
+ * y generando el asiento contable correspondiente.
+ */
+async guardarTransferenciaInventario(event) {
+    event.preventDefault();
+    const origenId = document.getElementById('transfer-origen').value;
+    const destinoId = document.getElementById('transfer-destino').value;
+
+    if (origenId === destinoId) {
+        this.showToast('La sucursal de origen y destino no pueden ser la misma.', 'error');
+        return;
+    }
+
+    const itemRows = document.querySelectorAll('.transfer-item-row');
+    const itemsParaTransferir = [];
+    let valorTotalTransferencia = 0;
+
+    for (const row of itemRows) {
+        const productoId = row.dataset.productId;
+        const cantidadInput = row.querySelector('.transfer-cantidad');
+        const cantidad = parseFloat(cantidadInput.value);
+
+        if (cantidad > 0) {
+            const producto = this.findById(this.productos, productoId);
+            const stockOrigen = producto.stockPorSucursal[origenId] || 0;
+
+            if (cantidad > stockOrigen) {
+                this.showToast(`Error: La cantidad de "${producto.nombre}" excede el stock disponible en la sucursal de origen.`, 'error');
+                return;
+            }
+            itemsParaTransferir.push({ producto, cantidad });
+            valorTotalTransferencia += producto.costo * cantidad;
+        }
+    }
+
+    if (itemsParaTransferir.length === 0) {
+        this.showToast('Debes especificar la cantidad para al menos un producto.', 'error');
+        return;
+    }
+
+    // Actualizar el estado del stock en la aplicación
+    itemsParaTransferir.forEach(({ producto, cantidad }) => {
+        // Restar del origen
+        producto.stockPorSucursal[origenId] = (producto.stockPorSucursal[origenId] || 0) - cantidad;
+        // Sumar al destino
+        producto.stockPorSucursal[destinoId] = (producto.stockPorSucursal[destinoId] || 0) + cantidad;
+    });
+
+    // Crear el asiento contable
+    const sucursalOrigen = this.empresa.sucursales.find(s => s.id === origenId);
+    const sucursalDestino = this.empresa.sucursales.find(s => s.id === destinoId);
+    const descripcionAsiento = `Transferencia de inventario de ${sucursalOrigen.nombre} a ${sucursalDestino.nombre}`;
+    
+    const movimientos = [];
+    itemsParaTransferir.forEach(({ producto, cantidad }) => {
+        const valorItem = producto.costo * cantidad;
+        movimientos.push({
+            cuentaId: producto.cuentaInventarioId,
+            debe: 0,
+            haber: valorItem,
+            sucursalId: origenId
+        });
+        movimientos.push({
+            cuentaId: producto.cuentaInventarioId,
+            debe: valorItem,
+            haber: 0,
+            sucursalId: destinoId
+        });
+    });
+
+    const asiento = this.crearAsiento(this.getTodayDate(), descripcionAsiento, movimientos);
+    if (asiento) {
+        await this.saveAll();
+        this.closeModal();
+        this.irModulo('inventario');
+        this.showToast('Transferencia realizada con éxito.', 'success');
+    }
+},
+
+// --- FIN DE CÓDIGO NUEVO ---
 });

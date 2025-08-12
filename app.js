@@ -101,37 +101,45 @@ const ROLES = {
         
         return permisos.modules.includes(permissionKey) || permisos.actions.includes(permissionKey);
     },
-            async init(repository, userProfile) { 
-    this.repository = repository;
-    this.currentUser = userProfile;
+            async init(repository, userProfile) {
+  this.repository = repository;
+  this.currentUser = userProfile;
 
-    this.initTheme();
-    this.initGlobalSearch();
+  this.initTheme();
+  this.initGlobalSearch();
 
-    const dataString = await this.repository.loadAll();
+  const dataString = await this.repository.loadAll();
+  this.loadAll(dataString);
 
-    this.loadAll(dataString); 
+  let seHicieronCambios = false;
 
-    let seHicieronCambios = false;
-    this.productos.forEach(producto => {
-        if (!producto.cuentaInventarioId && producto.tipo === 'producto') {
-            producto.cuentaInventarioId = 13001; 
-            seHicieronCambios = true;
-        }
-    });
+  // Unificar sucursales <-> centros de costo al iniciar
+  try {
+    const changed = this.syncSucursalesYCentrosDeCosto && this.syncSucursalesYCentrosDeCosto();
+    if (changed) seHicieronCambios = true;
+  } catch (e) {
+    console.warn('syncSucursalesYCentrosDeCosto() error:', e);
+  }
 
-    if (seHicieronCambios) {
-        console.log("Actualizando productos antiguos con categoría de inventario por defecto...");
-        this.saveAll();
+  // Ajuste inventario legado (por si faltaba categoría)
+  (this.productos || []).forEach(p => {
+    if (!p.cuentaInventarioId && p.tipo === 'producto') {
+      p.cuentaInventarioId = 13001;
+      seHicieronCambios = true;
     }
+  });
 
-    if (!dataString || Object.keys(JSON.parse(dataString)).length === 0) {
-        this.abrirAsistenteApertura();
-    } else {
-        this.actualizarSaldosGlobales();
-        this.actualizarPerfilEmpresa();
-        await this.irModulo('dashboard');
-    }
+  if (seHicieronCambios) {
+    await this.saveAll();
+  }
+
+  if (!dataString || Object.keys(JSON.parse(dataString)).length === 0) {
+    this.abrirAsistenteApertura();
+  } else {
+    this.actualizarSaldosGlobales();
+    this.actualizarPerfilEmpresa();
+    await this.irModulo('dashboard');
+  }
 },
 
       
@@ -1134,7 +1142,7 @@ getPeriodoContableActual() {
             cuenta.saldo = cuentaConSaldo ? cuentaConSaldo.saldo : 0;
         });
     },
-                getSaldosPorPeriodo(fechaFin = null, fechaInicio = null, centroDeCostoId = null) {
+                getSaldosPorPeriodo(fechaFin = null, fechaInicio = null, sucursalId = null) {
     const planCopia = JSON.parse(JSON.stringify(this.planDeCuentas));
     planCopia.forEach(c => c.saldo = 0);
     
@@ -1146,16 +1154,13 @@ getPeriodoContableActual() {
         return true;
     });
 
-    if (centroDeCostoId) {
-        asientosAProcesar = asientosAProcesar.filter(asiento => 
-            asiento.movimientos.some(mov => mov.centroDeCostoId === centroDeCostoId)
-        );
-    }
-    
+    // --- INICIO DE LA MODIFICACIÓN ---
+    // La lógica de filtrado por sucursal se hace más robusta y explícita
     asientosAProcesar.forEach(asiento => {
         asiento.movimientos.forEach(mov => {
-            if (centroDeCostoId && mov.centroDeCostoId !== centroDeCostoId) {
-                return;
+            // Si estamos filtrando por una sucursal, solo consideramos los movimientos de esa sucursal.
+            if (sucursalId && mov.sucursalId !== sucursalId) {
+                return; 
             }
 
             const cuenta = planCopia.find(c => c.id === mov.cuentaId);
@@ -1165,6 +1170,7 @@ getPeriodoContableActual() {
             }
         });
     });
+    // --- FIN DE LA MODIFICACIÓN ---
 
     const cuentasPorProcesar = planCopia.filter(c => c.tipo !== 'DETALLE').sort((a,b) => b.codigo.length - a.codigo.length);
     cuentasPorProcesar.forEach(c => c.saldo = 0); 
@@ -1861,5 +1867,161 @@ aplicarFiltrosAvanzados(modulo) {
 
         this.bancoImportado[cuentaId].push(nuevoMovimiento);
     },
+isMultiSucursalActivo() {
+  return !!(this.empresa?.licencia?.modulosActivos || []).includes('MULTISUCURSAL');
+},
 
+getPrincipalSucursalId() {
+  if (!this.empresa) this.empresa = {};
+  if (!Array.isArray(this.empresa.sucursales)) this.empresa.sucursales = [];
+  if (this.empresa.principalSucursalId) {
+    const ok = this.empresa.sucursales.find(s => String(s.id) === String(this.empresa.principalSucursalId));
+    if (ok) return this.empresa.principalSucursalId;
+  }
+  let principal = this.empresa.sucursales.find(s => s.nombre === 'Sucursal Principal');
+  if (!principal) {
+    principal = { id: this.generarUUID(), nombre: 'Sucursal Principal' };
+    this.empresa.sucursales.push(principal);
+  }
+  this.empresa.principalSucursalId = principal.id;
+  return principal.id;
+},
+
+// Garantiza que exista la principal (alias cómodo)
+ensureSucursalPrincipal() { return this.getPrincipalSucursalId(); },
+
+// Lista de sucursales activas
+getSucursalesActivas() {
+  return Array.isArray(this.empresa?.sucursales) ? this.empresa.sucursales : [];
+},
+
+syncSucursalesYCentrosDeCosto() {
+  if (!this.empresa) this.empresa = {};
+  if (!Array.isArray(this.empresa.sucursales)) this.empresa.sucursales = [];
+  if (!Array.isArray(this.empresa.centrosDeCosto)) this.empresa.centrosDeCosto = [];
+
+  const beforeJSON = JSON.stringify({ s: this.empresa.sucursales, c: this.empresa.centrosDeCosto });
+
+  const map = new Map();
+  const push = (id, nombre) => {
+    const key = String(id || '');
+    if (!key) return;
+    if (!map.has(key)) map.set(key, { id: key, nombre: nombre || 'Sucursal' });
+  };
+
+  // Unificamos: lo que esté en cualquiera de los dos, queda en ambos
+  this.empresa.sucursales.forEach(s => push(s.id, s.nombre));
+  this.empresa.centrosDeCosto.forEach(cc => push(cc.id, cc.nombre));
+
+  // Asegurar que exista una Principal y que principalSucursalId sea válido
+  if (map.size === 0) {
+    const pid = this.generarUUID();
+    map.set(pid, { id: pid, nombre: 'Sucursal Principal' });
+    this.empresa.principalSucursalId = pid;
+  } else {
+    const pid = this.empresa.principalSucursalId;
+    if (!pid || !map.has(String(pid))) {
+      const first = Array.from(map.values())[0];
+      this.empresa.principalSucursalId = first.id;
+    }
+  }
+
+  // Espejo en ambos arrays (mismo ID)
+  this.empresa.sucursales = Array.from(map.values());
+  this.empresa.centrosDeCosto = this.empresa.sucursales.map(s => ({ id: s.id, nombre: s.nombre }));
+
+  const afterJSON = JSON.stringify({ s: this.empresa.sucursales, c: this.empresa.centrosDeCosto });
+  return beforeJSON !== afterJSON;
+},
+// ======================== REPARAR STOCK POR SUCURSAL ========================
+// Backfill inteligente para poblar `stockPorSucursal`.
+// - Si encuentra `producto.stock` (modelo viejo / apertura), lo mueve a la Sucursal Principal.
+// - Si NO hay `stock` pero hay transacciones, intenta reconstruir a partir de compras/ventas.
+// - No sobreescribe productos que YA tengan stockPorSucursal con saldos > 0.
+async repararStockPorSucursal(opciones = { recalcularDesdeTransacciones: true }) {
+    const principalId = this.ensureSucursalPrincipal();
+    let huboCambios = false;
+
+    // 1) Normalizar estructura por producto y migrar `stock` legado
+    (this.productos || []).forEach(p => {
+        if (p.tipo !== 'producto') return;
+
+        if (!p.stockPorSucursal || typeof p.stockPorSucursal !== 'object') {
+            p.stockPorSucursal = {};
+        }
+
+        if (typeof p.stock === 'number' && p.stock > 0) {
+            p.stockPorSucursal[principalId] = (p.stockPorSucursal[principalId] || 0) + p.stock;
+            delete p.stock; // remover campo viejo
+            huboCambios = true;
+        }
+    });
+
+    // 2) (Opcional) Reconstrucción desde transacciones si no hay saldos existentes
+    if (opciones.recalcularDesdeTransacciones) {
+        // Mapa temporal por producto y sucursal
+        const tmp = {};
+        (this.productos || []).forEach(p => { if (p.tipo === 'producto') tmp[p.id] = {}; });
+
+        (this.transacciones || []).forEach(t => {
+            const sucursalId = t.sucursalId || principalId;
+            if (!Array.isArray(t.items)) return;
+
+            t.items.forEach(it => {
+                const pid = it.productoId || it.idProducto || it.id;
+                if (!tmp[pid]) return;
+
+                const qty = Number(it.cantidad) || 0;
+                if (t.tipo === 'compra_inventario' || t.tipo === 'produccion_terminada' || t.tipo === 'apertura_inventario') {
+                    tmp[pid][sucursalId] = (tmp[pid][sucursalId] || 0) + qty;
+                } else if (t.tipo === 'venta') {
+                    tmp[pid][sucursalId] = (tmp[pid][sucursalId] || 0) - qty;
+                } else if (t.tipo === 'transferencia_inventario' && it.origenSucursalId && it.destinoSucursalId) {
+                    // Si tu estructura de items de transferencia guarda origen/destino por renglón
+                    tmp[pid][it.origenSucursalId]  = (tmp[pid][it.origenSucursalId]  || 0) - qty;
+                    tmp[pid][it.destinoSucursalId] = (tmp[pid][it.destinoSucursalId] || 0) + qty;
+                }
+            });
+        });
+
+        // Aplicar deltas SOLO si el producto no tiene stockPorSucursal con saldos ya existentes
+        (this.productos || []).forEach(p => {
+            if (p.tipo !== 'producto') return;
+            const saldoExistente = Object.values(p.stockPorSucursal).reduce((a, b) => a + Number(b || 0), 0);
+            if (saldoExistente > 0) return; // respetar lo que ya está
+
+            const mapa = tmp[p.id] || {};
+            const sucursales = Object.keys(mapa);
+            if (sucursales.length > 0) {
+                sucursales.forEach(sid => {
+                    const delta = Number(mapa[sid] || 0);
+                    if (Math.abs(delta) > 0) {
+                        p.stockPorSucursal[sid] = (p.stockPorSucursal[sid] || 0) + delta;
+                        huboCambios = true;
+                    }
+                });
+            }
+        });
+    }
+
+    if (huboCambios) {
+        await this.saveAll();
+        this.showToast('Stock por sucursal reconstruido correctamente.', 'success');
+        // refrescar inventario si está abierto
+        try { if (document.getElementById('inventario')) this.irModulo('inventario', this.moduleFilters['inventario'] || {}); } catch(e){}
+    } else {
+        this.showToast('No se detectaron cambios para reconstruir.', 'info');
+    }
+},
+
+// Helper temporal para activar módulos desde consola (solo para pruebas)
+// Uso: ContaApp.activarModulo('MULTISUCURSAL')
+activarModulo(mod) {
+    if (!this.empresa.licencia) this.empresa.licencia = { modulosActivos: [] };
+    if (!this.empresa.licencia.modulosActivos.includes(mod)) {
+        this.empresa.licencia.modulosActivos.push(mod);
+        this.saveAll();
+        this.showToast(`Módulo ${mod} activado.`, 'success');
+    }
+},
 };

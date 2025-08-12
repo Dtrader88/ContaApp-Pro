@@ -82,43 +82,198 @@ Object.assign(ContaApp, {
     document.getElementById('compras').innerHTML = html;
 },
 
-    abrirModalNuevaCompra() {
-        const modalHTML = `
-            <h3 class="conta-title mb-4">Registrar Nueva Compra</h3>
-            <form onsubmit="ContaApp.guardarCompra(event)" class="modal-form">
-                
-                <div class="conta-card p-4 mb-4">
-                    <label class="font-semibold">Paso 1: ¿Qué tipo de bien estás comprando?</label>
-                    <div class="flex flex-wrap gap-x-6 gap-y-2 mt-2" onchange="ContaApp._renderCompraModalContent()">
-                        <label class="flex items-center cursor-pointer">
-                            <input type="radio" name="compra-tipo" value="reventa" class="h-4 w-4" checked>
-                            <span class="ml-2">Inventario para Reventa</span>
-                        </label>
-                        <label class="flex items-center cursor-pointer">
-                            <input type="radio" name="compra-tipo" value="materia_prima" class="h-4 w-4">
-                            <span class="ml-2">Materias Primas (Producción)</span>
-                        </label>
-                        <label class="flex items-center cursor-pointer">
-                            <input type="radio" name="compra-tipo" value="activo_fijo" class="h-4 w-4">
-                            <span class="ml-2">Activo Fijo</span>
-                        </label>
-                    </div>
+    // --- REEMPLAZO COMPLETO ---
+abrirModalNuevaCompra() {
+    const sucursales = this.empresa.sucursales || [];
+    const sucursalesOptions = sucursales.map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
+
+    const cuentasInventarioOptions = this.planDeCuentas
+        .filter(c => c.parentId === 130 && c.tipo === 'DETALLE')
+        .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }))
+        .map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`)
+        .join('');
+
+    const cuentasBancoOptions = this.planDeCuentas
+        .filter(c => c.parentId === 110 && c.tipo === 'DETALLE')
+        .map(c => `<option value="${c.id}">${c.nombre}</option>`)
+        .join('');
+
+    const proveedoresOptions = (this.contactos || [])
+        .filter(c => c.tipo === 'proveedor')
+        .map(c => `<option value="${c.id}">${c.nombre}</option>`)
+        .join('');
+
+    const today = this.getTodayDate();
+
+    const modalHTML = `
+        <h3 class="conta-title mb-4">Registrar Nueva Compra</h3>
+        <form onsubmit="ContaApp.guardarCompra(event)" class="modal-form">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 conta-card mb-4">
+                <div>
+                    <label>Proveedor</label>
+                    <select id="compra-proveedor-id" class="w-full conta-input mt-1" required>
+                        <option value="">-- Seleccionar --</option>
+                        ${proveedoresOptions}
+                    </select>
+                </div>
+                <div>
+                    <label>Fecha</label>
+                    <input type="date" id="compra-fecha" class="w-full conta-input mt-1" value="${today}" required>
+                </div>
+                <div>
+                    <label>Referencia #</label>
+                    <input type="text" id="compra-referencia" class="w-full conta-input mt-1" placeholder="Opcional">
                 </div>
 
-                <!-- El contenido dinámico del formulario se renderizará aquí -->
-                <div id="compra-modal-content"></div>
-                
-                <div class="flex justify-end gap-2 mt-8">
-                    <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button>
-                    <button type="submit" id="guardar-compra-btn" class="conta-btn">Continuar</button>
+                <!-- Sucursal que recibe -->
+                <div>
+                    <label>Sucursal que recibe</label>
+                    <select id="compra-sucursal-id" class="w-full conta-input mt-1" required>
+                        <option value="">-- Seleccionar sucursal --</option>
+                        ${sucursalesOptions}
+                    </select>
                 </div>
-            </form>
-        `;
+            </div>
 
-        this.showModal(modalHTML, '5xl');
-        // Renderizar el contenido inicial basado en la opción por defecto (reventa)
-        this._renderCompraModalContent();
-    },
+            <!-- Tipo de compra -->
+            <div class="conta-card p-4 mb-4">
+                <label class="font-semibold">Paso 1: ¿Qué tipo de bien estás comprando?</label>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio" name="compra-tipo" value="reventa" class="h-4 w-4" checked>
+                        <span class="ml-2">Mercancía para Reventa</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio" name="compra-tipo" value="materia_prima" class="h-4 w-4">
+                        <span class="ml-2">Materias Primas (Producción)</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio" name="compra-tipo" value="activo_fijo" class="h-4 w-4">
+                        <span class="ml-2">Activo Fijo</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Ítems -->
+            <div id="compra-items-card" class="conta-card p-4 mb-4">
+                <div class="grid grid-cols-12 gap-2 font-semibold mb-2 text-sm">
+                    <div class="col-span-5">Producto</div>
+                    <div class="col-span-2 text-right">Cantidad</div>
+                    <div class="col-span-2">Unidad</div>
+                    <div class="col-span-2 text-right">Costo Unit.</div>
+                    <div class="col-span-1 text-center">—</div>
+                </div>
+                <div id="compra-items-container" class="space-y-2"></div>
+                <button type="button" class="conta-btn conta-btn-ghost" onclick="ContaApp._agregarItemCompra()">+ Agregar Ítem</button>
+            </div>
+
+            <!-- Pie -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 conta-card">
+                <div>
+                    <label>Descripción</label>
+                    <input type="text" id="compra-descripcion" class="w-full conta-input mt-1" placeholder="Opcional">
+                </div>
+
+                <!-- Condición de Pago -->
+                <div>
+                    <label>Condición de Pago</label>
+                    <select id="compra-pago-tipo" class="w-full conta-input mt-1" onchange="ContaApp._togglePagoCompra()">
+                        <option value="credito">A Crédito (CxP/210)</option>
+                        <option value="contado">De Contado</option>
+                    </select>
+                </div>
+
+                <!-- Cuenta bancaria (solo contado) -->
+                <div id="compra-pago-cuenta-banco-div" style="display:none;">
+                    <label>Cuenta Bancaria</label>
+                    <select id="compra-pago-id" class="w-full conta-input mt-1">
+                        <option value="">-- Seleccionar cuenta --</option>
+                        ${cuentasBancoOptions}
+                    </select>
+                </div>
+
+                <!-- Cuenta de Inventario -->
+                <div>
+                    <label>Cuenta de Inventario</label>
+                    <select id="compra-cuenta-inventario-id" class="w-full conta-input mt-1" required>
+                        ${cuentasInventarioOptions}
+                    </select>
+                </div>
+
+                <!-- Comprobante -->
+                <div class="md:col-span-2">
+                    <label>Comprobante (opcional)</label>
+                    <input type="file" id="compra-comprobante" class="w-full conta-input mt-1" accept="image/*,application/pdf">
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 mt-6">
+                <button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button>
+                <button id="guardar-compra-btn" type="submit" class="conta-btn">Guardar Compra</button>
+            </div>
+        </form>
+    `;
+    this.showModal(modalHTML, '4xl');
+
+    // Render inicial de filas + estado inicial del selector de pago
+    this._agregarItemCompra();
+    this._togglePagoCompra();
+},
+// ===== INICIO: NUEVA/REEMPLAZO función _agregarItemCompra =====
+_agregarItemCompra() {
+    // Unidades
+    const unidadesOptions = (this.unidadesMedida || [])
+        .map(u => `<option value="${u.id}">${u.nombre}</option>`)
+        .join('');
+
+    // Productos existentes
+    const productosOptions = (this.productos || [])
+        .filter(p => p.tipo === 'producto')
+        .sort((a,b) => a.nombre.localeCompare(b.nombre))
+        .map(p => `<option value="${p.id}">${p.nombre}</option>`)
+        .join('');
+
+    const rowId = `compra-row-${this.generarUUID().slice(0,8)}`;
+
+    const rowHTML = `
+        <div id="${rowId}" class="grid grid-cols-12 gap-2 items-start compra-item-row">
+            <!-- Producto -->
+            <div class="col-span-5">
+                <select class="w-full conta-input compra-item-producto-id" onchange="ContaApp._onProductoSelectChange(this)">
+                    <option value="">-- Seleccionar producto --</option>
+                    <option value="__nuevo__">➕ Crear producto nuevo</option>
+                    ${productosOptions}
+                </select>
+                <input type="text" class="w-full conta-input mt-2 compra-item-nuevo-nombre" placeholder="Nombre del nuevo producto" style="display:none;">
+            </div>
+
+            <!-- Cantidad -->
+            <div class="col-span-2">
+                <input type="number" min="0" step="0.0001" class="w-full conta-input text-right compra-item-cantidad" placeholder="0">
+            </div>
+
+            <!-- Unidad -->
+            <div class="col-span-2">
+                <select class="w-full conta-input compra-item-unidad-select">
+                    ${unidadesOptions}
+                </select>
+            </div>
+
+            <!-- Costo unitario -->
+            <div class="col-span-2">
+                <input type="number" min="0" step="0.0001" class="w-full conta-input text-right compra-item-costo" placeholder="0.00">
+            </div>
+
+            <!-- Quitar fila -->
+            <button type="button" class="col-span-1 conta-btn conta-btn-ghost" title="Eliminar ítem"
+                onclick="this.closest('.compra-item-row').remove()">🗑️</button>
+        </div>
+    `;
+
+    document.getElementById('compra-items-container').insertAdjacentHTML('beforeend', rowHTML);
+},
+// ===== FIN: NUEVA/REEMPLAZO función _agregarItemCompra =====
+
     _renderCompraModalContent() {
         const tipoSeleccionado = document.querySelector('input[name="compra-tipo"]:checked').value;
         const container = document.getElementById('compra-modal-content');
@@ -317,141 +472,156 @@ Object.assign(ContaApp, {
         this.showToast('Unidad de medida creada y seleccionada.', 'success');
         document.body.removeChild(document.getElementById('sub-modal-bg'));
     },
-        async guardarCompra(e) {
+        // --- REEMPLAZO COMPLETO ---
+async guardarCompra(e) {
     e.preventDefault();
-    const tipoSeleccionado = document.querySelector('input[name="compra-tipo"]:checked').value;
     const submitButton = document.getElementById('guardar-compra-btn');
     this.toggleButtonLoading(submitButton, true);
 
     try {
-        if (tipoSeleccionado === 'reventa' || tipoSeleccionado === 'materia_prima') {
-            const proveedorId = document.getElementById('compra-proveedor-id').value;
-            if (!proveedorId) {
-                throw new Error('Debe seleccionar un proveedor válido de la lista.');
-            }
-
-            const fecha = document.getElementById('compra-fecha').value;
-            const referencia = document.getElementById('compra-referencia').value;
-            const descripcion = document.getElementById('compra-descripcion').value;
-            const cuentaInventarioId = parseInt(document.getElementById('compra-cuenta-inventario-id').value);
-            const cuentaPagoId = parseInt(document.getElementById('compra-pago-id').value);
-            const archivo = document.getElementById('compra-comprobante').files[0];
-            let comprobanteDataUrl = null;
-
-            if (archivo) {
-                if (archivo.size > 1024 * 1024) { throw new Error('El archivo es demasiado grande (máx 1MB).'); }
-                comprobanteDataUrl = await new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result);
-                    reader.onerror = error => reject(error);
-                    reader.readAsDataURL(archivo);
-                });
-            }
-            
-            const items = [];
-            let totalCompra = 0;
-            const itemRows = document.querySelectorAll('.compra-item-row');
-
-            for (const row of itemRows) {
-                let productoId = row.querySelector('.compra-item-producto-id').value;
-                const productoNombre = row.querySelector('.compra-item-producto-input').value.trim();
-                const cantidad = parseFloat(row.querySelector('.compra-item-cantidad').value);
-                const costoUnitario = parseFloat(row.querySelector('.compra-item-costo').value);
-                const unidadMedidaId = parseInt(row.querySelector('.compra-item-unidad-select').value);
-
-                if (!productoNombre || !(cantidad > 0) || !(costoUnitario >= 0)) continue;
-
-                if (!productoId) { // Se cambió la validación de isNaN a !productoId
-                    const productoExistente = this.productos.find(p => p.nombre.toLowerCase() === productoNombre.toLowerCase());
-                    if (productoExistente) {
-                        productoId = productoExistente.id;
-                    } else {
-                        const nuevoProducto = {
-                            id: this.generarUUID(),
-                            nombre: productoNombre,
-                            tipo: 'producto',
-                            stock: 0,
-                            costo: 0,
-                            precio: 0,
-                            unidadMedidaId: unidadMedidaId,
-                            cuentaInventarioId: cuentaInventarioId,
-                            cuentaIngresoId: 41001
-                        };
-                        this.productos.push(nuevoProducto);
-                        productoId = nuevoProducto.id;
-                    }
-                }
-                
-                items.push({ productoId, cantidad, costoUnitario });
-                totalCompra += cantidad * costoUnitario;
-            }
-
-            if (items.length === 0) { throw new Error('Debe añadir al menos un ítem a la compra.'); }
-
-            items.forEach(item => {
-                const producto = this.findById(this.productos, item.productoId);
-                if (producto) {
-                    const valorTotalStockActual = (producto.stock || 0) * (producto.costo || 0);
-                    const valorCompra = item.cantidad * item.costoUnitario;
-                    const nuevoStock = (producto.stock || 0) + item.cantidad;
-
-                    producto.costo = nuevoStock > 0 ? (valorTotalStockActual + valorCompra) / nuevoStock : item.costoUnitario;
-                    producto.stock = nuevoStock;
-                }
-            });
-            
-            const descripcionFinal = descripcion || `Compra de inventario s/f #${referencia || 'N/A'}`;
-            
-            const nuevaCompra = {
-                id: this.generarUUID(), tipo: 'compra_inventario',
-                fecha, contactoId: proveedorId, referencia, descripcion: descripcionFinal,
-                items, total: totalCompra, comprobanteDataUrl
-            };
-            
-            // --- INICIO DE LA CORRECCIÓN ---
-            // Se añade la lógica para manejar correctamente el pago de contado vs crédito
-            if (cuentaPagoId === 210) { // 210 es Cuentas por Pagar
-                nuevaCompra.estado = 'Pendiente';
-                nuevaCompra.montoPagado = 0;
-            } else {
-                nuevaCompra.estado = 'Pagado';
-                nuevaCompra.montoPagado = totalCompra;
-            }
-            // --- FIN DE LA CORRECCIÓN ---
-
-            this.transacciones.push(nuevaCompra);
-
-            const asiento = this.crearAsiento(fecha, descripcionFinal,
-                [{ cuentaId: cuentaInventarioId, debe: totalCompra, haber: 0 }, { cuentaId: cuentaPagoId, debe: 0, haber: totalCompra }],
-                nuevaCompra.id
-            );
-            
-            if (asiento) {
-                await this.repository.actualizarMultiplesDatos({
-                    transacciones: this.transacciones,
-                    productos: this.productos,
-                    asientos: this.asientos
-                });
-                
-                this.closeModal();
-                const submoduloDestino = cuentaInventarioId === 13001 ? 'reventa' : 'materia-prima';
-                this.irModulo('inventario', { submodulo: submoduloDestino });
-                this.showToast('Compra de inventario registrada con éxito.', 'success');
-            } else {
-                throw new Error("No se pudo generar el asiento contable para la compra.");
-            }
-
-        } else if (tipoSeleccionado === 'activo_fijo') {
-            this.closeModal();
-            this.abrirModalActivoFijo();
+        const tipoSeleccionado = document.querySelector('input[name="compra-tipo"]:checked')?.value || 'reventa';
+        if (!['reventa','materia_prima','activo_fijo'].includes(tipoSeleccionado)) {
+            throw new Error('Selecciona un tipo de compra válido.');
         }
+        if (tipoSeleccionado === 'activo_fijo') {
+            this.closeModal();
+            this.irModulo('activos-fijos', { submodulo: 'nuevo' });
+            return;
+        }
+
+        const proveedorId = document.getElementById('compra-proveedor-id').value;
+        if (!proveedorId) throw new Error('Debe seleccionar un proveedor.');
+
+        const fecha = document.getElementById('compra-fecha').value;
+        const referencia = document.getElementById('compra-referencia').value || null;
+        const descripcion = document.getElementById('compra-descripcion').value || '';
+        const cuentaInventarioId = parseInt(document.getElementById('compra-cuenta-inventario-id').value);
+        const sucursalId = document.getElementById('compra-sucursal-id').value;
+        if (!sucursalId) throw new Error('Selecciona la sucursal que recibe el inventario.');
+
+        // Pago
+        const pagoTipo = document.getElementById('compra-pago-tipo')?.value || 'credito'; // contado | credito
+        const cuentaBancoId = parseInt(document.getElementById('compra-pago-id')?.value || 0);
+        if (pagoTipo === 'contado' && !cuentaBancoId) throw new Error('Selecciona la cuenta bancaria para pago de contado.');
+        const cuentaContrapartidaId = (pagoTipo === 'credito') ? 210 : cuentaBancoId;
+
+        // Comprobante (opcional)
+        const archivo = document.getElementById('compra-comprobante')?.files?.[0];
+        let comprobanteDataUrl = null;
+        if (archivo) {
+            if (archivo.size > 1024 * 1024) throw new Error('El archivo es demasiado grande (máx 1MB).');
+            comprobanteDataUrl = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(archivo);
+            });
+        }
+
+        // Ítems
+        const rows = document.querySelectorAll('.compra-item-row');
+        if (!rows.length) throw new Error('Agrega al menos un ítem.');
+
+        const items = [];
+        let totalCompra = 0;
+
+        for (const row of rows) {
+            let productoId = row.querySelector('.compra-item-producto-id').value;
+            const nuevoNombre = row.querySelector('.compra-item-nuevo-nombre')?.value?.trim() || '';
+            const cantidad = parseFloat(row.querySelector('.compra-item-cantidad').value) || 0;
+            const costoUnitario = parseFloat(row.querySelector('.compra-item-costo').value) || 0;
+            const unidadMedidaId = parseInt(row.querySelector('.compra-item-unidad-select').value);
+
+            if (!cantidad || !costoUnitario) continue;
+
+            // Crear producto "rápido" si se eligió ➕
+            if (productoId === '__nuevo__') {
+                if (!nuevoNombre) throw new Error('Escribe el nombre del producto nuevo en la fila seleccionada.');
+                const nuevoProducto = {
+                    id: this.generarUUID(),
+                    nombre: nuevoNombre,
+                    tipo: 'producto',
+                    stockPorSucursal: {},
+                    stockMinimo: 0,
+                    costo: 0,
+                    precio: 0,
+                    unidadMedidaId,
+                    cuentaInventarioId,
+                    cuentaIngresoId: 41001
+                };
+                this.productos.push(nuevoProducto);
+                productoId = nuevoProducto.id;
+            }
+
+            if (!productoId) throw new Error('Selecciona un producto o crea uno nuevo.');
+
+            const producto = this.findById(this.productos, productoId);
+            if (!producto.stockPorSucursal) producto.stockPorSucursal = {};
+            const stockActualSucursal = parseFloat(producto.stockPorSucursal[sucursalId] || 0);
+            const nuevoStockSucursal = stockActualSucursal + cantidad;
+            producto.stockPorSucursal[sucursalId] = nuevoStockSucursal;
+
+            // Costo promedio global
+            const stockTotalAnterior = Object.values(producto.stockPorSucursal).reduce((a,b) => a + (parseFloat(b)||0), 0) - cantidad;
+            const valorTotalAnterior = stockTotalAnterior * (parseFloat(producto.costo) || 0);
+            const valorCompra = cantidad * costoUnitario;
+            const nuevoStockTotal = stockTotalAnterior + cantidad;
+            producto.costo = nuevoStockTotal > 0 ? (valorTotalAnterior + valorCompra) / nuevoStockTotal : costoUnitario;
+
+            items.push({ productoId, cantidad, costoUnitario, unidadMedidaId });
+            totalCompra += (cantidad * costoUnitario);
+        }
+
+        if (!items.length) throw new Error('Ingresa cantidades y costos válidos al menos en un ítem.');
+
+        // Transacción
+        const compra = {
+            id: this.generarUUID(),
+            tipo: 'compra_inventario',
+            fecha,
+            contactoId: proveedorId,
+            descripcion: descripcion || `Compra ${referencia || ''}`.trim(),
+            referencia,
+            total: totalCompra,
+            items,
+            comprobanteDataUrl,
+            sucursalId,
+            pagoTipo,
+            estado: (pagoTipo === 'credito') ? 'Pendiente' : 'Completada',
+            montoPagado: (pagoTipo === 'contado') ? totalCompra : 0
+        };
+        this.transacciones.push(compra);
+
+        // Asiento por sucursal
+        const movimientos = [
+            { cuentaId: cuentaInventarioId, debe: totalCompra, haber: 0, sucursalId },
+            { cuentaId: cuentaContrapartidaId, debe: 0, haber: totalCompra, sucursalId }
+        ];
+        const asiento = this.crearAsiento(fecha, `Compra de inventario #${referencia || compra.id}`, movimientos, compra.id);
+
+        // Movimiento bancario (contado)
+        if (pagoTipo === 'contado' && asiento) {
+            this._registrarMovimientoBancarioPendiente(
+                cuentaBancoId, fecha,
+                `Pago Compra Inventario #${referencia || compra.id}`,
+                -totalCompra, asiento.id
+            );
+        }
+
+        await this.saveAll();
+        this.closeModal();
+        this.irModulo('compras');
+        this.showToast('Compra registrada. Producto nuevo creado y stock por sucursal actualizado.', 'success');
+
     } catch (error) {
-        this.showToast(error.message, 'error');
-        console.error("Error al guardar la compra:", error);
+        console.error('Error al guardar la compra:', error);
+        this.showToast(error.message || 'No se pudo guardar la compra.', 'error');
     } finally {
         this.toggleButtonLoading(submitButton, false);
     }
 },
+// --- FIN REEMPLAZO COMPLETO ---
+
     abrirModalDetalleCompra(compraId) {
         const compra = this.findById(this.transacciones, compraId);
         if (!compra) return;
@@ -621,4 +791,5 @@ ordenarComprasPor(columna) {
     }
     this.irModulo('compras');
 },
+
 });
