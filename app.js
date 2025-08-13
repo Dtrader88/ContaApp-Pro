@@ -743,18 +743,65 @@ irAtras() {
     return array.find(item => item.id == id);
 },
     getThemeColor(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); },
-    showToast(message, type = 'info') {
-        const container = document.getElementById('toast-container');
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-        toast.textContent = message;
-        container.appendChild(toast);
-        setTimeout(() => toast.classList.add('show'), 10);
-        setTimeout(() => {
-            toast.classList.remove('show');
-            setTimeout(() => toast.remove(), 500);
-        }, 4000);
-    },
+    showToast(message, type = 'info', duration = 4000) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    // Crear toast
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+    toast.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+
+    // Icono según tipo
+    const icon = document.createElement('span');
+    icon.className = 'me-2 flex items-center';
+    icon.innerHTML = ({
+        success: '<i class="fa-solid fa-circle-check"></i>',
+        error:   '<i class="fa-solid fa-triangle-exclamation"></i>',
+        info:    '<i class="fa-solid fa-circle-info"></i>'
+    }[type] || '<i class="fa-solid fa-circle-info"></i>');
+
+    // Texto seguro
+    const text = document.createElement('span');
+    text.textContent = message;
+
+    // Botón cerrar
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.setAttribute('aria-label', 'Cerrar notificación');
+    closeBtn.className = 'ms-3';
+    closeBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+    closeBtn.onclick = () => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    };
+
+    // Borde lateral por estado usando variables del tema
+    const getVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    const borderColor = ({
+        success: getVar('--color-success'),
+        error:   getVar('--color-danger'),
+        info:    getVar('--color-primary')
+    }[type] || getVar('--color-primary'));
+    toast.style.borderLeft = `4px solid ${borderColor}`;
+
+    // Ensamblar y mostrar
+    toast.appendChild(icon);
+    toast.appendChild(text);
+    toast.appendChild(closeBtn);
+    container.appendChild(toast);
+
+    // Animación de entrada
+    setTimeout(() => toast.classList.add('show'), 10);
+
+    // Autocierre
+    const ttl = Math.max(1500, Number(duration) || 4000);
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 500);
+    }, ttl);
+},
     showConfirm(message, onConfirm) {
     const confirmContent = `
         <h3 class="conta-title mb-4">Confirmación</h3>
@@ -1528,11 +1575,52 @@ getPeriodoContableActual() {
         document.getElementById('global-search-input').value = '';
     },
     aplicarTema(themeName) {
-        document.documentElement.setAttribute('data-theme', themeName);
-        if (document.getElementById('dashboard')?.style.display !== 'none') {
-             setTimeout(() => this.renderDashboardCharts(), 50);
+    // 1) Aplicar tema al <html>
+    document.documentElement.setAttribute('data-theme', themeName);
+
+    // 2) Sincronizar Chart.js con las variables del tema activo (si Chart está cargado)
+    if (window.Chart) {
+        const fg     = this.getThemeColor('--color-text-primary')     || '#eaeaea';
+        const grid   = this.getThemeColor('--color-border-accent')    || '#3a3a3a';
+        const primary= this.getThemeColor('--color-primary')          || '#4f46e5';
+
+        // Defaults globales para que todos los charts “lean” el tema
+        Chart.defaults.color = fg;
+        Chart.defaults.borderColor = grid;
+
+        // Sensación más suave en líneas y puntos
+        if (!Chart.defaults.elements) Chart.defaults.elements = {};
+        if (!Chart.defaults.elements.line)  Chart.defaults.elements.line  = {};
+        if (!Chart.defaults.elements.point) Chart.defaults.elements.point = {};
+
+        Chart.defaults.elements.line.tension = 0.3;
+        Chart.defaults.elements.point.radius = 0;
+
+        // Leyendas con puntico (se ve más limpio en dark/light)
+        if (!Chart.defaults.plugins) Chart.defaults.plugins = {};
+        if (!Chart.defaults.plugins.legend) Chart.defaults.plugins.legend = {};
+        if (!Chart.defaults.plugins.legend.labels) Chart.defaults.plugins.legend.labels = {};
+
+        Chart.defaults.plugins.legend.labels.usePointStyle = true;
+
+        // Color primario por defecto para datasets que no lo definan explícitamente
+        // (si algún gráfico usa su propio color, esto no lo sobrescribe)
+        Chart.defaults.datasets = Chart.defaults.datasets || {};
+        Chart.defaults.datasets.line = Chart.defaults.datasets.line || {};
+        if (!Chart.defaults.datasets.line.borderColor) {
+            Chart.defaults.datasets.line.borderColor = primary;
         }
-    },
+        Chart.defaults.datasets.doughnut = Chart.defaults.datasets.doughnut || {};
+        if (!Chart.defaults.datasets.doughnut.borderColor) {
+            Chart.defaults.datasets.doughnut.borderColor = grid;
+        }
+    }
+
+    // 3) Si el dashboard está visible, re-render rápido de charts para reflejar el tema
+    if (document.getElementById('dashboard')?.style.display !== 'none') {
+        setTimeout(() => this.renderDashboardCharts?.(), 50);
+    }
+},
     cambiarTema() {
         const currentTheme = document.documentElement.getAttribute('data-theme') || 'fresco';
         const currentIndex = this.themes.indexOf(currentTheme);
@@ -2023,5 +2111,38 @@ activarModulo(mod) {
         this.saveAll();
         this.showToast(`Módulo ${mod} activado.`, 'success');
     }
+},
+toggleDensity(mode = 'toggle') {
+  try {
+    const KEY = 'ui:prefs';
+    const el = document.documentElement;
+
+    // Leer prefs actuales (si existen)
+    let prefs = {};
+    try { prefs = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (_) {}
+
+    if (mode === 'init') {
+      const on = !!prefs.compact;
+      el.classList.toggle('density-compact', on);
+      return on;
+    }
+
+    const next =
+      mode === 'toggle'
+        ? !el.classList.contains('density-compact')
+        : !!mode;
+
+    el.classList.toggle('density-compact', next);
+    prefs.compact = next;
+    localStorage.setItem(KEY, JSON.stringify(prefs));
+
+    // Feedback rápido (usa tu showToast nuevo)
+    this.showToast(next ? 'Modo compacto activado' : 'Modo cómodo activado', 'info', 1400);
+    return next;
+  } catch (err) {
+    console.error('toggleDensity error:', err);
+    this.showToast('No se pudo cambiar la densidad', 'error');
+    return null;
+  }
 },
 };

@@ -491,3 +491,63 @@ tfoot tr:hover { background-color: var(--color-bg-accent); }
     font-size: 0.75rem;
     color: var(--color-text-secondary);
 }
+#toast-container{
+  position: fixed;
+  top: 1rem; right: 1rem;
+  z-index: 9999;
+  display: flex; flex-direction: column; gap: .5rem;
+  /* el contenedor no captura eventos, cada toast sí */
+  pointer-events: none;
+}
+
+.toast{
+  display: flex; align-items: center; gap: .6rem;
+  padding: .8rem 1.2rem; border-radius: .5rem;
+  color: var(--color-text-light);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--color-shadow) 60%, transparent);
+  opacity: 0; transform: translateX(100%);
+  transition: opacity .25s ease, transform .25s ease;
+  /* ¡para que funcione el botón cerrar! */
+  pointer-events: auto;
+  /* el borde real lo fija showToast(), esto es fallback */
+  border-left: 4px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+  background: transparent; /* dejamos el color a las variantes */
+  font-weight: 500; /* más legible que 600 en algunos fondos */
+}
+
+.toast.show{ opacity: 1; transform: translateX(0); }
+
+.toast.success{ background-color: var(--color-success); }
+.toast.error{   background-color: var(--color-danger); }
+.toast.info{    background-color: var(--color-primary); }
+
+/* botón cerrar dentro del toast */
+.toast button{
+  background: transparent; border: 0; color: inherit; cursor: pointer;
+  font-size: 1rem; line-height: 1; padding: 0; margin-left: .25rem;
+}
+html.density-compact .conta-card{
+  padding: .5rem;
+}
+
+html.density-compact .conta-input,
+html.density-compact .modal-form input,
+html.density-compact .modal-form select,
+html.density-compact .modal-form textarea,
+html.density-compact .conta-btn{
+  padding-top: .35rem;
+  padding-bottom: .35rem;
+}
+
+html.density-compact .conta-table-th,
+html.density-compact .conta-table-td,
+html.density-compact table th,
+html.density-compact table td{
+  padding-top: .35rem !important;
+  padding-bottom: .35rem !important;
+}
+
+/* Opcional: KPIs un poco más densos */
+html.density-compact .kpi-dashboard-card{
+  padding: .6rem;
+}
