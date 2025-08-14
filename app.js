@@ -27,6 +27,29 @@ const ROLES = {
     repository: null, 
     empresa: {},
     navigationHistory: [],
+    contexto: {
+    sucursalId: null,
+    sucursalNombre: ''
+},
+
+/**
+ * Establece la sucursal activa para la sesión actual del usuario.
+ * @param {string} sucursalId - El ID de la sucursal a activar.
+ */
+setSucursalContexto(sucursalId) {
+    if (!sucursalId) {
+        console.error("Se intentó establecer un contexto de sucursal sin ID.");
+        return;
+    }
+    const sucursal = this.findById(this.empresa.sucursales, sucursalId);
+    if (sucursal) {
+        this.contexto.sucursalId = sucursal.id;
+        this.contexto.sucursalNombre = sucursal.nombre;
+        console.log(`Contexto cambiado a Sucursal: ${sucursal.nombre} (ID: ${sucursal.id})`);
+    } else {
+        console.error(`No se encontró la sucursal con ID: ${sucursalId} para establecer el contexto.`);
+    }
+},
 
     /**
      * Genera un Identificador Único Universal (UUID).
@@ -743,64 +766,48 @@ irAtras() {
     return array.find(item => item.id == id);
 },
     getThemeColor(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); },
-    showToast(message, type = 'info', duration = 4000) {
+    showToast(message, type = 'info', durationMs = 2500) {
+  try {
     const container = document.getElementById('toast-container');
-    if (!container) return;
+    if (!container) {
+      console.warn('[ContaApp.showToast] No existe #toast-container en el DOM.');
+      return;
+    }
 
-    // Crear toast
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
-    toast.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
-
-    // Icono según tipo
-    const icon = document.createElement('span');
-    icon.className = 'me-2 flex items-center';
-    icon.innerHTML = ({
-        success: '<i class="fa-solid fa-circle-check"></i>',
-        error:   '<i class="fa-solid fa-triangle-exclamation"></i>',
-        info:    '<i class="fa-solid fa-circle-info"></i>'
-    }[type] || '<i class="fa-solid fa-circle-info"></i>');
-
-    // Texto seguro
-    const text = document.createElement('span');
-    text.textContent = message;
-
-    // Botón cerrar
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.setAttribute('aria-label', 'Cerrar notificación');
-    closeBtn.className = 'ms-3';
-    closeBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
-    closeBtn.onclick = () => {
-        toast.classList.remove('show');
-        setTimeout(() => toast.remove(), 300);
+    const icons = {
+      success: '<i class="fa-solid fa-circle-check"></i>',
+      error:   '<i class="fa-solid fa-triangle-exclamation"></i>',
+      info:    '<i class="fa-solid fa-circle-info"></i>',
     };
+    const validType = ['success','error','info'].includes(type) ? type : 'info';
 
-    // Borde lateral por estado usando variables del tema
-    const getVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    const borderColor = ({
-        success: getVar('--color-success'),
-        error:   getVar('--color-danger'),
-        info:    getVar('--color-primary')
-    }[type] || getVar('--color-primary'));
-    toast.style.borderLeft = `4px solid ${borderColor}`;
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${validType}`;
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    toast.innerHTML = `
+      <div class="toast-icon">${icons[validType] || icons.info}</div>
+      <div class="toast-message">${message || ''}</div>
+      <button class="toast-close" aria-label="Cerrar notificación" title="Cerrar">❌</button>
+    `;
 
-    // Ensamblar y mostrar
-    toast.appendChild(icon);
-    toast.appendChild(text);
-    toast.appendChild(closeBtn);
+    // Cierre por botón
+    const closeBtn = toast.querySelector('.toast-close');
+    const close = () => {
+      toast.classList.add('toast-hide');
+      // Esperar animación de salida antes de remover
+      setTimeout(() => toast.remove(), 180);
+    };
+    closeBtn.addEventListener('click', close);
+
+    // Insertar y animar
     container.appendChild(toast);
-
-    // Animación de entrada
-    setTimeout(() => toast.classList.add('show'), 10);
-
-    // Autocierre
-    const ttl = Math.max(1500, Number(duration) || 4000);
-    setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => toast.remove(), 500);
-    }, ttl);
+    // Autocierre seguro (mínimo 1500 ms)
+    const timeout = Math.max(1500, Number(durationMs) || 0);
+    if (timeout > 0) setTimeout(close, timeout);
+  } catch (err) {
+    console.error('[ContaApp.showToast] Error al mostrar toast:', err);
+  }
 },
     showConfirm(message, onConfirm) {
     const confirmContent = `
@@ -883,131 +890,124 @@ irAtras() {
             }
         });
     },
-        async saveAll(){
-        const dataToSave = {
-            empresa: this.empresa,
-            licencia: this.licencia,
-            idCounter: this.idCounter,
-            planDeCuentas: this.planDeCuentas.map(({saldo, ...rest}) => rest),
-            asientos: this.asientos,
-            transacciones: this.transacciones,
-            contactos: this.contactos,
-            productos: this.productos,
-            recurrentes: this.recurrentes,
-            activosFijos: this.activosFijos,
-            listasMateriales: this.listasMateriales,
-            ordenesProduccion: this.ordenesProduccion,
-            unidadesMedida: this.unidadesMedida,
-            bancoImportado: this.bancoImportado,
-            auditLog: this.auditLog
-        };
-        await this.repository.saveAll(dataToSave);
-    },
-        loadAll(dataString){
-    const defaultData = {
-        empresa: {
-            nombre: "Tu Empresa", logo: 'images/logo.png', direccion: '123 Calle Ficticia',
-            telefono: '+1 (555) 123-4567', email: 'contacto@tuempresa.com',
-            taxId: 'J-12345678-9', taxRate: 16,
-            presupuestos: {},
-            dashboardWidgets: ['ingresos', 'gastos', 'resultadoNeto', 'bancos'],
-            dashboardContentWidgets: {
-                order: ['financialPerformance', 'activity-feed', 'topExpenses', 'quick-actions'],
-                settings: {
-                    financialPerformance: { timeRange: 'last6months', visible: true },
-                    'activity-feed': { visible: true },
-                    topExpenses: { timeRange: 'currentMonth', visible: true },
-                    'quick-actions': { visible: true }
-                }
-            },
-            dashboardLayout: 'grid', pdfTemplate: 'clasica', pdfColor: '#1877f2', periodosContables: {},
-            pdfTemplate: 'clasica', pdfColor: '#1877f2', periodosContables: {},
-            // --- INICIO DE LA MODIFICACIÓN ---
-            roles: {
-                administrador: {
-                    nombre: "Administrador",
-                    permisos: { modules: ['*'], actions: ['*'] }
-                },
-                contador: {
-                    nombre: "Contador",
-                    permisos: {
-                        modules: ['dashboard', 'ventas', 'cxc', 'gastos', 'compras', 'cxp', 'bancos', 'inventario', 'produccion', 'plan-de-cuentas', 'diario-general', 'cierre-periodo', 'activos-fijos', 'reportes'],
-                        actions: ['anular_transaccion']
-                    }
-                },
-                vendedor: {
-                    nombre: "Vendedor",
-                    permisos: {
-                        modules: ['dashboard', 'ventas', 'cxc', 'inventario'],
-                        actions: []
-                    }
-                },
-                operador_sucursal: {
-                    nombre: "Operador de Sucursal",
-                    permisos: {
-                        modules: ['ventas', 'gastos', 'compras', 'inventario'],
-                        actions: []
-                    }
-                }
-            }
-        },
-        licencia: {
-            cliente: "Usuario Principal",
-            paquete: "Profesional",
-            modulosActivos: [ "VENTAS", "GASTOS", "CXC", "CXP", "PLAN_DE_CUENTAS", "DIARIO_GENERAL", "CONFIGURACION", "INVENTARIO_BASE", "FINANZAS_AVANZADO", "CONTABILIDAD_AVANZADO", "REPORTES_AVANZADOS", "ACTIVOS_AVANZADOS", "PRODUCCION", "NOMINAS" ]
-        },
-        idCounter: 1000,
-        planDeCuentas: this.getPlanDeCuentasDefault(),
-        asientos: [],
-        transacciones: [],
-        contactos: [],
-        productos: [],
-        recurrentes: [],
-        activosFijos: [],
-        listasMateriales: [],
-        ordenesProduccion: [],
-        unidadesMedida: [
-            { id: 1, nombre: 'Unidad' }, { id: 2, nombre: 'Caja' }, { id: 3, nombre: 'Kg' },
-            { id: 4, nombre: 'Litro' }, { id: 5, nombre: 'Metro' }
-        ],
-        bancoImportado: {},
-        auditLog: []
-    };
-
-    if (dataString) {
-        const data = JSON.parse(dataString);
-        this.empresa = { ...defaultData.empresa, ...data.empresa };
-        if (!this.empresa.roles) { this.empresa.roles = defaultData.empresa.roles; }
-        this.licencia = data.licencia || defaultData.licencia;
-        this.idCounter = data.idCounter || defaultData.idCounter;
-        this.planDeCuentas = data.planDeCuentas || defaultData.planDeCuentas;
-        this.contactos = data.contactos || defaultData.contactos;
-        this.productos = data.productos || defaultData.productos;
-        this.recurrentes = data.recurrentes || defaultData.recurrentes;
-        this.activosFijos = data.activosFijos || [];
-        this.listasMateriales = data.listasMateriales || [];
-        this.ordenesProduccion = data.ordenesProduccion || [];
-        this.bancoImportado = data.bancoImportado || defaultData.bancoImportado;
-        this.unidadesMedida = (data.unidadesMedida && data.unidadesMedida.length > 0) 
-            ? data.unidadesMedida 
-            : defaultData.unidadesMedida;
-        this.auditLog = data.auditLog || [];
-        
-        this.asientos = data.asientos || [];
-        this.transacciones = data.transacciones || [];
-        
-        this.verificarYActualizarPlanDeCuentas();
-
-        if (!this.empresa.presupuestos) this.empresa.presupuestos = {};
-        if (!this.empresa.dashboardContentWidgets || !this.empresa.dashboardContentWidgets.order) {
-            this.empresa.dashboardContentWidgets = defaultData.empresa.dashboardContentWidgets;
+        async saveAll() {
+  const dataToSave = {
+    empresa: this.empresa,
+    licencia: this.licencia,
+    idCounter: this.idCounter,
+    // ✅ Elimina 'saldo' de cada cuenta antes de guardar
+    planDeCuentas: this.planDeCuentas.map(({ saldo, ...rest }) => rest),
+    asientos: this.asientos,
+    transacciones: this.transacciones,
+    contactos: this.contactos,
+    productos: this.productos,
+    recurrentes: this.recurrentes,
+    activosFijos: this.activosFijos,
+    listasMateriales: this.listasMateriales,
+    ordenesProduccion: this.ordenesProduccion,
+    unidadesMedida: this.unidadesMedida,
+    bancoImportado: this.bancoImportado,
+    auditLog: this.auditLog
+  };
+  await this.repository.saveAll(dataToSave);
+},
+    loadAll(dataString) {
+  const defaultData = {
+    empresa: {
+      nombre: "Tu Empresa",
+      logo: 'images/logo.png',
+      direccion: '123 Calle Ficticia',
+      telefono: '+1 (555) 123-4567',
+      email: 'contacto@tuempresa.com',
+      taxId: 'J-12345678-9',
+      taxRate: 16,
+      presupuestos: {},
+      dashboardWidgets: ['ingresos', 'gastos', 'resultadoNeto', 'bancos'],
+      dashboardContentWidgets: {
+        order: ['financialPerformance', 'activity-feed', 'topExpenses', 'quick-actions'],
+        settings: {
+          financialPerformance: { timeRange: 'last6months', visible: true },
+          'activity-feed': { visible: true },
+          topExpenses: { timeRange: 'currentMonth', visible: true },
+          'quick-actions': { visible: true }
         }
-        if (!this.empresa.dashboardLayout) this.empresa.dashboardLayout = defaultData.empresa.dashboardLayout;
-        if (!this.empresa.periodosContables) this.empresa.periodosContables = {};
-        
-    } else {
-        Object.assign(this, defaultData);
+      },
+      dashboardLayout: 'grid',
+      pdfTemplate: 'clasica',
+      pdfColor: '#1877f2',
+      periodosContables: {},
+      roles: ROLES
+    },
+    licencia: {
+      cliente: "Usuario Principal",
+      paquete: "Profesional",
+      modulosActivos: [
+        "VENTAS", "GASTOS", "CXC", "CXP",
+        "PLAN_DE_CUENTAS", "DIARIO_GENERAL", "CONFIGURACION",
+        "INVENTARIO_BASE", "FINANZAS_AVANZADO", "CONTABILIDAD_AVANZADO",
+        "REPORTES_AVANZADOS", "ACTIVOS_AVANZADOS", "PRODUCCION", "NOMINAS"
+      ]
+    },
+    idCounter: 1000,
+    planDeCuentas: this.getPlanDeCuentasDefault(),
+    asientos: [],
+    transacciones: [],
+    contactos: [],
+    productos: [],
+    recurrentes: [],
+    activosFijos: [],
+    listasMateriales: [],
+    ordenesProduccion: [],
+    unidadesMedida: [
+      { id: 1, nombre: 'Unidad' },
+      { id: 2, nombre: 'Caja' },
+      { id: 3, nombre: 'Kg' },
+      { id: 4, nombre: 'Litro' },
+      { id: 5, nombre: 'Metro' }
+    ],
+    bancoImportado: {},
+    auditLog: []
+  };
+
+  if (dataString) {
+    const data = JSON.parse(dataString);
+
+    // ✅ Merge correcto de empresa (defaults + datos guardados)
+    this.empresa = { ...defaultData.empresa, ...(data.empresa || {}) };
+    if (!this.empresa.roles) this.empresa.roles = defaultData.empresa.roles;
+
+    this.licencia = data.licencia || defaultData.licencia;
+    this.idCounter = (data.idCounter ?? defaultData.idCounter);
+
+    this.planDeCuentas   = data.planDeCuentas   || defaultData.planDeCuentas;
+    this.contactos       = data.contactos       || defaultData.contactos;
+    this.productos       = data.productos       || defaultData.productos;
+    this.recurrentes     = data.recurrentes     || defaultData.recurrentes;
+    this.activosFijos    = data.activosFijos    || defaultData.activosFijos;
+    this.listasMateriales= data.listasMateriales|| defaultData.listasMateriales;
+    this.ordenesProduccion = data.ordenesProduccion || defaultData.ordenesProduccion;
+    this.unidadesMedida  = (data.unidadesMedida && data.unidadesMedida.length > 0)
+                            ? data.unidadesMedida
+                            : defaultData.unidadesMedida;
+    this.auditLog        = data.auditLog        || defaultData.auditLog;
+
+    this.asientos        = data.asientos        || defaultData.asientos;
+    this.transacciones   = data.transacciones   || defaultData.transacciones;
+
+    // Mantén actualizado el plan
+    this.verificarYActualizarPlanDeCuentas?.();
+
+    // Rellena defaults que falten
+    if (!this.empresa.presupuestos) this.empresa.presupuestos = {};
+    if (!this.empresa.dashboardContentWidgets || !this.empresa.dashboardContentWidgets.order) {
+      this.empresa.dashboardContentWidgets = defaultData.empresa.dashboardContentWidgets;
     }
+    if (!this.empresa.dashboardLayout) this.empresa.dashboardLayout = defaultData.empresa.dashboardLayout;
+    if (!this.empresa.periodosContables) this.empresa.periodosContables = {};
+  } else {
+    // Primer arranque
+    Object.assign(this, defaultData);
+  }
 },
 verificarYActualizarPlanDeCuentas() {
         console.log("--- INICIANDO verificarYActualizarPlanDeCuentas ---");
@@ -1368,10 +1368,23 @@ getPeriodoContableActual() {
     },
     
     initTheme() {
-        const savedTheme = localStorage.getItem("conta_theme") || 'fresco';
-        this.aplicarTema(savedTheme);
-        this.renderThemeSwitcher(savedTheme);
-    },
+  const savedTheme = localStorage.getItem("conta_theme") || "fresco";
+  this.aplicarTema(savedTheme);
+
+  // Densidad desde preferencia
+  try { this.toggleDensity('init'); } catch(e) { console.warn('[initTheme] toggleDensity:', e); }
+
+  // Pintar inmediatamente si existe el contenedor...
+  this.renderThemeSwitcher(savedTheme);
+
+  // ...y repintar en el próximo tick por si el DOM del header se montó después
+  // (algunos layouts dibujan el topbar/acciones asíncronamente)
+  setTimeout(() => {
+    this.renderThemeSwitcher(
+      document.documentElement.getAttribute('data-theme') || savedTheme
+    );
+  }, 0);
+},
     initGlobalSearch() {
         const input = document.getElementById('global-search-input');
         if (!input) return;
@@ -1575,51 +1588,64 @@ getPeriodoContableActual() {
         document.getElementById('global-search-input').value = '';
     },
     aplicarTema(themeName) {
-    // 1) Aplicar tema al <html>
-    document.documentElement.setAttribute('data-theme', themeName);
-
-    // 2) Sincronizar Chart.js con las variables del tema activo (si Chart está cargado)
-    if (window.Chart) {
-        const fg     = this.getThemeColor('--color-text-primary')     || '#eaeaea';
-        const grid   = this.getThemeColor('--color-border-accent')    || '#3a3a3a';
-        const primary= this.getThemeColor('--color-primary')          || '#4f46e5';
-
-        // Defaults globales para que todos los charts “lean” el tema
-        Chart.defaults.color = fg;
-        Chart.defaults.borderColor = grid;
-
-        // Sensación más suave en líneas y puntos
-        if (!Chart.defaults.elements) Chart.defaults.elements = {};
-        if (!Chart.defaults.elements.line)  Chart.defaults.elements.line  = {};
-        if (!Chart.defaults.elements.point) Chart.defaults.elements.point = {};
-
-        Chart.defaults.elements.line.tension = 0.3;
-        Chart.defaults.elements.point.radius = 0;
-
-        // Leyendas con puntico (se ve más limpio en dark/light)
-        if (!Chart.defaults.plugins) Chart.defaults.plugins = {};
-        if (!Chart.defaults.plugins.legend) Chart.defaults.plugins.legend = {};
-        if (!Chart.defaults.plugins.legend.labels) Chart.defaults.plugins.legend.labels = {};
-
-        Chart.defaults.plugins.legend.labels.usePointStyle = true;
-
-        // Color primario por defecto para datasets que no lo definan explícitamente
-        // (si algún gráfico usa su propio color, esto no lo sobrescribe)
-        Chart.defaults.datasets = Chart.defaults.datasets || {};
-        Chart.defaults.datasets.line = Chart.defaults.datasets.line || {};
-        if (!Chart.defaults.datasets.line.borderColor) {
-            Chart.defaults.datasets.line.borderColor = primary;
-        }
-        Chart.defaults.datasets.doughnut = Chart.defaults.datasets.doughnut || {};
-        if (!Chart.defaults.datasets.doughnut.borderColor) {
-            Chart.defaults.datasets.doughnut.borderColor = grid;
-        }
+  try {
+    const root = document.documentElement; // <html>
+    if (themeName) {
+      root.setAttribute('data-theme', themeName);
+      // Persistir preferencia (opcional)
+      try { localStorage.setItem('ui:prefs.theme', themeName); } catch {}
     }
 
-    // 3) Si el dashboard está visible, re-render rápido de charts para reflejar el tema
-    if (document.getElementById('dashboard')?.style.display !== 'none') {
-        setTimeout(() => this.renderDashboardCharts?.(), 50);
+    // Leer variables del tema actual
+    const styles = getComputedStyle(root);
+    const colorText   = styles.getPropertyValue('--color-text-primary').trim() || '#222';
+    const colorBorder = styles.getPropertyValue('--color-border-accent').trim() || '#ccc';
+    const colorPrimary= styles.getPropertyValue('--color-primary').trim() || '#0d6efd';
+
+    // Aplicar a Chart.js (si está cargado)
+    if (typeof Chart !== 'undefined' && Chart.defaults) {
+      // Colores base de tipografías/leyendas/ejes
+      Chart.defaults.color = colorText;
+      Chart.defaults.borderColor = colorBorder;
+
+      // Grid y ticks
+      Chart.defaults.scale.grid.color = colorBorder;
+      Chart.defaults.scale.ticks.color = colorText;
+
+      // Leyenda y título
+      if (Chart.defaults.plugins && Chart.defaults.plugins.legend) {
+        Chart.defaults.plugins.legend.labels = Chart.defaults.plugins.legend.labels || {};
+        Chart.defaults.plugins.legend.labels.color = colorText;
+      }
+      if (Chart.defaults.plugins && Chart.defaults.plugins.title) {
+        Chart.defaults.plugins.title.color = colorText;
+      }
+
+      // Línea/elementos por defecto (para line charts)
+      Chart.defaults.elements = Chart.defaults.elements || {};
+      Chart.defaults.elements.line = Chart.defaults.elements.line || {};
+      Chart.defaults.elements.line.borderColor = colorPrimary;
+      Chart.defaults.elements.point = Chart.defaults.elements.point || {};
+      Chart.defaults.elements.point.borderColor = colorPrimary;
+      Chart.defaults.elements.point.backgroundColor = colorPrimary;
+
+      // Refrescar gráficos si existen referencias en el Dashboard
+      // Asumimos que guardas instancias en this._charts (opcional).
+      if (Array.isArray(this._charts)) {
+        this._charts.forEach(ch => { try { ch.update('none'); } catch {} });
+      } else {
+        // Fallback: re-render del dashboard si estás usando render on demand.
+        if (typeof this.renderDashboard === 'function') {
+          try { this.renderDashboard(); } catch {}
+        }
+      }
     }
+
+    this.showToast('Tema aplicado', 'success', 1500);
+  } catch (err) {
+    console.error('[ContaApp.aplicarTema] Error aplicando tema:', err);
+    this.showToast('No se pudo aplicar el tema', 'error');
+  }
 },
     cambiarTema() {
         const currentTheme = document.documentElement.getAttribute('data-theme') || 'fresco';
@@ -1632,12 +1658,37 @@ getPeriodoContableActual() {
         this.renderThemeSwitcher(newTheme);
     },
     renderThemeSwitcher(currentTheme) {
-        const sunIcon = `<svg class="theme-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>`;
-        const moonIcon = `<svg class="theme-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>`;
-        
-        const iconToShow = currentTheme === 'infinito' ? sunIcon : moonIcon;
-        document.getElementById('theme-switcher').innerHTML = `<div onclick="ContaApp.cambiarTema()">${iconToShow}</div>`;
-    },
+  const sunIcon = `<svg class="theme-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" width="22" height="22"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2v2m0 16v2m10-10h-2M4 12H2m15.364-7.364l-1.414 1.414M6.05 17.95l-1.414 1.414M17.95 17.95l-1.414-1.414M6.05 6.05L4.636 4.636"></path><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="2" /></svg>`;
+  const moonIcon = `<svg class="theme-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" width="22" height="22"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>`;
+  const compactOn = document.documentElement.classList.contains('density-compact');
+  const compactIcon = compactOn
+    ? `<svg class="theme-icon" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-label="Densidad: Compacto"><rect x="4" y="6" width="16" height="3" rx="1"/><rect x="4" y="11" width="16" height="3" rx="1"/><rect x="4" y="16" width="12" height="3" rx="1"/></svg>`
+    : `<svg class="theme-icon" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-label="Densidad: Cómodo"><rect x="4" y="5" width="16" height="4" rx="1"/><rect x="4" y="10" width="16" height="4" rx="1"/><rect x="4" y="15" width="16" height="4" rx="1"/></svg>`;
+
+  const iconToShow = (currentTheme || '').toLowerCase() === 'infinito' ? sunIcon : moonIcon;
+
+  const html = `
+    <div class="flex items-center gap-2">
+      <button class="conta-btn-icon" title="Cambiar tema" onclick="ContaApp.cambiarTema()">${iconToShow}</button>
+      <button class="conta-btn-icon" title="Modo compacto" onclick="
+        (function(){
+          const active = document.documentElement.classList.contains('density-compact');
+          ContaApp.toggleDensity(!active);
+          ContaApp.renderThemeSwitcher(document.documentElement.getAttribute('data-theme') || 'fresco');
+        })();
+      ">${compactIcon}</button>
+    </div>
+  `;
+
+  const topbar = document.getElementById('topbar-theme-switcher');
+  if (topbar) {
+    topbar.innerHTML = html;
+  } else {
+    // Fallback por compatibilidad (si alguien dejó el contenedor antiguo en el sidebar)
+    const legacy = document.getElementById('theme-switcher');
+    if (legacy) legacy.innerHTML = html;
+  }
+},
         
     exportarA_CSV(nombreArchivo, dataArray) {
         if (dataArray.length === 0) {
@@ -1867,26 +1918,27 @@ cerrarSesion() {
     );
 },
 aplicarFiltrosAvanzados(modulo) {
-        const filtrosBasicos = {
-            search: document.getElementById(`${modulo}-search`)?.value || '',
-            startDate: document.getElementById(`${modulo}-start-date`)?.value || '',
-            endDate: document.getElementById(`${modulo}-end-date`)?.value || '',
-        };
+  const filtrosBasicos = {
+    search: document.getElementById(`${modulo}-search`)?.value || '',
+    startDate: document.getElementById(`${modulo}-start-date`)?.value || '',
+    endDate: document.getElementById(`${modulo}-end-date`)?.value || '',
+  };
 
-        const filtrosAvanzados = {
-            clienteId: document.getElementById('filtro-avanzado-cliente')?.value || '',
-            estado: document.getElementById('filtro-avanzado-estado')?.value || 'Todas',
-            itemId: document.getElementById('filtro-avanzado-item')?.value || '',
-            minTotal: document.getElementById('filtro-avanzado-min-total')?.value || '',
-            maxTotal: document.getElementById('filtro-avanzado-max-total')?.value || '',
-        };
+  const filtrosAvanzados = {
+    clienteId: document.getElementById('filtro-avanzado-cliente')?.value || '',
+    estado: document.getElementById('filtro-avanzado-estado')?.value || 'Todas',
+    itemId: document.getElementById('filtro-avanzado-item')?.value || '',
+    minTotal: document.getElementById('filtro-avanzado-min-total')?.value || '',
+    maxTotal: document.getElementById('filtro-avanzado-max-total')?.value || '',
+  };
 
-        const params = { ...filtrosBasicos, ...filtrosAvanzados };
-        this.moduleFilters[modulo] = params; 
-        
-        this.closeModal();
-        this.irModulo(modulo, params);
-    },
+  // ✅ Combina correctamente con spread
+  const params = { ...filtrosBasicos, ...filtrosAvanzados };
+  this.moduleFilters[modulo] = params;
+
+  this.closeModal();
+  this.irModulo(modulo, params);
+},
 
     limpiarFiltrosAvanzados(modulo) {
         this.moduleFilters[modulo] = {};
@@ -2112,37 +2164,130 @@ activarModulo(mod) {
         this.showToast(`Módulo ${mod} activado.`, 'success');
     }
 },
-toggleDensity(mode = 'toggle') {
+toggleDensity(mode = 'init') {
   try {
-    const KEY = 'ui:prefs';
-    const el = document.documentElement;
-
-    // Leer prefs actuales (si existen)
-    let prefs = {};
-    try { prefs = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (_) {}
+    const root = document.documentElement; // <html>
+    const key  = 'ui:prefs.compact';
 
     if (mode === 'init') {
-      const on = !!prefs.compact;
-      el.classList.toggle('density-compact', on);
-      return on;
+      // Leer preferencia previa
+      let pref = null;
+      try { pref = localStorage.getItem(key); } catch {}
+      const active = pref === '1';
+      root.classList.toggle('density-compact', active);
+      return;
     }
 
-    const next =
-      mode === 'toggle'
-        ? !el.classList.contains('density-compact')
-        : !!mode;
+    // Forzar on/off
+    const active = !!mode;
+    root.classList.toggle('density-compact', active);
 
-    el.classList.toggle('density-compact', next);
-    prefs.compact = next;
-    localStorage.setItem(KEY, JSON.stringify(prefs));
+    // Persistir
+    try { localStorage.setItem(key, active ? '1' : '0'); } catch {}
 
-    // Feedback rápido (usa tu showToast nuevo)
-    this.showToast(next ? 'Modo compacto activado' : 'Modo cómodo activado', 'info', 1400);
-    return next;
+    // Aviso sutil
+    this.showToast(active ? 'Modo compacto: ON' : 'Modo compacto: OFF', 'info', 1500);
   } catch (err) {
-    console.error('toggleDensity error:', err);
-    this.showToast('No se pudo cambiar la densidad', 'error');
-    return null;
+    console.error('[ContaApp.toggleDensity] Error al alternar densidad:', err);
   }
 },
-};
+}; // <= *** ESTA LLAVE Y PUNTO Y COMA CIERRAN EL OBJETO ContaApp ***
+
+// === EXTENSIÓN PR1: Contexto de Sucursal + Event Bus (idempotente) ===
+// Pega este bloque EXACTAMENTE DESPUÉS del cierre "};" anterior.
+// NO PEGAR NADA de esto dentro del objeto ContaApp.
+(function (app) {
+  if (!app) { console.error('[PR1] ContaApp no está definido'); return; }
+
+  // --- Event bus mínimo ---
+  app._listeners = app._listeners || {};
+  app.on   = app.on   || function (evt, fn) { (this._listeners[evt] ||= []).push(fn); };
+  app.off  = app.off  || function (evt, fn) { this._listeners[evt] = (this._listeners[evt] || []).filter(f => f !== fn); };
+  app.emit = app.emit || function (evt, payload) { (this._listeners[evt] || []).forEach(fn => { try { fn(payload); } catch(e){ console.warn(e); } }); };
+
+  // --- Contexto global ---
+  app.ctx = app.ctx || { sucursalId: null, userId: null, workspaceId: null, permisos: {} };
+
+  // --- Helpers de sucursal/permisos ---
+  app.getPrincipalSucursalId = app.getPrincipalSucursalId || function () {
+    const arr = this.empresa?.sucursales || [];
+    return arr.length ? arr[0].id : null;
+  };
+  app.hasMultiSucursal     = app.hasMultiSucursal     || function () { return (this.empresa?.sucursales?.length || 0) > 1; };
+  app.rolActual            = app.rolActual            || function () { return (this.currentUser?.rol || '').toLowerCase(); };
+  app.puedeCambiarSucursal = app.puedeCambiarSucursal || function () {
+    const r = this.rolActual();
+    return r === 'administrador' || r === 'gerente';
+  };
+
+  // --- Setter de contexto + evento ---
+  app.setSucursalContext = app.setSucursalContext || function (sucursalId, opts) {
+    opts = opts || { persist: true, silent: false };
+    if (!sucursalId) { console.warn('[setSucursalContext] sucursalId vacío'); return; }
+
+    const prev = this.ctx.sucursalId;
+    this.ctx.sucursalId = sucursalId;
+
+    if (opts.persist) { try { localStorage.setItem('ctx:sucursalId', sucursalId); } catch {} }
+    this.renderSucursalChip && this.renderSucursalChip();
+
+    if (!opts.silent && prev !== sucursalId) {
+      const nombre = (this.findById ? this.findById(this.empresa?.sucursales || [], sucursalId) : null)?.nombre || 'N/D';
+      this.showToast && this.showToast(`Sucursal activa: ${nombre}`, 'info', 1500);
+    }
+    this.emit && this.emit('ctx:sucursal-changed', { from: prev, to: sucursalId });
+  };
+
+  // --- Chip en topbar ---
+  app.renderSucursalChip = app.renderSucursalChip || function () {
+    const host = document.getElementById('topbar-sucursal-chip');
+    if (!host) return;
+
+    const sucursales = this.empresa?.sucursales || [];
+    if (sucursales.length <= 1) { host.innerHTML = ''; return; }
+
+    const actual = this.ctx?.sucursalId || this.getPrincipalSucursalId();
+    const nombre = (this.findById ? this.findById(sucursales, actual) : null)?.nombre || 'Sucursal';
+    const puede  = this.puedeCambiarSucursal();
+
+    host.innerHTML =
+      '<div class="relative">' +
+        `<button class="conta-btn-icon" title="Sucursal activa${puede ? ' (clic para cambiar)' : ''}" ${puede ? 'onclick="ContaApp._openSucursalPicker()"' : ''}>` +
+          '<i class="fa-solid fa-location-dot"></i>' +
+        '</button>' +
+        `<span class="text-sm ms-1 align-middle" style="color:var(--color-text-secondary)">${nombre}</span>` +
+      '</div>';
+  };
+
+  // --- Modal selector (solo admin/gerente) ---
+  app._openSucursalPicker = app._openSucursalPicker || function () {
+    if (!this.puedeCambiarSucursal()) return;
+
+    const sucursales = this.empresa?.sucursales || [];
+    const actual = this.ctx?.sucursalId || this.getPrincipalSucursalId();
+
+    const opciones = sucursales.map(s => `
+      <label class="flex items-center gap-2">
+        <input type="radio" name="suc-radio" value="${s.id}" ${s.id === actual ? 'checked' : ''}/>
+        <span>${s.nombre}</span>
+      </label>
+    `).join('');
+
+    const html = `
+      <h3 class="conta-title mb-3">Cambiar sucursal</h3>
+      <div class="space-y-2">${opciones}</div>
+      <div class="flex justify-end gap-2 mt-6">
+        <button class="conta-btn conta-btn-neutral" onclick="ContaApp.closeModal()">Cancelar</button>
+        <button class="conta-btn" onclick="
+          (function(){
+            const v = (document.querySelector('input[name=suc-radio]:checked')||{}).value;
+            if(!v){ ContaApp.showToast('Selecciona una sucursal.', 'error'); return; }
+            ContaApp.setSucursalContext(v, {persist:true});
+            ContaApp.closeModal();
+          })();
+        ">Aplicar</button>
+      </div>
+    `;
+    this.showModal && this.showModal(html, 'sm');
+  };
+})(window.ContaApp);

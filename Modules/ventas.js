@@ -342,104 +342,181 @@ abrirModalEditarVenta(ventaId) {
     togglePagoContado(selectElement) {
         document.getElementById('venta-pago-contado-div').style.display = selectElement.value === 'contado' ? 'block' : 'none';
     },
-                                abrirModalVenta(clienteIdPreseleccionado = null, anticipoIdPreseleccionado = null, ventaIdDuplicar = null, cotizacionIdDuplicar = null, ventaIdEditar = null) {
-    const isEditing = ventaIdEditar !== null;
-    const isDuplicating = ventaIdDuplicar !== null || cotizacionIdDuplicar !== null;
-    
-    const transaccionOriginal = isEditing 
-        ? this.findById(this.transacciones, ventaIdEditar) 
-        : (ventaIdDuplicar 
-            ? this.findById(this.transacciones, ventaIdDuplicar) 
-            : (cotizacionIdDuplicar ? this.findById(this.transacciones, cotizacionIdDuplicar) : null));
+    abrirModalVenta(
+  clienteIdPreseleccionado = null,
+  anticipoIdPreseleccionado = null,
+  ventaIdDuplicar = null,
+  cotizacionIdDuplicar = null,
+  ventaIdEditar = null
+) {
+  const isEditing = ventaIdEditar !== null;
+  const isDuplicating = ventaIdDuplicar !== null || cotizacionIdDuplicar !== null;
 
-    let modalTitle = 'Nueva Venta';
-    if (isEditing) modalTitle = 'Editar Venta';
-    if (isDuplicating && !cotizacionIdDuplicar) modalTitle = 'Duplicar Venta';
-    if (cotizacionIdDuplicar) modalTitle = `Venta desde Cotización #${transaccionOriginal.numeroCotizacion || transaccionOriginal.id}`;
+  const transaccionOriginal = isEditing
+    ? this.findById(this.transacciones, ventaIdEditar)
+    : (ventaIdDuplicar
+        ? this.findById(this.transacciones, ventaIdDuplicar)
+        : (cotizacionIdDuplicar ? this.findById(this.transacciones, cotizacionIdDuplicar) : null));
 
-    const numeroFactura = isEditing ? transaccionOriginal.numeroFactura : this.generarSiguienteNumeroDeFactura();
-    const fecha = isDuplicating ? this.getTodayDate() : (transaccionOriginal?.fecha || this.getTodayDate());
+  // --- Sucursal (asegurar que exista al menos la Principal) ---
+  if (!this.empresa.sucursales || this.empresa.sucursales.length === 0) {
+    this.empresa.sucursales = [{ id: this.generarUUID(), nombre: 'Sucursal Principal' }];
+  }
+  const sucursalesOpts = this.empresa.sucursales.map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
+  const sucursalSeleccionada =
+    (isEditing && transaccionOriginal?.sucursalId) ||
+    this.currentUser?.sucursalId ||
+    this.empresa.sucursales[0].id;
 
-    const cuentasBancoOptions = this.planDeCuentas.filter(c => c.tipo === 'DETALLE' && c.parentId === 110).map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
-    
-    this.isFormDirty = false;
-    const modalHTML = `
-        <h3 class="conta-title mb-4">${modalTitle}</h3>
-        <form onsubmit="ContaApp.guardarVenta(event, ${anticipoIdPreseleccionado})" oninput="ContaApp.isFormDirty = true;" class="modal-form">
-            ${isEditing ? `<input type="hidden" id="venta-id-edit" value="${ventaIdEditar}">` : ''}
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div>
-                    <label>Cliente</label>
-                    <div class="flex items-center gap-2">
-                        <input list="clientes-datalist" id="venta-cliente-input" class="w-full conta-input" required placeholder="Escribe para buscar...">
-                        <datalist id="clientes-datalist">${this.contactos.filter(c => c.tipo === 'cliente').map(c => `<option value="${c.nombre}" data-id="${c.id}"></option>`).join('')}</datalist>
-                        <input type="hidden" id="venta-cliente-id">
-                        <button type="button" class="conta-btn conta-btn-small" onclick="ContaApp.abrirSubModalNuevoContacto('cliente', 'venta-cliente-input')">+</button>
-                    </div>
-                </div>
-                <div>
-                    <label>Fecha</label>
-                    <input type="date" id="venta-fecha" value="${fecha}" class="w-full conta-input" required>
-                </div>
-                <div>
-                    <label>Factura #</label>
-                    <input type="text" id="venta-numero-factura" value="${numeroFactura}" class="w-full conta-input ${isEditing ? 'bg-gray-100 dark:bg-gray-700' : ''}" ${isEditing ? 'readonly' : ''}>
-                </div>
+  const modalTitle =
+    isEditing ? 'Editar Venta'
+      : (isDuplicating && !cotizacionIdDuplicar ? 'Duplicar Venta'
+        : (cotizacionIdDuplicar ? `Venta desde Cotización ${transaccionOriginal?.numeroCotizacion || transaccionOriginal?.id}` : 'Nueva Venta'));
+
+  const numeroFactura = isEditing ? transaccionOriginal.numeroFactura : this.generarSiguienteNumeroDeFactura();
+  const fecha = isDuplicating ? this.getTodayDate() : (transaccionOriginal?.fecha || this.getTodayDate());
+
+  const cuentasBancoOptions = this.planDeCuentas
+    .filter(c => c.tipo === 'DETALLE' && c.parentId === 110)
+    .map(c => `<option value="${c.id}">${c.nombre}</option>`)
+    .join('');
+
+  this.isFormDirty = false;
+
+  const modalHTML = `
+    <h3 class="conta-title mb-4">${modalTitle}</h3>
+    <form onsubmit="ContaApp.guardarVenta(event, ${anticipoIdPreseleccionado ? `'${anticipoIdPreseleccionado}'` : 'null'})"
+          oninput="ContaApp.isFormDirty = true;" class="modal-form">
+      ${isEditing ? `<input type="hidden" id="venta-id-edit" value="${ventaIdEditar}">` : ''}
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+        <div>
+          <label>Sucursal</label>
+          <select id="venta-sucursal-id" class="w-full conta-input">${sucursalesOpts}</select>
+        </div>
+
+        <div>
+          <label>Cliente</label>
+          <div class="flex items-center gap-2">
+            <input list="clientes-datalist" id="venta-cliente-input" class="w-full conta-input" required placeholder="Escribe para buscar...">
+            <datalist id="clientes-datalist">
+              ${this.contactos
+                .filter(c => c.tipo === 'cliente' || !c.tipo)
+                .map(c => `<option value="${c.nombre}" data-id="${c.id}"></option>`).join('')}
+            </datalist>
+            <input type="hidden" id="venta-cliente-id">
+            <button type="button" class="conta-btn conta-btn-small"
+              onclick="ContaApp.abrirSubModalNuevoContacto('cliente','venta-cliente-input')">+</button>
+          </div>
+        </div>
+
+        <div>
+          <label>Fecha</label>
+          <input type="date" id="venta-fecha" value="${fecha}" class="w-full conta-input" required>
+        </div>
+
+        <div>
+          <label>Factura #</label>
+          <input type="text" id="venta-numero-factura" class="w-full conta-input" value="${numeroFactura}" ${isEditing ? 'readonly' : ''}>
+        </div>
+      </div>
+
+      <div class="conta-card p-2 md:p-4">
+        <h4 class="font-bold mb-2 text-sm">Ítems de la Venta</h4>
+        <div id="venta-items-container" class="space-y-3"></div>
+        <button type="button" class="conta-btn conta-btn-accent mt-2" onclick="ContaApp.agregarItemVenta()">+ Agregar Ítem</button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 items-start">
+        <div>
+          <label>Términos de Pago</label>
+          <select id="venta-terminos-pago" class="w-full conta-input"
+            onchange="document.getElementById('venta-pago-contado-div').style.display = (this.value==='contado') ? 'block' : 'none'">
+            <option value="credito_30">Crédito (30 días)</option>
+            <option value="credito_15">Crédito (15 días)</option>
+            <option value="contado">De Contado</option>
+          </select>
+
+          <div id="venta-pago-contado-div" style="display:none" class="mt-2">
+            <label>Depositar en</label>
+            <select id="venta-pago-cuenta-banco" class="w-full conta-input">${cuentasBancoOptions}</select>
+          </div>
+        </div>
+
+        <div class="space-y-2 text-right">
+          <div class="flex justify-end items-center gap-2 mb-2">
+            <label for="venta-recurrente-check" class="text-sm font-medium">Venta Recurrente</label>
+            <input type="checkbox" id="venta-recurrente-check" class="h-4 w-4">
+          </div>
+          <div class="flex justify-between font-semibold">
+            <span class="text-[var(--color-text-secondary)]">Subtotal:</span>
+            <span id="venta-subtotal">${this.formatCurrency(0)}</span>
+          </div>
+          <div class="flex justify-between items-center font-semibold">
+            <span class="text-[var(--color-text-secondary)]">Descuento:</span>
+            <div class="flex items-center gap-1">
+              <input id="venta-descuento-porc" type="number" class="w-20 conta-input text-right" min="0" max="100" step="0.01"
+                     oninput="ContaApp.actualizarTotalesVenta('porc')" placeholder="%">
+              <input id="venta-descuento-monto" type="text" class="w-28 conta-input text-right" data-monto-real="0"
+                     oninput="ContaApp.actualizarTotalesVenta('monto')" placeholder="$">
             </div>
-            
-            <div class="conta-card p-2 md:p-4">
-                <h4 class="font-bold mb-2 text-sm">Ítems de la Venta</h4>
-                <div id="venta-items-container" class="space-y-3"></div>
-                <button type="button" class="conta-btn conta-btn-small conta-btn-accent mt-2" onclick="ContaApp.agregarItemVenta()">+ Agregar Ítem</button>
-            </div>
+          </div>
+          <div class="flex justify-between font-semibold">
+            <span class="text-[var(--color-text-secondary)]">Impuesto:</span>
+            <span id="venta-impuesto">${this.formatCurrency(0)}</span>
+          </div>
+          <div class="flex justify-between font-bold text-[var(--color-text-primary)]">
+            <span>Total:</span>
+            <span id="venta-total">${this.formatCurrency(0)}</span>
+          </div>
+        </div>
+      </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 items-start">
-                <div>
-                    <label>Términos de Pago</label>
-                    <select id="venta-terminos-pago" class="w-full conta-input" onchange="this.value === 'contado' ? document.getElementById('venta-pago-contado-div').style.display = 'block' : document.getElementById('venta-pago-contado-div').style.display = 'none'">
-                        <option value="credito_30">Crédito (30 días)</option>
-                        <option value="credito_15">Crédito (15 días)</option>
-                        <option value="contado">De Contado</option>
-                    </select>
-                    <div id="venta-pago-contado-div" style="display: none;" class="mt-2">
-                        <label>Depositar en</label>
-                        <select id="venta-pago-cuenta-banco" class="w-full conta-input">${cuentasBancoOptions}</select>
-                    </div>
-                </div>
-                <div class="space-y-2 text-right">
-                    <div class="flex justify-end items-center gap-2 mb-2">
-                        <label for="venta-recurrente-check" class="text-sm font-medium">Venta Recurrente</label>
-                        <input type="checkbox" id="venta-recurrente-check" class="h-4 w-4">
-                    </div>
-                    <div class="flex justify-between font-semibold"><span class="text-[var(--color-text-secondary)]">Subtotal:</span> <span id="venta-subtotal">${this.formatCurrency(0)}</span></div>
-                    <div class="flex justify-between items-center font-semibold">
-                        <span class="text-[var(--color-text-secondary)]">Descuento:</span>
-                        <div class="flex items-center gap-1"><input type="number" step="0.01" id="venta-descuento-monto" class="conta-input w-24 text-right" oninput="ContaApp.actualizarTotalesVenta('monto')"><input type="number" step="0.01" id="venta-descuento-porc" class="conta-input w-20 text-right" oninput="ContaApp.actualizarTotalesVenta('porc')"></div>
-                    </div>
-                    <div class="flex justify-between font-semibold"><span class="text-[var(--color-text-secondary)]">Impuesto (${this.empresa.taxRate}%):</span> <span id="venta-impuesto">${this.formatCurrency(0)}</span></div>
-                    <div class="flex justify-between font-bold text-xl"><span class="text-[var(--color-text-primary)]">Total:</span> <span id="venta-total">${this.formatCurrency(0)}</span></div>
-                </div>
-            </div>
-            <div class="flex justify-end gap-2 mt-8"><button type="button" class="conta-btn conta-btn-accent" onclick="ContaApp.closeModal()">Cancelar</button><button type="submit" class="conta-btn">${isEditing ? 'Guardar Cambios' : 'Guardar'}</button></div>
-        </form>
-    `;
-    this.showModal(modalHTML, '5xl');
-    this.setupDatalistListener('venta-cliente-input', 'venta-cliente-id', 'clientes-datalist');
-    
-    const itemsContainer = document.getElementById('venta-items-container');
-    itemsContainer.innerHTML = '';
+      <div class="flex justify-end gap-2 mt-8">
+        <button type="button" class="conta-btn conta-btn-neutral" onclick="ContaApp.closeModal()">Cancelar</button>
+        <button type="submit" class="conta-btn">${isEditing ? 'Guardar Cambios' : 'Guardar'}</button>
+      </div>
+    </form>`;
 
-    if (this.tempItemsParaVenta && this.tempItemsParaVenta.length > 0) {
-        this.tempItemsParaVenta.forEach(item => { this.agregarItemVenta(); /* ...lógica para rellenar... */ });
-        this.tempItemsParaVenta = [];
-    } else if (transaccionOriginal) {
-        // ... (lógica para rellenar desde una transacción existente sin cambios)
-    } else {
-         this.agregarItemVenta();
-    }
+  this.showModal(modalHTML, '5xl');
+  this.setupDatalistListener('venta-cliente-input', 'venta-cliente-id', 'clientes-datalist');
 
-    this.actualizarTotalesVenta('monto');
+  const itemsContainer = document.getElementById('venta-items-container');
+  itemsContainer.innerHTML = '';
+
+  if (this.tempItemsParaVenta && this.tempItemsParaVenta.length > 0) {
+    this.tempItemsParaVenta.forEach(() => this.agregarItemVenta());
+    this.tempItemsParaVenta = [];
+  } else if (transaccionOriginal) {
+    // Si se está duplicando/editando, aquí puedes pre-cargar items si ya lo hacías.
+    // (Se mantiene tu comportamiento actual)
+  } else {
+    this.agregarItemVenta();
+  }
+
+  // Preselección de sucursal
+  document.getElementById('venta-sucursal-id').value = sucursalSeleccionada;
+
+  // Recalcular totales
+  this.actualizarTotalesVenta('monto');
 },
+_validarStockVentaPorSucursal(sucursalId, items) {
+  const faltantes = [];
+  for (const it of items) {
+    if (it.itemType !== 'producto') continue;
+    const p = this.findById(this.productos, it.productoId);
+    if (!p) continue;
+    if (!p.stockPorSucursal) p.stockPorSucursal = {};
+    const disponible = parseFloat(p.stockPorSucursal[sucursalId] || 0);
+    if (disponible < it.cantidad) {
+      faltantes.push(`${p.nombre}: disponible ${disponible}, solicitado ${it.cantidad}`);
+    }
+  }
+  if (faltantes.length) {
+    throw new Error(`Stock insuficiente en la sucursal seleccionada:\n• ${faltantes.join('\n• ')}`);
+  }
+},
+
         convertirCotizacionAVenta(cotizacionId) {
         const cotizacion = this.findById(this.transacciones, cotizacionId);
         if (!cotizacion) {
@@ -707,138 +784,202 @@ abrirModalEditarVenta(ventaId) {
     document.getElementById('venta-total').textContent = this.formatCurrency(total);
 },
     async guardarVenta(e, anticipoIdAplicado = null) {
-    e.preventDefault();
-    const submitButton = e.target.querySelector('button[type="submit"]');
-    this.toggleButtonLoading(submitButton, true);
+  e.preventDefault();
+  const submitButton = e.target.querySelector('button[type="submit"]');
+  this.toggleButtonLoading(submitButton, true);
 
-    const ventaIdEdit = document.getElementById('venta-id-edit')?.value;
-    const isEditing = !!ventaIdEdit;
+  const ventaIdEdit = document.getElementById('venta-id-edit')?.value;
+  const isEditing = !!ventaIdEdit;
 
-    try {
-        const clienteId = document.getElementById('venta-cliente-id').value;
-        if (!clienteId) throw new Error('Por favor, selecciona un cliente válido de la lista.');
-        
-        const fecha = document.getElementById('venta-fecha').value;
-        const terminosPago = document.getElementById('venta-terminos-pago').value;
-        const items = [];
-        let subtotal = 0;
+  try {
+    const sucursalId = document.getElementById('venta-sucursal-id')?.value || null;
+    if (!sucursalId) throw new Error('Selecciona la Sucursal de la venta.');
 
-        for (const row of document.querySelectorAll('.venta-item-row')) {
-            const tipo = row.querySelector('.venta-item-type').value;
-            // --- INICIO DE LA CORRECCIÓN ---
-            // Se ajusta el querySelector para encontrar el ID dentro de su contenedor.
-            const itemIdSelect = row.querySelector('.venta-item-selector-container .venta-item-id');
-            if (!itemIdSelect) continue; // Si no se encuentra el selector, se salta la fila.
-            const itemId = itemIdSelect.value;
-            // --- FIN DE LA CORRECCIÓN ---
-            
-            const cantidad = parseInt(row.querySelector('.venta-item-cantidad').value);
-            const precio = parseFloat(row.querySelector('.venta-item-precio').value);
-            const centroDeCostoId = row.querySelector('.venta-item-centro-costo').value;
-            if (!centroDeCostoId) {
-                throw new Error('Todas las líneas de la venta deben tener un Centro de Costo asignado.');
-            }
+    const clienteId = document.getElementById('venta-cliente-id').value;
+    if (!clienteId) throw new Error('Por favor, selecciona un cliente válido de la lista.');
 
-            const item = { itemType: tipo, cantidad, precio, costo: 0, centroDeCostoId };
-            if (tipo === 'producto') {
-                const producto = this.findById(this.productos, itemId);
-                if (!producto) continue;
-                item.productoId = itemId;
-                item.costo = producto.costo;
-            } else {
-                item.cuentaId = itemId;
-                item.descripcion = row.querySelector('.venta-item-descripcion')?.value || '';
-            }
-            items.push(item);
-            subtotal += cantidad * precio;
-        }
+    const fecha = document.getElementById('venta-fecha').value;
+    const terminosPago = document.getElementById('venta-terminos-pago').value; // credito_30 | credito_15 | contado
 
-        if (items.length === 0) throw new Error('Debes agregar al menos un ítem.');
+    // Armar items desde el formulario (igual que tu flujo actual)
+    const items = [];
+    let subtotal = 0;
+    for (const row of document.querySelectorAll('.venta-item-row')) {
+      const tipo = row.querySelector('.venta-item-type').value;
+      const itemIdSelect = row.querySelector('.venta-item-selector-container .venta-item-id');
+      if (!itemIdSelect) continue;
+      const itemId = itemIdSelect.value;
 
-        const descuento = parseFloat(document.getElementById('venta-descuento-monto').dataset.montoReal) || 0;
-        const impuesto = (subtotal - descuento) * (this.empresa.taxRate / 100);
-        const total = (subtotal - descuento) + impuesto;
-        
-        let ventaParaGuardar;
-        if (isEditing) {
-            ventaParaGuardar = this.findById(this.transacciones, ventaIdEdit);
-            // Revertir stock antes de re-calcular
-            ventaParaGuardar.items.forEach(item => {
-                if (item.itemType === 'producto') {
-                    const producto = this.findById(this.productos, item.productoId);
-                    if (producto) producto.stock += item.cantidad;
-                }
-            });
-            // Eliminar asientos viejos para recrearlos
-            this.asientos = this.asientos.filter(a => a.transaccionId !== ventaParaGuardar.id);
-        } else {
-            ventaParaGuardar = {
-                id: this.generarUUID(),
-                numeroFactura: document.getElementById('venta-numero-factura').value,
-                tipo: 'venta',
-            };
-            this.transacciones.push(ventaParaGuardar);
-        }
+      const cantidad = parseFloat(row.querySelector('.venta-item-cantidad').value);
+      const precio = parseFloat(row.querySelector('.venta-item-precio').value);
+      const centroDeCostoId = row.querySelector('.venta-item-centro-costo').value;
+      if (!centroDeCostoId) throw new Error('Todas las líneas deben tener Centro de Costo.');
 
-        Object.assign(ventaParaGuardar, {
-            fecha, terminosPago, contactoId: clienteId, items, subtotal, descuento, 
-            impuesto, total
-        });
-        
-        items.forEach(item => {
-            if (item.itemType === 'producto') {
-                const producto = this.findById(this.productos, item.productoId);
-                if (producto.stock < item.cantidad) throw new Error(`Stock insuficiente para "${producto.nombre}".`);
-                producto.stock -= item.cantidad;
-            }
-        });
-        
-        const esContado = terminosPago === 'contado';
-        const cuentaDebeId = esContado ? parseInt(document.getElementById('venta-pago-cuenta-banco').value) : 120;
-        
-        if(esContado) {
-            ventaParaGuardar.estado = 'Pagada';
-            ventaParaGuardar.montoPagado = total;
-        } else {
-            ventaParaGuardar.estado = 'Pendiente';
-            ventaParaGuardar.montoPagado = 0;
-        }
-
-        const asientoDescripcion = `Venta a ${this.findById(this.contactos, clienteId).nombre} #${ventaParaGuardar.numeroFactura}`;
-        const movimientosVenta = [{ cuentaId: cuentaDebeId, debe: total, haber: 0 }, { cuentaId: 240, debe: 0, haber: impuesto }];
-        if (descuento > 0) movimientosVenta.push({ cuentaId: 490, debe: descuento, haber: 0 });
-        items.forEach(item => {
-            const cuentaIngresoId = item.itemType === 'producto' ? this.findById(this.productos, item.productoId).cuentaIngresoId : item.cuentaId;
-            movimientosVenta.push({ cuentaId: cuentaIngresoId, debe: 0, haber: item.cantidad * item.precio, centroDeCostoId: item.centroDeCostoId });
-        });
-        const asientoVenta = this.crearAsiento(fecha, asientoDescripcion, movimientosVenta, ventaParaGuardar.id);
-
-        if (esContado && asientoVenta) {
-            this._registrarMovimientoBancarioPendiente(cuentaDebeId, fecha, `Cobro Factura #${ventaParaGuardar.numeroFactura}`, total, asientoVenta.id);
-        }
-        
-        const costoTotalItems = items.filter(i => i.itemType === 'producto').reduce((sum, i) => sum + (i.costo * i.cantidad), 0);
-        if (costoTotalItems > 0) {
-            this.crearAsiento(fecha, `Costo de venta #${ventaParaGuardar.numeroFactura}`, [
-                { cuentaId: 510, debe: costoTotalItems, haber: 0 },
-                { cuentaId: 13004, debe: 0, haber: costoTotalItems } // Asumiendo que los productos terminados salen de esta cuenta
-            ], ventaParaGuardar.id);
-        }
-        
-        await this.saveAll();
-        
-        this.isFormDirty = false;
-        this.closeModal();
-        this.irModulo('ventas');
-        this.showToast(`Venta ${isEditing ? 'actualizada' : 'creada'} con éxito.`, 'success');
-
-    } catch (error) {
-        console.error("Error al guardar la venta:", error);
-        this.showToast(error.message || 'Ocurrió un error al guardar.', 'error');
-        if (isEditing) this.irModulo('ventas');
-    } finally {
-        this.toggleButtonLoading(submitButton, false);
+      const item = { itemType: tipo, cantidad, precio, costo: 0, centroDeCostoId };
+      if (tipo === 'producto') {
+        const producto = this.findById(this.productos, itemId);
+        if (!producto) continue;
+        item.productoId = itemId;
+        item.costo = parseFloat(producto.costo) || 0;
+      } else {
+        item.cuentaId = itemId;
+        item.descripcion = row.querySelector('.venta-item-descripcion')?.value || '';
+      }
+      items.push(item);
+      subtotal += (cantidad * precio);
     }
+    if (items.length === 0) throw new Error('Debes agregar al menos un ítem.');
+
+    // Descuentos / impuestos
+    const descuento = parseFloat(document.getElementById('venta-descuento-monto').dataset.montoReal) || 0;
+    const impuesto = (subtotal - descuento) * (this.empresa.taxRate / 100);
+    const total = (subtotal - descuento) + impuesto;
+
+    // Si es edición, revertir stocks previos (en su sucursal original)
+    let ventaParaGuardar;
+    if (isEditing) {
+      ventaParaGuardar = this.findById(this.transacciones, ventaIdEdit);
+
+      // Reponer stock por sucursal de la venta original
+      if (ventaParaGuardar?.items?.length) {
+        const sucursalOriginal = ventaParaGuardar.sucursalId || sucursalId;
+        ventaParaGuardar.items.forEach(it => {
+          if (it.itemType === 'producto') {
+            const pr = this.findById(this.productos, it.productoId);
+            if (!pr) return;
+            if (!pr.stockPorSucursal) pr.stockPorSucursal = {};
+            pr.stockPorSucursal[sucursalOriginal] = (parseFloat(pr.stockPorSucursal[sucursalOriginal] || 0) + parseFloat(it.cantidad || 0));
+          }
+        });
+      }
+
+      // Borrar asientos viejos de la venta
+      this.asientos = this.asientos.filter(a => a.transaccionId !== ventaParaGuardar.id);
+    } else {
+      ventaParaGuardar = {
+        id: this.generarUUID(),
+        tipo: 'venta',
+        numeroFactura: document.getElementById('venta-numero-factura').value || this.generarSiguienteNumeroDeFactura()
+      };
+      this.transacciones.push(ventaParaGuardar);
+    }
+
+    // Validar stock por sucursal
+    this._validarStockVentaPorSucursal(sucursalId, items);
+
+    // Actualizar stock por sucursal (restar)
+    items.forEach(it => {
+      if (it.itemType !== 'producto') return;
+      const pr = this.findById(this.productos, it.productoId);
+      if (!pr.stockPorSucursal) pr.stockPorSucursal = {};
+      const actual = parseFloat(pr.stockPorSucursal[sucursalId] || 0);
+      pr.stockPorSucursal[sucursalId] = actual - it.cantidad;
+    });
+
+    // Campos de la venta
+    ventaParaGuardar.fecha = fecha;
+    ventaParaGuardar.contactoId = clienteId;
+    ventaParaGuardar.items = items;
+    ventaParaGuardar.subtotal = subtotal;
+    ventaParaGuardar.descuento = descuento;
+    ventaParaGuardar.impuesto = impuesto;
+    ventaParaGuardar.total = total;
+    ventaParaGuardar.sucursalId = sucursalId;
+
+    // Pago contado/credito → contrapartida
+    const esContado = terminosPago === 'contado';
+    const pagoTipo = esContado ? 'contado' : 'credito';
+    ventaParaGuardar.pagoTipo = pagoTipo;
+
+    let cuentaDebeId;
+    if (esContado) {
+      const cuentaBancoId = parseInt(document.getElementById('venta-pago-cuenta-banco').value || 0);
+      if (!cuentaBancoId) throw new Error('Selecciona la cuenta bancaria para pago de contado.');
+      cuentaDebeId = cuentaBancoId;
+      ventaParaGuardar.estado = 'Pagada';
+      ventaParaGuardar.montoPagado = total;
+    } else {
+      cuentaDebeId = 120; // CxC
+      ventaParaGuardar.estado = 'Pendiente';
+      ventaParaGuardar.montoPagado = 0;
+    }
+
+    // --- Asiento 1: Ingreso (por sucursal) ---
+    const descCliente = this.findById(this.contactos, clienteId)?.nombre || 'Cliente';
+    const descVenta = `Venta a ${descCliente} #${ventaParaGuardar.numeroFactura}`;
+    const movimientosVenta = [
+      { cuentaId: cuentaDebeId, debe: total, haber: 0, sucursalId },
+      { cuentaId: 240, debe: 0, haber: impuesto, sucursalId } // IVA por pagar
+    ];
+    if (descuento > 0) movimientosVenta.push({ cuentaId: 490, debe: descuento, haber: 0, sucursalId }); // Descuentos concedidos
+
+    items.forEach(it => {
+      if (it.itemType === 'producto') {
+        const pr = this.findById(this.productos, it.productoId);
+        const cuentaIngresoId = pr?.cuentaIngresoId || 41001;
+        movimientosVenta.push({
+          cuentaId: cuentaIngresoId,
+          debe: 0, haber: (it.cantidad * it.precio),
+          sucursalId, centroDeCostoId: it.centroDeCostoId
+        });
+      } else {
+        movimientosVenta.push({
+          cuentaId: it.cuentaId,
+          debe: 0, haber: (it.cantidad * it.precio),
+          sucursalId, centroDeCostoId: it.centroDeCostoId
+        });
+      }
+    });
+
+    const asientoVenta = this.crearAsiento(fecha, descVenta, movimientosVenta, ventaParaGuardar.id);
+
+    // Movimiento bancario pendiente (contado)
+    if (esContado && asientoVenta) {
+      this._registrarMovimientoBancarioPendiente(
+        cuentaDebeId,
+        fecha,
+        `Cobro de venta #${ventaParaGuardar.numeroFactura}`,
+        total,
+        asientoVenta.id
+      );
+    }
+
+    // --- Asiento 2: Costo de Venta (por sucursal) ---
+    const costoTotalItems = items
+      .filter(i => i.itemType === 'producto')
+      .reduce((sum, i) => sum + (parseFloat(i.costo || 0) * parseFloat(i.cantidad || 0)), 0);
+
+    if (costoTotalItems > 0) {
+      // Preferimos la cuenta de inventario del producto; si no, 13004 (terminados)
+      const cuentaInventarioId =
+        this.productos.find(p => p.id === (items.find(i => i.itemType === 'producto')?.productoId))?.cuentaInventarioId || 13004;
+
+      this.crearAsiento(
+        fecha,
+        `Costo de venta #${ventaParaGuardar.numeroFactura}`,
+        [
+          { cuentaId: 510,   debe: costoTotalItems, haber: 0,             sucursalId }, // Costo de Ventas
+          { cuentaId: cuentaInventarioId, debe: 0, haber: costoTotalItems, sucursalId } // Inventario
+        ],
+        ventaParaGuardar.id
+      );
+    }
+
+    // Persistir todo
+    await this.saveAll();
+
+    this.isFormDirty = false;
+    this.closeModal();
+    this.irModulo('ventas');
+    this.showToast(`Venta ${isEditing ? 'actualizada' : 'creada'} con éxito.`, 'success');
+
+  } catch (error) {
+    console.error('Error al guardar la venta:', error);
+    this.showToast(error.message || 'Ocurrió un error al guardar.', 'error');
+    if (isEditing) this.irModulo('ventas');
+  } finally {
+    this.toggleButtonLoading(submitButton, false);
+  }
 },
     anularVenta(ventaId) {
     const venta = this.findById(this.transacciones, ventaId);

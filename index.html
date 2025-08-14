@@ -1,164 +1,188 @@
+<!-- Archivo: index.html -->
 <!DOCTYPE html>
 <html lang="es" data-theme="fresco">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ContaApp Pro</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <style type="text/css" media="print">
-        @page { size: auto; margin: 0mm; }
-        body { background-color: #FFFFFF; margin: 1cm; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ContaApp Pro</title>
+
+  <!-- Libs UI -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <!-- Charts / util -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+  <!-- Tipografías -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet"/>
 </head>
+
 <body>
-    <div id="toast-container"></div>
-    <div class="flex h-screen">
-        <nav class="w-64 shadow-lg flex-shrink-0 flex flex-col no-print">
-            <div class="p-4 flex items-center justify-between gap-3 border-b border-[var(--color-border-primary)]">
-                <div class="flex items-center gap-3">
-                    <img id="side-logo" src="images/logo.png" alt="Logo" class="h-10 w-10 rounded-full object-contain bg-white">
-                    <span class="conta-nav-title font-bold text-lg"></span>
-                </div>
-                <div id="theme-switcher"></div>
-            </div>
-            <div class="overflow-y-auto">
-                <a id="nav-dashboard" class="conta-nav-link" onclick="ContaApp.irModulo('dashboard')"><i class="fa-solid fa-chart-pie fa-fw me-2"></i> Dashboard</a>
-                
-                <div class="px-4 pt-4 pb-2 text-xs font-bold uppercase text-[var(--color-text-secondary)]">Finanzas</div>
-                <a id="nav-ventas" class="conta-nav-link" onclick="ContaApp.irModulo('ventas')"><i class="fa-solid fa-shopping-cart fa-fw me-2"></i> Ventas</a>
-                <a id="nav-cxc" class="conta-nav-link" onclick="ContaApp.irModulo('cxc')"><i class="fa-solid fa-file-invoice-dollar fa-fw me-2"></i> Cuentas por Cobrar</a>
-                <a id="nav-gastos" class="conta-nav-link" onclick="ContaApp.irModulo('gastos')"><i class="fa-solid fa-receipt fa-fw me-2"></i> Gastos</a>
-                <a id="nav-compras" class="conta-nav-link" onclick="ContaApp.irModulo('compras')"><i class="fa-solid fa-shopping-basket fa-fw me-2"></i> Compras</a>
-                <a id="nav-cxp" class="conta-nav-link" onclick="ContaApp.irModulo('cxp')"><i class="fa-solid fa-file-invoice fa-fw me-2"></i> Cuentas por Pagar</a>
-                <a id="nav-bancos" class="conta-nav-link" onclick="ContaApp.irModulo('bancos')"><i class="fa-solid fa-landmark fa-fw me-2"></i> Bancos y Tarjetas</a>
+  <!-- TOASTS -->
+  <div id="toast-container"></div>
 
-                <div class="px-4 pt-4 pb-2 text-xs font-bold uppercase text-[var(--color-text-secondary)]">Inventario</div>
-                <a id="nav-inventario" class="conta-nav-link" onclick="ContaApp.irModulo('inventario')"><i class="fa-solid fa-boxes-stacked fa-fw me-2"></i> Gestión de Productos</a>
-                
-                <div class="px-4 pt-4 pb-2 text-xs font-bold uppercase text-[var(--color-text-secondary)]">Producción</div>
-                <a id="nav-produccion" class="conta-nav-link" onclick="ContaApp.irModulo('produccion')"><i class="fa-solid fa-cogs fa-fw me-2"></i> Gestión de Producción</a>
+  <!-- APP -->
+  <div id="app-root" class="flex h-screen no-print hidden">
+    <!-- SIDEBAR -->
+    <nav class="w-64 shadow-lg flex-shrink-0 flex flex-col no-print">
+      <!-- Logo limpio (sin luna/barritas) -->
+      <div class="p-4 flex items-center justify-between gap-3 border-b border-[var(--color-border-primary)]">
+        <div class="flex items-center gap-3">
+          <img id="side-logo" src="images/logo.png" alt="Logo" class="h-10 w-10 rounded-full object-contain bg-white" />
+          <span class="conta-nav-title font-bold text-lg"></span>
+        </div>
+      </div>
 
-                <div class="px-4 pt-4 pb-2 text-xs font-bold uppercase text-[var(--color-text-secondary)]">Contabilidad</div>
-                <a id="nav-plan-de-cuentas" class="conta-nav-link" onclick="ContaApp.irModulo('plan-de-cuentas')"><i class="fa-solid fa-book fa-fw me-2"></i> Plan de Cuentas</a>
-                <a id="nav-diario-general" class="conta-nav-link" onclick="ContaApp.irModulo('diario-general')"><i class="fa-solid fa-book-journal-whills fa-fw me-2"></i> Diario General</a>
-                <a id="nav-cierre-periodo" class="conta-nav-link" onclick="ContaApp.irModulo('cierre-periodo')"><i class="fa-solid fa-scale-balanced fa-fw me-2"></i> Cierre del Período</a>
-                
-                <div class="px-4 pt-4 pb-2 text-xs font-bold uppercase text-[var(--color-text-secondary)]">Activos</div>
-                <a id="nav-activos-fijos" class="conta-nav-link" onclick="ContaApp.irModulo('activos-fijos')"><i class="fa-solid fa-building-columns fa-fw me-2"></i> Activos Fijos</a>
+      <!-- NAV -->
+      <div class="overflow-y-auto flex-1">
+        <a id="nav-dashboard" class="conta-nav-link" onclick="ContaApp.irModulo('dashboard')"><i class="fa-solid fa-chart-pie fa-fw me-2"></i>Dashboard</a>
+        <a id="nav-ventas" class="conta-nav-link" onclick="ContaApp.irModulo('ventas')"><i class="fa-solid fa-shopping-cart fa-fw me-2"></i>Ventas</a>
+        <a id="nav-cxc" class="conta-nav-link" onclick="ContaApp.irModulo('cxc')"><i class="fa-solid fa-hand-holding-dollar fa-fw me-2"></i>Cuentas por Cobrar</a>
+        <a id="nav-compras" class="conta-nav-link" onclick="ContaApp.irModulo('compras')"><i class="fa-solid fa-basket-shopping fa-fw me-2"></i>Compras</a>
+        <a id="nav-cxp" class="conta-nav-link" onclick="ContaApp.irModulo('cxp')"><i class="fa-solid fa-file-invoice-dollar fa-fw me-2"></i>Cuentas por Pagar</a>
+        <a id="nav-inventario" class="conta-nav-link" onclick="ContaApp.irModulo('inventario')"><i class="fa-solid fa-boxes-stacked fa-fw me-2"></i>Inventario</a>
+        <a id="nav-produccion" class="conta-nav-link" onclick="ContaApp.irModulo('produccion')"><i class="fa-solid fa-cogs fa-fw me-2"></i>Producción</a>
+        <a id="nav-plan" class="conta-nav-link" onclick="ContaApp.irModulo('plan-de-cuentas')"><i class="fa-solid fa-list-ol fa-fw me-2"></i>Plan de Cuentas</a>
+        <a id="nav-diario" class="conta-nav-link" onclick="ContaApp.irModulo('diario-general')"><i class="fa-solid fa-book-open fa-fw me-2"></i>Diario General</a>
+        <a id="nav-cierre" class="conta-nav-link" onclick="ContaApp.irModulo('cierre-periodo')"><i class="fa-solid fa-lock fa-fw me-2"></i>Cierre del Período</a>
+        <a id="nav-activos" class="conta-nav-link" onclick="ContaApp.irModulo('activos-fijos')"><i class="fa-solid fa-building-columns fa-fw me-2"></i>Activos Fijos</a>
+        <a id="nav-bancos" class="conta-nav-link" onclick="ContaApp.irModulo('bancos')"><i class="fa-solid fa-landmark fa-fw me-2"></i>Bancos / Tarjetas</a>
+        <a id="nav-reportes" class="conta-nav-link" onclick="ContaApp.irModulo('reportes')"><i class="fa-solid fa-file-lines fa-fw me-2"></i>Reportes</a>
+        <a id="nav-config" class="conta-nav-link" onclick="ContaApp.irModulo('config')"><i class="fa-solid fa-gear fa-fw me-2"></i>Configuración</a>
+      </div>
 
-                <div class="px-4 pt-4 pb-2 text-xs font-bold uppercase text-[var(--color-text-secondary)]">Análisis</div>
-                <a id="nav-reportes" class="conta-nav-link" onclick="ContaApp.irModulo('reportes')"><i class="fa-solid fa-chart-simple fa-fw me-2"></i> Reportes Financieros</a>
-                
-                <div class="px-4 pt-4 pb-2 text-xs font-bold uppercase text-[var(--color-text-secondary)]">Sistema</div>
-                <a id="nav-config" class="conta-nav-link" onclick="ContaApp.irModulo('config')"><i class="fa-solid fa-cog fa-fw me-2"></i> Ajustes</a>
-            </div>
-        </nav>
-        <main class="flex-1 flex flex-col relative">
-            <div id="content-header" class="bg-[var(--color-bg-secondary)] shadow-sm p-4 flex justify-between items-center gap-4 no-print">
-                <div class="flex items-center gap-4">
-                    <button id="back-button" class="conta-btn-icon" onclick="ContaApp.irAtras()" title="Ir Atrás" disabled>
-                        <i class="fa-solid fa-arrow-left fa-lg"></i>
-                    </button>
-                    <h1 id="page-title-header" class="text-xl font-bold text-[var(--color-text-primary)] whitespace-nowrap"></h1>
-                </div>
-                <div class="relative flex-grow max-w-lg mx-auto">
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <i class="fa-solid fa-search text-[var(--color-text-secondary)]"></i>
-                    </div>
-                    <input type="text" id="global-search-input" placeholder="Buscar factura, cliente, gasto..." class="w-full conta-input pl-10">
-                    <div id="global-search-results" class="hidden absolute top-full mt-2 w-full bg-[var(--color-bg-secondary)] rounded-lg shadow-xl border border-[var(--color-border-primary)] z-50 max-h-96 overflow-y-auto"></div>
-                </div>
+      <!-- Footer Sidebar -->
+      <div class="p-4 border-t border-[var(--color-border-primary)] text-xs text-[var(--color-text-secondary)]">
+        <div>ContaApp Pro</div>
+        <div>v2.1.2</div>
+      </div>
+    </nav>
 
-                <!-- ===== INICIO DE CÓDIGO AÑADIDO PARA NOTIFICACIONES ===== -->
-                <div id="notification-bell-container" class="relative flex-shrink-0">
-                    <button class="conta-btn-icon" onclick="ContaApp.toggleNotificationDropdown()" title="Notificaciones">
-                        <i class="fa-solid fa-bell fa-lg"></i>
-                        <span id="notification-badge" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-4 w-4 flex items-center justify-center hidden"></span>
-                    </button>
-                    <div id="notification-dropdown" class="hidden absolute top-full mt-2 right-0 w-80 bg-[var(--color-bg-secondary)] rounded-lg shadow-xl border border-[var(--color-border-primary)] z-50 max-h-96 overflow-y-auto">
-                        <!-- El contenido de las notificaciones se generará aquí -->
-                    </div>
-                </div>
-                <!-- ===== FIN DE CÓDIGO AÑADIDO ===== -->
-                <button class="conta-btn-icon" onclick="ContaApp.cerrarSesion()" title="Cerrar Sesión">
-                    <i class="fa-solid fa-sign-out-alt fa-lg"></i>
-                </button>
-                <div id="page-actions-header" class="flex-shrink-0"></div>
-            </div>
-            <div id="module-loader" class="absolute top-0 left-0 right-0 bottom-0 bg-[rgba(var(--color-bg-primary-rgb),0.7)] z-40 flex items-center justify-center hidden">
-                <div class="spinner-large"></div>
-            </div>
-            <div id="content-area" class="flex-1 p-4 md:p-6 overflow-y-auto">
-                <div id="dashboard" style="display:none;"></div>
-                <div id="ventas" style="display:none;"></div>
-                <div id="anticipos" style="display:none;"></div>
-                <div id="cxc" style="display:none;"></div>
-                <div id="gastos" style="display:none;"></div>
-                <div id="compras" style="display:none;"></div>
-                <div id="cxp" style="display:none;"></div>
-                <div id="inventario" style="display:none;"></div>
-                <div id="produccion" style="display:none;"></div>
-                <div id="plan-de-cuentas" style="display:none;"></div>
-                <div id="diario-general" style="display:none;"></div>
-                <div id="cierre-periodo" style="display:none;"></div>
-                <div id="activos-fijos" style="display:none;"></div>
-                <div id="bancos" style="display:none;"></div>
-                <div id="reportes" style="display:none;"></div>
-                <div id="config" style="display:none;"></div>
-            </div>
-            <div id="pagination-container" class="no-print"></div>
-        </main>
+    <!-- MAIN -->
+    <main class="flex-1 flex flex-col min-w-0">
+      <!-- TOPBAR -->
+      <header class="p-4 flex items-center justify-between gap-3 border-b border-[var(--color-border-primary)] no-print">
+        <div class="flex items-center gap-2 min-w-0">
+          <button id="back-button" class="conta-btn-icon" onclick="ContaApp.irAtras()" title="Ir Atrás" disabled>
+            <i class="fa-solid fa-arrow-left"></i>
+          </button>
+          <h1 id="page-title-header" class="text-lg font-bold truncate">Dashboard</h1>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <!-- Buscador simple (compatible con tu app.js actual) -->
+          <div class="hidden md:block">
+            <input id="global-search" type="text" class="conta-input w-64" placeholder="Buscar…" onkeydown="if(event.key==='Enter'){ContaApp.buscarGlobal(this.value)}"/>
+          </div>
+
+          <!-- Notificaciones -->
+          <button id="notifications-button" class="conta-btn-icon" title="Notificaciones">
+            <i class="fa-regular fa-bell"></i>
+          </button>
+
+          <!-- Switcher de Tema + Densidad (migrado aquí) -->
+          <div id="topbar-theme-switcher" class="flex-shrink-0"></div>
+          <div id="topbar-sucursal-chip" class="flex-shrink-0"></div>
+          <!-- Usuario / Logout -->
+          <button id="logout-button" class="conta-btn" onclick="ContaApp.logout()">
+            <i class="fa-solid fa-right-from-bracket me-2"></i>Salir
+          </button>
+        </div>
+      </header>
+
+      <!-- SUBHEADER -->
+      <section class="p-3 flex items-center justify-between gap-3 no-print">
+        <div id="page-breadcrumbs" class="text-sm text-[var(--color-text-secondary)]"></div>
+        <div id="page-actions-header" class="flex items-center gap-2"></div>
+      </section>
+
+      <!-- Loader de módulo (lo usa app.js) -->
+      <div id="module-loader" class="absolute top-0 left-0 right-0 bottom-0 bg-[rgba(0,0,0,.04)] z-40 flex items-center justify-center hidden">
+        <div class="spinner-large"></div>
+      </div>
+
+      <!-- CONTENIDO (lo usa app.js) -->
+      <div id="content-area" class="flex-1 p-4 min-h-0 overflow-hidden">
+        <div id="dashboard"></div>
+        <div id="ventas" style="display:none;"></div>
+        <div id="cxc" style="display:none;"></div>
+        <div id="compras" style="display:none;"></div>
+        <div id="cxp" style="display:none;"></div>
+        <div id="inventario" style="display:none;"></div>
+        <div id="produccion" style="display:none;"></div>
+        <div id="plan-de-cuentas" style="display:none;"></div>
+        <div id="diario-general" style="display:none;"></div>
+        <div id="cierre-periodo" style="display:none;"></div>
+        <div id="activos-fijos" style="display:none;"></div>
+        <div id="bancos" style="display:none;"></div>
+        <div id="reportes" style="display:none;"></div>
+        <div id="config" style="display:none;"></div>
+      </div>
+
+      <div id="pagination-container" class="no-print"></div>
+    </main>
+  </div>
+
+  <!-- LOGIN (fallback si caes aquí sin sesión) -->
+  <div id="login-root" class="min-h-screen flex items-center justify-center hidden">
+    <div class="conta-card w-full max-w-md">
+      <h2 class="text-2xl font-bold mb-4 text-center">Iniciar sesión</h2>
+      <div class="space-y-3">
+        <input id="login-email" type="email" class="conta-input w-full" placeholder="Correo" />
+        <input id="login-password" type="password" class="conta-input w-full" placeholder="Contraseña" />
+        <button class="conta-btn w-full" onclick="ContaApp.login()">Entrar</button>
+      </div>
+      <p class="text-sm mt-4 text-center text-[var(--color-text-secondary)]">¿Primera vez? Solicita invitación al administrador.</p>
     </div>
-    <div id="modal-bg" class="fixed inset-0 bg-black bg-opacity-70 hidden items-center justify-center z-50 p-4 overflow-y-auto no-print" onclick="ContaApp.closeModal()">
-        <div id="modal-content" class="p-6 rounded-lg shadow-xl w-full max-w-4xl modal-content" onclick="event.stopPropagation()"></div>
-    </div>
+  </div>
 
-    <!-- Scripts de Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    
-    <script>
-      // Tu configuración personal de Firebase
-      const firebaseConfig = {
-          apiKey: "AIzaSyC3aa2x_lB-NwXrwmO7ook5lY5saJ6_9ew",
-          authDomain: "contapp-pro-23d00.firebaseapp.com",
-          projectId: "contapp-pro-23d00",
-          storageBucket: "contapp-pro-23d00.firebasestorage.app",
-          messagingSenderId: "115018410304",
-          appId: "1:115018410304:web:e3fd1511e1edfdf898f2a5"
-      };
-    
-      // Inicializar Firebase
-      firebase.initializeApp(firebaseConfig);
-    </script>
+  <!-- MODAL GLOBAL -->
+  <div id="modal-bg" class="fixed inset-0 bg-black bg-opacity-50 hidden p-4 overflow-y-auto no-print" onclick="ContaApp.closeModal()">
+    <div id="modal-content" class="p-6 rounded-lg shadow-xl mx-auto bg-[var(--color-bg-secondary)] w-full max-w-4xl modal-content" onclick="event.stopPropagation()"></div>
+  </div>
 
-    <!-- ===== ORDEN DE CARGA DE SCRIPTS ===== -->
-    <script type="module" src="repository.js"></script>
-    <script src="app.js"></script>
-    <script src="modules/dashboard.js"></script>
-    <script src="modules/ventas.js"></script>
-    <script src="modules/gastos.js"></script>
-    <script src="modules/compras.js"></script>
-    <script src="modules/cuentas_corrientes.js"></script>
-    <script src="modules/inventario.js"></script>
-    <script src="modules/produccion.js"></script>
-    <script src="modules/bancos.js"></script>
-    <script src="modules/reportes.js"></script>
-    <script src="modules/activos_fijos.js"></script>
-    <script src="modules/contabilidad.js"></script>
-    <script src="modules/config.js"></script>
-    
-    <!-- Este script SIEMPRE debe ser el último -->
-    <script type="module" src="init.js"></script>
+  <!-- Firebase v8 -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <!-- Config Firebase (tu proyecto) -->
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyC3aa2x_lB-NwXrwmO7ook5lY5saJ6_9ew",
+      authDomain: "contapp-pro-23d00.firebaseapp.com",
+      projectId: "contapp-pro-23d00",
+      storageBucket: "contapp-pro-23d00.firebasestorage.app",
+      messagingSenderId: "115018410304",
+      appId: "1:115018410304:web:e3fd1511e1edfdf898f2a5"
+    };
+    firebase.initializeApp(firebaseConfig);
+  </script>
+
+  <!-- CORE (⚠️ no incluyas repository.js ni login.js aquí) -->
+  <script src="app.js"></script>
+
+  <!-- MÓDULOS -->
+  <script src="modules/dashboard.js"></script>
+  <script src="modules/ventas.js"></script>
+  <script src="modules/gastos.js"></script>
+  <script src="modules/compras.js"></script>
+  <script src="modules/cuentas_corrientes.js"></script>
+  <script src="modules/inventario.js"></script>
+  <script src="modules/produccion.js"></script>
+  <script src="modules/bancos.js"></script>
+  <script src="modules/reportes.js"></script>
+  <script src="modules/activos_fijos.js"></script>
+  <script src="modules/contabilidad.js"></script>
+  <script src="modules/config.js"></script>
+
+  <!-- SIEMPRE al final (ES module que importa repository.js) -->
+  <script type="module" src="init.js"></script>
 </body>
 </html>

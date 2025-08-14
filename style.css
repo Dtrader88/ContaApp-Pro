@@ -491,63 +491,206 @@ tfoot tr:hover { background-color: var(--color-bg-accent); }
     font-size: 0.75rem;
     color: var(--color-text-secondary);
 }
-#toast-container{
-  position: fixed;
-  top: 1rem; right: 1rem;
-  z-index: 9999;
-  display: flex; flex-direction: column; gap: .5rem;
-  /* el contenedor no captura eventos, cada toast sí */
-  pointer-events: none;
+
+.toast {
+  pointer-events: auto; /* cada toast sí capta clic (para el botón cerrar) */
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: start;
+  gap: 10px;
+  min-width: 280px;
+  max-width: 420px;
+  padding: 12px 12px 12px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-bg-card) 88%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  border-left: 4px solid var(--color-border-accent);
+  box-shadow: 0 6px 18px rgba(0,0,0,.12);
+  animation: toast-in .18s ease-out;
 }
+.toast-hide { animation: toast-out .18s ease-in forwards; }
 
-.toast{
-  display: flex; align-items: center; gap: .6rem;
-  padding: .8rem 1.2rem; border-radius: .5rem;
-  color: var(--color-text-light);
-  box-shadow: 0 8px 20px color-mix(in srgb, var(--color-shadow) 60%, transparent);
-  opacity: 0; transform: translateX(100%);
-  transition: opacity .25s ease, transform .25s ease;
-  /* ¡para que funcione el botón cerrar! */
-  pointer-events: auto;
-  /* el borde real lo fija showToast(), esto es fallback */
-  border-left: 4px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
-  background: transparent; /* dejamos el color a las variantes */
-  font-weight: 500; /* más legible que 600 en algunos fondos */
+.toast-icon { margin-top: 2px; opacity: .9; }
+.toast-message { color: var(--color-text-primary); line-height: 1.25rem; }
+.toast-close {
+  margin-left: 8px;
+  background: transparent;
+  border: none;
+  font-size: .95rem;
+  cursor: pointer;
+  opacity: .75;
 }
+.toast-close:hover { opacity: 1; }
 
-.toast.show{ opacity: 1; transform: translateX(0); }
+.toast-success { border-left-color: var(--color-success); }
+.toast-error   { border-left-color: var(--color-danger); }
+.toast-info    { border-left-color: var(--color-primary); }
 
-.toast.success{ background-color: var(--color-success); }
-.toast.error{   background-color: var(--color-danger); }
-.toast.info{    background-color: var(--color-primary); }
+@keyframes toast-in { from { transform: translateY(-6px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes toast-out { to { transform: translateY(-6px); opacity: 0; } }
 
-/* botón cerrar dentro del toast */
-.toast button{
-  background: transparent; border: 0; color: inherit; cursor: pointer;
-  font-size: 1rem; line-height: 1; padding: 0; margin-left: .25rem;
-}
-html.density-compact .conta-card{
-  padding: .5rem;
-}
-
+/* ----- DENSIDAD COMPACTA ----- */
+html.density-compact .conta-card { padding: .6rem !important; }
 html.density-compact .conta-input,
-html.density-compact .modal-form input,
-html.density-compact .modal-form select,
-html.density-compact .modal-form textarea,
-html.density-compact .conta-btn{
-  padding-top: .35rem;
-  padding-bottom: .35rem;
-}
-
+html.density-compact .conta-btn   { padding: .4rem .55rem !important; }
 html.density-compact .conta-table-th,
-html.density-compact .conta-table-td,
-html.density-compact table th,
-html.density-compact table td{
-  padding-top: .35rem !important;
-  padding-bottom: .35rem !important;
+html.density-compact .conta-table-td { padding: .4rem .55rem !important; }
+html.density-compact .kpi-dashboard-card { padding: .6rem .7rem !important; }
+
+/* ----- GLOW SUTIL (premium sin exagerar) ----- */
+.conta-card,
+.card,
+.kpi-dashboard-card {
+  box-shadow: 0 2px 10px rgba(0,0,0,.06);
+  transition: box-shadow .15s ease, outline-color .15s ease;
+  outline: 1px solid color-mix(in srgb, var(--color-border-accent) 40%, transparent);
+}
+.conta-card:hover,
+.card:hover,
+.kpi-dashboard-card:hover {
+  box-shadow: 0 6px 22px color-mix(in srgb, var(--color-primary) 16%, rgba(0,0,0,.12));
+  outline-color: color-mix(in srgb, var(--color-primary) 30%, var(--color-border-accent));
 }
 
-/* Opcional: KPIs un poco más densos */
-html.density-compact .kpi-dashboard-card{
-  padding: .6rem;
+.conta-btn.conta-btn-primary,
+.conta-btn.conta-btn-accent,
+.conta-btn.conta-btn-success,
+.conta-btn.conta-btn-danger {
+  transition: box-shadow .12s ease;
+}
+.conta-btn.conta-btn-primary:hover,
+.conta-btn.conta-btn-accent:hover,
+.conta-btn.conta-btn-success:hover,
+.conta-btn.conta-btn-danger:hover {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+/* ----- HEADERS DE TABLA SUTILES ----- */
+.conta-table-th {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--color-bg-card) 100%, transparent),
+    color-mix(in srgb, var(--color-bg-card) 86%, transparent)
+  );
+}
+#toast-container {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none; /* el contenedor no captura eventos */
+}
+
+.toast {
+  pointer-events: auto; /* cada toast sí capta clic (para el botón cerrar) */
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: start;
+  gap: 10px;
+  min-width: 280px;
+  max-width: 420px;
+  padding: 12px 12px 12px 10px;
+  border-radius: 8px;
+  /* CORRECCIÓN: usar bg-secondary en lugar de bg-card */
+  background: color-mix(in srgb, var(--color-bg-secondary) 88%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  border-left: 4px solid var(--color-border-accent);
+  box-shadow: 0 6px 18px rgba(0,0,0,.12);
+  animation: toast-in .18s ease-out;
+}
+.toast-hide { animation: toast-out .18s ease-in forwards; }
+
+.toast-icon { margin-top: 2px; opacity: .9; }
+.toast-message { color: var(--color-text-primary); line-height: 1.25rem; }
+.toast-close {
+  margin-left: 8px;
+  background: transparent;
+  border: none;
+  font-size: .95rem;
+  cursor: pointer;
+  opacity: .75;
+}
+.toast-close:hover { opacity: 1; }
+
+.toast-success { border-left-color: var(--color-success); }
+.toast-error   { border-left-color: var(--color-danger); }
+.toast-info    { border-left-color: var(--color-primary); }
+
+@keyframes toast-in { from { transform: translateY(-6px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes toast-out { to { transform: translateY(-6px); opacity: 0; } }
+
+/* ----- DENSIDAD COMPACTA ----- */
+html.density-compact .conta-card { padding: .6rem !important; }
+html.density-compact .conta-input,
+html.density-compact .conta-btn   { padding: .4rem .55rem !important; }
+html.density-compact .conta-table-th,
+html.density-compact .conta-table-td { padding: .4rem .55rem !important; }
+html.density-compact .kpi-dashboard-card { padding: .6rem .7rem !important; }
+
+/* ----- GLOW SUTIL (premium sin exagerar) ----- */
+.conta-card,
+.card,
+.kpi-dashboard-card {
+  box-shadow: 0 2px 10px rgba(0,0,0,.06);
+  transition: box-shadow .15s ease, outline-color .15s ease;
+  outline: 1px solid color-mix(in srgb, var(--color-border-accent) 40%, transparent);
+}
+.conta-card:hover,
+.card:hover,
+.kpi-dashboard-card:hover {
+  box-shadow: 0 6px 22px color-mix(in srgb, var(--color-primary) 16%, rgba(0,0,0,.12));
+  outline-color: color-mix(in srgb, var(--color-primary) 30%, var(--color-border-accent));
+}
+
+.conta-btn.conta-btn-primary,
+.conta-btn.conta-btn-accent,
+.conta-btn.conta-btn-success,
+.conta-btn.conta-btn-danger {
+  transition: box-shadow .12s ease;
+}
+.conta-btn.conta-btn-primary:hover,
+.conta-btn.conta-btn-accent:hover,
+.conta-btn.conta-btn-success:hover,
+.conta-btn.conta-btn-danger:hover {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+/* ----- HEADERS DE TABLA SUTILES ----- */
+.conta-table-th {
+  background: linear-gradient(
+    to bottom,
+    /* CORRECCIÓN: usar bg-secondary en lugar de bg-card */
+    color-mix(in srgb, var(--color-bg-secondary) 100%, transparent),
+    color-mix(in srgb, var(--color-bg-secondary) 86%, transparent)
+  );
+}
+.conta-card.overflow-auto {
+  /* Garantiza el contexto de scroll del contenedor */
+  overflow: auto;
+}
+
+/* Head pegajoso */
+.conta-card.overflow-auto table thead th {
+  position: sticky;
+  top: 0;               /* pegado al borde superior del contenedor */
+  z-index: 2;           /* por encima de filas */
+  backdrop-filter: blur(2px);
+  /* Reutiliza el gradiente sutil que ya tienes en los headers */
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--color-bg-secondary) 100%, transparent),
+    color-mix(in srgb, var(--color-bg-secondary) 86%, transparent)
+  );
+  /* Línea inferior para separar visualmente el head del contenido */
+  box-shadow: 0 1px 0 0 var(--color-border-accent);
+}
+
+/* Cuando hay muchas columnas, evita que el sticky “salte” en hover */
+.conta-card.overflow-auto table thead th:hover {
+  filter: brightness(1.02);
 }
